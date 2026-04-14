@@ -1,0 +1,28 @@
+{
+  "id": "vendor-recovery-loop",
+  "displayName": "Vendor Recovery Loop",
+  "zoneName": "Town Fishing Route",
+  "targetSkill": "fishing",
+  "enabledSkills": ["fishing", "survival", "cooking"],
+  "baitName": "Utility Bait",
+  "notes": [
+    "Conservative profile intended for longer sessions with more maintenance overhead.",
+    "Best used when vendor/bank access is nearby."
+  ],
+  "pacing": {
+    "reactionFloorMs": 70,
+    "reactionCeilingMs": 200,
+    "biteTimeoutMs": 14000,
+    "lootTimeoutMs": 2500
+  },
+  "thresholds": {
+    "rebaitAtOrBelow": 6,
+    "maintenanceAtFreeSlotsOrBelow": 3,
+    "maxRecoveryAttempts": 3
+  },
+  "guardrails": {
+    "pauseOnCombat": true,
+    "pauseOnBridgeLoss": true,
+    "recoverOnDrift": true
+  }
+}

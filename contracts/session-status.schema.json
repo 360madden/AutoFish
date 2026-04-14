@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autofish.local/contracts/session-status.schema.json",
+  "title": "SessionStatus",
+  "type": "object",
+  "required": [
+    "characterName",
+    "activeProfile",
+    "mode",
+    "inGame",
+    "nearWater",
+    "inCombat",
+    "inventoryFull",
+    "bridgeOnline",
+    "remainingBait",
+    "freeSlots",
+    "lastAction",
+    "lastReason",
+    "updatedAtUtc",
+    "counters",
+    "alerts"
+  ],
+  "properties": {
+    "characterName": {"type": "string"},
+    "activeProfile": {"type": "string"},
+    "mode": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "scanning",
+        "casting",
+        "waiting_bite",
+        "hooking",
+        "looting",
+        "maintenance",
+        "recovering",
+        "paused"
+      ]
+    },
+    "inGame": {"type": "boolean"},
+    "nearWater": {"type": "boolean"},
+    "inCombat": {"type": "boolean"},
+    "inventoryFull": {"type": "boolean"},
+    "bridgeOnline": {"type": "boolean"},
+    "remainingBait": {"type": "integer", "minimum": 0},
+    "freeSlots": {"type": "integer", "minimum": 0},
+    "lastAction": {"type": "string"},
+    "lastReason": {"type": "string"},
+    "updatedAtUtc": {"type": "string", "format": "date-time"},
+    "counters": {
+      "type": "object",
+      "required": [
+        "casts",
+        "hooksets",
+        "catches",
+        "skillUps",
+        "recoveries",
+        "maintenanceActions"
+      ],
+      "properties": {
+        "casts": {"type": "integer", "minimum": 0},
+        "hooksets": {"type": "integer", "minimum": 0},
+        "catches": {"type": "integer", "minimum": 0},
+        "skillUps": {"type": "integer", "minimum": 0},
+        "recoveries": {"type": "integer", "minimum": 0},
+        "maintenanceActions": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "alerts": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "additionalProperties": false
+}

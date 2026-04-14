@@ -1,0 +1,28 @@
+{
+  "id": "shoreline-grind",
+  "displayName": "Shoreline Grind",
+  "zoneName": "Open Shoreline Route",
+  "targetSkill": "fishing",
+  "enabledSkills": ["fishing", "survival"],
+  "baitName": "Improved Shore Bait",
+  "notes": [
+    "Slightly more aggressive pacing profile for repetitive shoreline leveling.",
+    "Use where bobber tracking is still reliable."
+  ],
+  "pacing": {
+    "reactionFloorMs": 50,
+    "reactionCeilingMs": 150,
+    "biteTimeoutMs": 10000,
+    "lootTimeoutMs": 1800
+  },
+  "thresholds": {
+    "rebaitAtOrBelow": 4,
+    "maintenanceAtFreeSlotsOrBelow": 2,
+    "maxRecoveryAttempts": 4
+  },
+  "guardrails": {
+    "pauseOnCombat": true,
+    "pauseOnBridgeLoss": false,
+    "recoverOnDrift": true
+  }
+}

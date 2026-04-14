@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autofish.local/contracts/bridge-command.schema.json",
+  "title": "BridgeCommand",
+  "type": "object",
+  "required": ["commandType", "issuedAtUtc"],
+  "properties": {
+    "commandType": {
+      "type": "string",
+      "enum": [
+        "start",
+        "pause",
+        "resume",
+        "stop",
+        "sync_profile",
+        "request_snapshot",
+        "ack"
+      ]
+    },
+    "issuedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "profileId": {
+      "type": ["string", "null"]
+    },
+    "notes": {
+      "type": ["string", "null"]
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

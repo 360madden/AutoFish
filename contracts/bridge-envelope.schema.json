@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autofish.local/contracts/bridge-envelope.schema.json",
+  "title": "BridgeEnvelope",
+  "type": "object",
+  "required": ["messageType", "contractVersion", "issuedAtUtc", "payload"],
+  "properties": {
+    "messageType": {
+      "type": "string",
+      "enum": ["ack", "session_status", "command"]
+    },
+    "contractVersion": {
+      "type": "string"
+    },
+    "issuedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

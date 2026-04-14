@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autofish.local/contracts/rift-observation.schema.json",
+  "title": "RiftObservation",
+  "type": "object",
+  "required": [
+    "timestamp",
+    "in_game",
+    "near_water",
+    "inventory_full",
+    "bait_available",
+    "line_cast",
+    "bobber_visible",
+    "bite_detected",
+    "loot_window_open",
+    "skill_up_ready",
+    "durability_low",
+    "can_cast",
+    "stuck_for_seconds",
+    "confidence"
+  ],
+  "properties": {
+    "timestamp": {"type": "number"},
+    "in_game": {"type": "boolean"},
+    "near_water": {"type": "boolean"},
+    "in_combat": {"type": "boolean"},
+    "inventory_full": {"type": "boolean"},
+    "bait_available": {"type": "boolean"},
+    "line_cast": {"type": "boolean"},
+    "bobber_visible": {"type": "boolean"},
+    "bite_detected": {"type": "boolean"},
+    "loot_window_open": {"type": "boolean"},
+    "skill_up_ready": {"type": "boolean"},
+    "durability_low": {"type": "boolean"},
+    "can_cast": {"type": "boolean"},
+    "stuck_for_seconds": {"type": "number", "minimum": 0},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "notes": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "additionalProperties": false
+}

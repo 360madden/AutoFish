@@ -1,0 +1,28 @@
+{
+  "id": "starter-pond",
+  "displayName": "Starter Pond",
+  "zoneName": "Sanctum / Meridian Starter Water",
+  "targetSkill": "fishing",
+  "enabledSkills": ["fishing"],
+  "baitName": "Basic Bait",
+  "notes": [
+    "Balanced starter profile for low-risk fishing loops.",
+    "Prefer stable water edges with minimal movement."
+  ],
+  "pacing": {
+    "reactionFloorMs": 60,
+    "reactionCeilingMs": 180,
+    "biteTimeoutMs": 12000,
+    "lootTimeoutMs": 2200
+  },
+  "thresholds": {
+    "rebaitAtOrBelow": 5,
+    "maintenanceAtFreeSlotsOrBelow": 2,
+    "maxRecoveryAttempts": 3
+  },
+  "guardrails": {
+    "pauseOnCombat": true,
+    "pauseOnBridgeLoss": false,
+    "recoverOnDrift": true
+  }
+}
