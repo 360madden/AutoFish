@@ -21,6 +21,6 @@ jobs:
       - name: Build desktop solution
         run: dotnet build AutoFish.sln --configuration Release
 
-      - name: Validate profile JSON syntax
+      - name: Validate fishing profiles
         shell: pwsh
         run: .\scripts\validate-profiles.ps1

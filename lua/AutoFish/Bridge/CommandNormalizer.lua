@@ -14,20 +14,29 @@ local knownCommands = {
 
 function CommandNormalizer.normalize(command)
     if type(command) ~= "table" then
-        return nil
+        return nil, "command payload must be a table"
     end
 
     local commandType = command.commandType
-    if type(commandType) ~= "string" or not knownCommands[commandType] then
-        return nil
+    if type(commandType) ~= "string" or commandType == "" then
+        return nil, "commandType must be a non-empty string"
+    end
+
+    if not knownCommands[commandType] then
+        return nil, "commandType is not recognized"
+    end
+
+    local profileId = type(command.profileId) == "string" and command.profileId or nil
+    if profileId == "" then
+        profileId = nil
     end
 
     return {
         commandType = commandType,
         issuedAtUtc = type(command.issuedAtUtc) == "string" and command.issuedAtUtc or os.date("!%Y-%m-%dT%H:%M:%SZ"),
-        profileId = type(command.profileId) == "string" and command.profileId or nil,
+        profileId = profileId,
         notes = type(command.notes) == "string" and command.notes or nil,
-    }
+    }, nil
 end
 
 return CommandNormalizer

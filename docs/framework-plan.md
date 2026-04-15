@@ -24,6 +24,7 @@ Build a modular, reliable fishing-focused system where:
 - The addon must remain fail-safe if the helper is absent.
 - The helper must remain useful offline with mock data and profile loading.
 - Contracts must be stable and explicit before any real bridge transport is chosen.
+- Bridge contract versioning rules are documented in `docs/bridge-contract-versioning.md` and must be followed before live transport work starts.
 - Profiles must be data-driven so leveling behavior can scale without rewriting the core.
 - The repository must stay Git/GitHub-ready and easy to maintain.
 
@@ -121,6 +122,7 @@ Next:
 Next:
 
 - bind real Rift addon APIs,
+- enforce the documented bridge contract versioning policy,
 - bind the actual helper bridge transport,
 - verify helper/addon sync and reconnect behavior.
 

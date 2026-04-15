@@ -1,26 +1,52 @@
 local Contracts = require("AutoFish.Bridge.Contracts")
+local GuardrailRules = require("AutoFish.Core.GuardrailRules")
 
 local Guardrails = {}
 
-function Guardrails.evaluate(observation, config)
-    if not observation.inGame then
-        return { action = "pause", mode = Contracts.Mode.PAUSED, reason = "game signal missing" }
+local function normalizeContext(context)
+    if type(context) ~= "table" then
+        return nil
     end
 
-    if observation.inCombat and config.pauseOnCombat then
-        return { action = "pause", mode = Contracts.Mode.PAUSED, reason = "combat detected" }
+    local normalized = {}
+    for key, value in pairs(context) do
+        local valueType = type(value)
+        if valueType == "string" or valueType == "number" or valueType == "boolean" then
+            normalized[key] = value
+        end
     end
 
-    if observation.inventoryFull then
-        return { action = "maintenance", mode = Contracts.Mode.MAINTENANCE, reason = "inventory full" }
+    return normalized
+end
+
+local function logIfAvailable(logger, level, message, context)
+    if not logger or type(logger[level]) ~= "function" then
+        return
     end
 
-    if not observation.baitAvailable then
-        return { action = "rebait", mode = Contracts.Mode.MAINTENANCE, reason = "bait depleted" }
-    end
+    logger[level](logger, message, normalizeContext(context))
+end
 
-    if not observation.nearWater and config.recoverOnDrift then
-        return { action = "recover_position", mode = Contracts.Mode.RECOVERING, reason = "drifted away from fishing position" }
+function Guardrails.evaluate(observation, config, session, logger)
+    session = session or {}
+    local context = {
+        observation = observation,
+        config = config,
+        session = session,
+    }
+
+    for _, rule in ipairs(GuardrailRules.getAll()) do
+        local decision = rule.evaluate(context)
+        if decision then
+            decision.ruleId = decision.ruleId or rule.id
+            logIfAvailable(logger, "warn", "Guardrail triggered.", {
+                ruleId = decision.ruleId,
+                action = decision.action,
+                mode = decision.mode,
+                reason = decision.reason,
+            })
+            return decision
+        end
     end
 
     return nil

@@ -22,12 +22,20 @@ function SessionState.create(config, activeProfile)
         counters = buildCounters(),
         alerts = {},
         bridgeOnline = false,
+        bridgeWasOnline = false,
+        recoveryAttempts = 0,
+        lineCastSinceMs = nil,
+        biteDetectedSinceMs = nil,
+        lootReadySinceMs = nil,
     }
 end
 
 function SessionState.resetMaintenanceResources(session, config)
     session.remainingBait = config.baitCapacity
     session.freeSlots = config.inventoryCapacity
+    session.lineCastSinceMs = nil
+    session.biteDetectedSinceMs = nil
+    session.lootReadySinceMs = nil
 end
 
 return SessionState

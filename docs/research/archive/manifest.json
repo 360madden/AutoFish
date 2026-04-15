@@ -1,0 +1,62 @@
+{
+  "updatedAt": "2026-04-15",
+  "archivedArtifacts": [
+    {
+      "id": "epvp_simple_autoit_lure",
+      "type": "forum_inline_code_extract",
+      "language": "AutoIt",
+      "completeness": "full_inline_script",
+      "path": "C:\\RIFT MODDING\\AutoFish\\docs\\research\\archive\\forum-extracts\\epvp-simple-autoit-rift-fishing-bot-lure.au3",
+      "sha256": "D3355599F1899944E37192A28E6BCFAB1E1866D5FE4A4E21F5423572ED34F01B",
+      "sourceUrl": "https://www.elitepvpers.com/forum/rift-hacks-bots-cheats-exploits/3863609-simple-autoit-rift-fishing-bot.html",
+      "sourceNote": "Public inline code from Odlid Tubpu post with lure support.",
+      "trust": "untrusted_third_party"
+    },
+    {
+      "id": "epvp_simple_autoit_original",
+      "type": "forum_inline_code_extract",
+      "language": "AutoIt",
+      "completeness": "full_inline_script",
+      "path": "C:\\RIFT MODDING\\AutoFish\\docs\\research\\archive\\forum-extracts\\epvp-simple-autoit-rift-fishing-bot-original.au3",
+      "sha256": "5FC66E6FE25EE0DDF3184602CB7C999903570308CB80FBEF6B75525464F68A00",
+      "sourceUrl": "https://www.elitepvpers.com/forum/rift-hacks-bots-cheats-exploits/3863609-simple-autoit-rift-fishing-bot.html",
+      "sourceNote": "Public inline code from the same thread, marked by the author as the original simpler version before lure support.",
+      "trust": "untrusted_third_party"
+    },
+    {
+      "id": "fabd_rift_mouselooktoggle_repo",
+      "type": "public_repository_mirror",
+      "language": "AutoHotkey+Lua",
+      "completeness": "source_tree",
+      "path": "C:\\RIFT MODDING\\AutoFish\\docs\\research\\archive\\external-src\\rift-mouselooktoggle",
+      "notableHashes": {
+        "source/MouseLookToggle.ahk": "0854DA9BC4E4A834FE9C3E2CD9A5AE2D6CA2F43802F92618177C4560D622BEF0",
+        "source/MouseLookToggle/Main.lua": "393CB3DF17CA6CC1C63E679F2ACF2F0242A2B17E397691D697336AEC6BC67A66",
+        "web/Rift-MouseLookToggle.zip": "414764EEA72D3198F8BA74D3239AF456446D1BA7DFAAACCED55238258FB23503"
+      },
+      "sourceUrl": "https://github.com/fabd/rift-mouselooktoggle",
+      "sourceNote": "Public GitHub repository mirrored locally without .git metadata.",
+      "trust": "untrusted_third_party"
+    }
+  ],
+  "referenceOnly": [
+    {
+      "id": "epvp_rift_fishing_assistant",
+      "status": "not_archived_hidden_links",
+      "sourceUrl": "https://www.elitepvpers.com/forum/rift-hacks-bots-cheats-exploits/2291047-rift-fishing-assistant.html",
+      "reason": "Thread content is readable, but download links are hidden behind registration-only link wrappers."
+    },
+    {
+      "id": "tault_moefish",
+      "status": "not_archived_attachment_not_exposed",
+      "sourceUrl": "https://www.taultunleashed.com/rift-submissions/rift-fishing-bot-advanced-t83221.html",
+      "reason": "Public page text is readable, but no direct script attachment URL is exposed in the fetched page."
+    },
+    {
+      "id": "ownedcore_working_fishbot",
+      "status": "not_archived_no_full_script",
+      "sourceUrl": "https://www.ownedcore.com/forums/mmo/rift/387544-req-working-fishbot.html",
+      "reason": "Public thread provides discussion and short technical hints, but not a full retrievable script."
+    }
+  ]
+}

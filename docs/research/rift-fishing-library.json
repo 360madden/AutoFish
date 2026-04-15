@@ -1,0 +1,956 @@
+{
+  "updatedAt": "2026-04-15",
+  "scope": {
+    "game": "Rift",
+    "purpose": "Rift-only fishing research library for AutoFish development",
+    "excludedReferences": [
+      "World of Warcraft"
+    ]
+  },
+  "executiveFindings": [
+    {
+      "name": "track_fish_is_the_best_verified_native_signal",
+      "confidence": "high",
+      "notes": [
+        "Track Fish is explicitly documented in current community fishing references.",
+        "Historical addon behavior confirms missing Track Fish buff prevents fishing node tracking."
+      ],
+      "sourceIds": [
+        "cadrift_fishing",
+        "resource_tracker",
+        "rift_archive_fishing"
+      ]
+    },
+    {
+      "name": "visible_fishing_cursor_changes_worked_historically_but_not_proven_in_addon_api",
+      "confidence": "medium",
+      "notes": [
+        "Gameplay references and historical scripts both describe or use cursor changes for fishing.",
+        "The documented addon cursor API appears to describe drag/drop cursor contents rather than world-hover fishing cursor state."
+      ],
+      "sourceIds": [
+        "cadrift_fishing",
+        "api_inspect_cursor",
+        "api_event_cursor",
+        "simple_autoit_fishing"
+      ]
+    },
+    {
+      "name": "historical_log_and_pixel_methods_were_real_but_brittle",
+      "confidence": "medium",
+      "notes": [
+        "Historical bots used /log or log.txt plus splash or loot-window heuristics.",
+        "Language, resolution, layout, and graphics settings repeatedly broke those approaches."
+      ],
+      "sourceIds": [
+        "slash_commands",
+        "moefish",
+        "ownedcore_working_fishbot",
+        "simple_autoit_fishing",
+        "mouselook_toggle"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "macros_support",
+      "title": "RIFT - Creating Macros",
+      "type": "official_support",
+      "confidence": "high",
+      "url": "https://support.gamigo.com/en/support/solutions/articles/201000105449-rift-creating-macros"
+    },
+    {
+      "id": "slash_commands",
+      "title": "RIFT - Slash Commands",
+      "type": "official_support",
+      "confidence": "high",
+      "url": "https://support.gamigo.com/en/support/solutions/articles/201000105480-rift-slash-commands"
+    },
+    {
+      "id": "ui_import_support",
+      "title": "How do I import UI settings from another character in RIFT?",
+      "type": "official_support",
+      "confidence": "high",
+      "url": "https://support.gamigo.com/en/support/solutions/articles/201000105458-rift-how-do-i-import-ui-settings-from-another-character-in-rift-"
+    },
+    {
+      "id": "cadrift_fishing",
+      "title": "Fishing - CADRIFT",
+      "type": "community_guide",
+      "confidence": "high",
+      "url": "https://www.cadrift.net/gameplay/crafting/fishing/"
+    },
+    {
+      "id": "telarapedia_ui_customization",
+      "title": "UI Customization - Telarapedia",
+      "type": "community_wiki",
+      "confidence": "high",
+      "url": "https://telarapedia.fandom.com/wiki/UI_Customization"
+    },
+    {
+      "id": "api_root",
+      "title": "Rift API Docs (PTS mirror)",
+      "type": "community_api_mirror",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/"
+    },
+    {
+      "id": "rift_archive_fishing",
+      "title": "Category:Fishing - Rift Archive",
+      "type": "community_wiki",
+      "confidence": "high",
+      "url": "https://rift-archive.fandom.com/wiki/Category%3AFishing"
+    },
+    {
+      "id": "resource_tracker",
+      "title": "ResourceTracker - RiftUI",
+      "type": "addon_page_search_snippet",
+      "confidence": "medium",
+      "url": "https://www.riftui.com/downloads/info335-ResourceTracker.html"
+    },
+    {
+      "id": "simple_autoit_fishing",
+      "title": "Simple Autoit Rift Fishing Bot",
+      "type": "historical_script_thread",
+      "confidence": "medium",
+      "url": "https://www.elitepvpers.com/forum/rift-hacks-bots-cheats-exploits/3863609-simple-autoit-rift-fishing-bot.html"
+    },
+    {
+      "id": "moefish",
+      "title": "MoeFish BOT: advanced-simple fishing bot",
+      "type": "historical_script_thread",
+      "confidence": "medium",
+      "url": "https://www.elitepvpers.com/forum/rift-hacks-bots-cheats-exploits/2285108-moefish-bot-advanced-simple-fishing-bot.html"
+    },
+    {
+      "id": "ownedcore_working_fishbot",
+      "title": "[REQ] Working Fishbot",
+      "type": "historical_forum_thread",
+      "confidence": "low_medium",
+      "url": "https://www.ownedcore.com/forums/mmo/rift/387544-req-working-fishbot.html"
+    },
+    {
+      "id": "ownedcore_simple_fish_bot",
+      "title": "Simple Fish Bot",
+      "type": "historical_forum_thread",
+      "confidence": "low",
+      "url": "https://www.ownedcore.com/forums/mmo/rift/419314-simple-fish-bot.html"
+    },
+    {
+      "id": "mouselook_toggle",
+      "title": "Mouse Look Toggle Script and Addon for Rift MMO",
+      "type": "addon_helper_project",
+      "confidence": "medium",
+      "url": "https://fabd.github.io/rift-mouselook-addon/"
+    },
+    {
+      "id": "api_inspect_cursor",
+      "title": "Inspect.Cursor",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_cursor.html"
+    },
+    {
+      "id": "api_event_cursor",
+      "title": "Event.Cursor",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/event_cursor.html"
+    },
+    {
+      "id": "api_inspect_buff_list",
+      "title": "Inspect.Buff.List",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_buff_list.html"
+    },
+    {
+      "id": "api_inspect_buff_detail",
+      "title": "Inspect.Buff.Detail",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_buff_detail.html"
+    },
+    {
+      "id": "api_event_unit_castbar",
+      "title": "Event.Unit.Castbar",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/event_unit_castbar.html"
+    },
+    {
+      "id": "api_inspect_unit_castbar",
+      "title": "Inspect.Unit.Castbar",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_unit_castbar.html"
+    },
+    {
+      "id": "api_inspect_item_list",
+      "title": "Inspect.Item.List",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_item_list.html"
+    },
+    {
+      "id": "api_inspect_item_detail",
+      "title": "Inspect.Item.Detail",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_item_detail.html"
+    },
+    {
+      "id": "api_inspect_item_find",
+      "title": "Inspect.Item.Find",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_item_find.html"
+    },
+    {
+      "id": "api_inspect_system_secure",
+      "title": "Inspect.System.Secure",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_system_secure.html"
+    },
+    {
+      "id": "api_event_system_secure_enter",
+      "title": "Event.System.Secure.Enter",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/event_system_secure_enter.html"
+    },
+    {
+      "id": "api_event_system_secure_leave",
+      "title": "Event.System.Secure.Leave",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/event_system_secure_leave.html"
+    },
+    {
+      "id": "api_layout_eventmacroset",
+      "title": "Layout:EventMacroSet",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/layout_eventmacroset.html"
+    },
+    {
+      "id": "api_inspect_setting_list",
+      "title": "Inspect.Setting.List",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_setting_list.html"
+    },
+    {
+      "id": "api_inspect_setting_detail",
+      "title": "Inspect.Setting.Detail",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_setting_detail.html"
+    },
+    {
+      "id": "api_command_console_display",
+      "title": "Command.Console.Display",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/command_console_display.html"
+    },
+    {
+      "id": "api_command_message_send",
+      "title": "Command.Message.Send",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/command_message_send.html"
+    },
+    {
+      "id": "api_command_message_broadcast",
+      "title": "Command.Message.Broadcast",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/command_message_broadcast.html"
+    },
+    {
+      "id": "api_command_message_accept",
+      "title": "Command.Message.Accept",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/command_message_accept.html"
+    },
+    {
+      "id": "api_event_message_receive",
+      "title": "Event.Message.Receive",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/event_message_receive.html"
+    },
+    {
+      "id": "api_inspect_message_accept_check",
+      "title": "Inspect.Message.Accept.Check",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_message_accept_check.html"
+    },
+    {
+      "id": "api_inspect_message_accept_list",
+      "title": "Inspect.Message.Accept.List",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_message_accept_list.html"
+    },
+    {
+      "id": "api_inspect_queue_status",
+      "title": "Inspect.Queue.Status",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_queue_status.html"
+    },
+    {
+      "id": "api_inspect_interaction",
+      "title": "Inspect.Interaction",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_interaction.html"
+    },
+    {
+      "id": "api_event_interaction",
+      "title": "Event.Interaction",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/event_interaction.html"
+    },
+    {
+      "id": "api_inspect_map_detail",
+      "title": "Inspect.Map.Detail",
+      "type": "api_doc",
+      "confidence": "high",
+      "url": "https://www.seebs.net/rift/pts/inspect_map_detail.html"
+    }
+  ],
+  "stringLibrary": {
+    "abilitiesAndBuffs": [
+      "Track Fish"
+    ],
+    "poolTypes": [
+      "School of Fish",
+      "School of Rare Fish",
+      "School of Clever Fish",
+      "Sunken Boat"
+    ],
+    "cursorTerms": [
+      "use hand",
+      "fish"
+    ],
+    "settingsAndUiTerms": [
+      "Auto-Loot By Default",
+      "Target Nearest in Front of Player",
+      "Smart Target",
+      "Windowed",
+      "Windowed Fullscreen",
+      "UI.dat"
+    ],
+    "slashCommands": [
+      "/macro",
+      "/combatlog",
+      "/loc",
+      "/exportkeybindings",
+      "/importkeybindings",
+      "/exportui",
+      "/importui"
+    ],
+    "historicalLogTokens": [
+      "log.txt",
+      "lure has decayed",
+      "away",
+      "stop fishing",
+      "received"
+    ],
+    "historicalSlotConventions": [
+      "rod in slot 1",
+      "90-second lure in slot 2",
+      "10-minute lure in slot 3",
+      "15-minute lure in slot 4"
+    ]
+  },
+  "historicalImplementations": [
+    {
+      "name": "Simple Autoit Rift Fishing Bot",
+      "category": "external_script",
+      "confidence": "medium",
+      "detectionMethods": [
+        "os_cursor_change",
+        "static_loot_region_over_rippling_water"
+      ],
+      "actionMethods": [
+        "press_bound_rod_key",
+        "mouse_click_selected_fishing_point",
+        "optional_bag_click_for_lures"
+      ],
+      "requirements": [
+        "Windowed mode",
+        "Fish in lower half of the screen",
+        "Rod must be on slot 1",
+        "Autoloot off",
+        "Water must visibly ripple",
+        "Bags open for lure support"
+      ],
+      "failureModes": [
+        "Low graphics or no visible water ripple breaks loot heuristic",
+        "Resolution changes may require parameter adjustment",
+        "Visual heuristics depend on a stable screen region"
+      ],
+      "usefulNotes": [
+        "The script explicitly says it did not use the screen for the fishing event itself; it waited for cursor changes.",
+        "It used loot-region stillness rather than raw splash pixels for loot detection."
+      ],
+      "sourceIds": [
+        "simple_autoit_fishing"
+      ]
+    },
+    {
+      "name": "MoeFish",
+      "category": "external_script",
+      "confidence": "medium",
+      "detectionMethods": [
+        "historical_log_based_loot_detection",
+        "calibrated_visual_detection",
+        "later_detection_rewrite"
+      ],
+      "actionMethods": [
+        "hotbar_slot_activation",
+        "calibrated_cast_positions",
+        "optional_lure_slots"
+      ],
+      "requirements": [
+        "English client language",
+        "Historical /log usage",
+        "Windowed or windowed fullscreen",
+        "Autoloot on",
+        "Rod in slot 1",
+        "Optional lures in fixed slots"
+      ],
+      "failureModes": [
+        "Language dependence",
+        "Lag-sensitive loot handling",
+        "Repeated detection rewrites imply unstable signal sources",
+        "Users reported failures after reinstalls or changed setups"
+      ],
+      "usefulNotes": [
+        "Version history explicitly mentions changing loot detection to log based and later fully rewriting detection.",
+        "It also added random and two-point cast options, suggesting route/cast modularity was valuable."
+      ],
+      "sourceIds": [
+        "moefish"
+      ]
+    },
+    {
+      "name": "Simple Fish Bot / AHK-style shared script",
+      "category": "external_script",
+      "confidence": "low_medium",
+      "detectionMethods": [
+        "PixelSearch splash color",
+        "log_file_string_checks"
+      ],
+      "actionMethods": [
+        "send_rod_key",
+        "mouse_click_fishing_point",
+        "send_bait_key",
+        "bag_click_for_bait"
+      ],
+      "requirements": [
+        "Windows profile log path",
+        "Manual screenshot color sampling",
+        "Configured rod and bait bindings"
+      ],
+      "failureModes": [
+        "Hardcoded log path and tokens",
+        "Color tolerance issues",
+        "Heavy manual calibration burden"
+      ],
+      "usefulNotes": [
+        "Useful mainly as evidence that historical bots combined multiple weak signals rather than trusting one signal."
+      ],
+      "sourceIds": [
+        "ownedcore_working_fishbot"
+      ]
+    },
+    {
+      "name": "ResourceTracker",
+      "category": "addon_only",
+      "confidence": "medium",
+      "detectionMethods": [
+        "track_buff_presence",
+        "tracked_node_visibility"
+      ],
+      "actionMethods": [
+        "none_informational_only"
+      ],
+      "requirements": [
+        "Relevant Track buff active"
+      ],
+      "failureModes": [
+        "Some versions/comments reported lag or stutter",
+        "Missing Track Fish buff caused visible warning state"
+      ],
+      "usefulNotes": [
+        "This is strong evidence that fishing node tracking belongs in addon logic, not only external helper logic."
+      ],
+      "sourceIds": [
+        "resource_tracker"
+      ]
+    },
+    {
+      "name": "MouseLookToggle",
+      "category": "addon_plus_external_helper",
+      "confidence": "medium",
+      "detectionMethods": [
+        "ui_recognition",
+        "pixel_corner_signaling_between_addon_and_script"
+      ],
+      "actionMethods": [
+        "external_key_and_mouse_input"
+      ],
+      "requirements": [
+        "Active Rift window",
+        "Windowed or windowed fullscreen",
+        "Stable chat window placement",
+        "Compatible colors without disruptive shaders"
+      ],
+      "failureModes": [
+        "Fullscreen breaks behavior",
+        "Moved chat window or resolution changes break recognition",
+        "Shader/filter color changes break recognition"
+      ],
+      "usefulNotes": [
+        "This is direct evidence that a modular addon + helper split is viable in Rift, but only if calibration and environment constraints are explicit."
+      ],
+      "sourceIds": [
+        "mouselook_toggle"
+      ]
+    }
+  ],
+  "apiCandidates": [
+    {
+      "name": "Inspect.Buff.List",
+      "signature": "buffs = Inspect.Buff.List(unit)",
+      "confidence": "high",
+      "useCases": [
+        "track_fish_buff_detection",
+        "lure_buff_detection"
+      ],
+      "limitations": [
+        "Requires live identification of the exact fishing-related buff names or IDs."
+      ],
+      "sourceIds": [
+        "api_inspect_buff_list",
+        "telarapedia_ui_customization"
+      ]
+    },
+    {
+      "name": "Inspect.Buff.Detail",
+      "signature": "details = Inspect.Buff.Detail(unit, buffs)",
+      "confidence": "high",
+      "useCases": [
+        "named_buff_lookup",
+        "remaining_duration_tracking",
+        "icon_based_signal_confirmation"
+      ],
+      "limitations": [
+        "Buff presence still needs live fishing-specific mapping."
+      ],
+      "sourceIds": [
+        "api_inspect_buff_detail",
+        "telarapedia_ui_customization"
+      ]
+    },
+    {
+      "name": "Event.Unit.Castbar",
+      "signature": "Event.Unit.Castbar(units)",
+      "confidence": "high",
+      "useCases": [
+        "line_cast_started",
+        "line_cast_completed"
+      ],
+      "limitations": [
+        "Needs live confirmation that fishing actions emit castbar updates."
+      ],
+      "sourceIds": [
+        "api_event_unit_castbar"
+      ]
+    },
+    {
+      "name": "Inspect.Unit.Castbar",
+      "signature": "detail = Inspect.Unit.Castbar(unit)",
+      "confidence": "high",
+      "useCases": [
+        "cast_ability_name_detection",
+        "cast_duration_timing"
+      ],
+      "limitations": [
+        "Only useful if fishing appears as a castbar-visible ability."
+      ],
+      "sourceIds": [
+        "api_inspect_unit_castbar"
+      ]
+    },
+    {
+      "name": "Inspect.Item.List",
+      "signature": "items = Inspect.Item.List()",
+      "confidence": "high",
+      "useCases": [
+        "inventory_scan_for_lures",
+        "bag_presence_checks"
+      ],
+      "limitations": [
+        "Live testing is still needed to identify fishing-related item names/types."
+      ],
+      "sourceIds": [
+        "api_inspect_item_list"
+      ]
+    },
+    {
+      "name": "Inspect.Item.Detail",
+      "signature": "item = Inspect.Item.Detail(item_or_slot)",
+      "confidence": "high",
+      "useCases": [
+        "lure_name_lookup",
+        "lure_stack_count",
+        "lure_cooldown_tracking"
+      ],
+      "limitations": [
+        "Requires item discovery or mapping."
+      ],
+      "sourceIds": [
+        "api_inspect_item_detail"
+      ]
+    },
+    {
+      "name": "Inspect.Item.Find",
+      "signature": "slot = Inspect.Item.Find(item)",
+      "confidence": "high",
+      "useCases": [
+        "map_known_item_to_inventory_slot"
+      ],
+      "limitations": [
+        "Useful after item IDs are known."
+      ],
+      "sourceIds": [
+        "api_inspect_item_find"
+      ]
+    },
+    {
+      "name": "Inspect.Setting.List",
+      "signature": "settings = Inspect.Setting.List()",
+      "confidence": "high",
+      "useCases": [
+        "discover_fishing_relevant_setting_ids"
+      ],
+      "limitations": [
+        "Needs live inspection to map setting IDs to UI labels."
+      ],
+      "sourceIds": [
+        "api_inspect_setting_list"
+      ]
+    },
+    {
+      "name": "Inspect.Setting.Detail",
+      "signature": "detail = Inspect.Setting.Detail(setting)",
+      "confidence": "high",
+      "useCases": [
+        "autoloot_setting_probe",
+        "layout_or_ui_setting_probe"
+      ],
+      "limitations": [
+        "The setting IDs still need to be discovered."
+      ],
+      "sourceIds": [
+        "api_inspect_setting_detail"
+      ]
+    },
+    {
+      "name": "Inspect.System.Secure",
+      "signature": "secure = Inspect.System.Secure()",
+      "confidence": "high",
+      "useCases": [
+        "combat_or_secure_guardrails"
+      ],
+      "limitations": [],
+      "sourceIds": [
+        "api_inspect_system_secure"
+      ]
+    },
+    {
+      "name": "Event.System.Secure.Enter/Leave",
+      "signature": "Event.System.Secure.Enter(); Event.System.Secure.Leave()",
+      "confidence": "high",
+      "useCases": [
+        "pause_resume_guardrails"
+      ],
+      "limitations": [],
+      "sourceIds": [
+        "api_event_system_secure_enter",
+        "api_event_system_secure_leave"
+      ]
+    },
+    {
+      "name": "Layout:EventMacroSet",
+      "signature": "Layout:EventMacroSet(handle, macro)",
+      "confidence": "high",
+      "useCases": [
+        "secure_macro_trigger_bridge"
+      ],
+      "limitations": [
+        "Requires a secure frame and insecure environment.",
+        "Does not imply unrestricted unattended execution."
+      ],
+      "sourceIds": [
+        "api_layout_eventmacroset",
+        "macros_support"
+      ]
+    },
+    {
+      "name": "Command.Console.Display",
+      "signature": "Command.Console.Display(console, suppressPrefix, text, html)",
+      "confidence": "high",
+      "useCases": [
+        "structured_addon_logging"
+      ],
+      "limitations": [],
+      "sourceIds": [
+        "api_command_console_display"
+      ]
+    },
+    {
+      "name": "Command.Message.*",
+      "signature": "Command.Message.Send/Broadcast/Accept and Event.Message.Receive",
+      "confidence": "high",
+      "useCases": [
+        "addon_to_addon_signaling",
+        "diagnostic_message_path_experiments"
+      ],
+      "limitations": [
+        "Not a desktop-helper bridge.",
+        "Subject to message throttling and accept filters."
+      ],
+      "sourceIds": [
+        "api_command_message_send",
+        "api_command_message_broadcast",
+        "api_command_message_accept",
+        "api_event_message_receive",
+        "api_inspect_message_accept_check",
+        "api_inspect_message_accept_list",
+        "api_inspect_queue_status"
+      ]
+    },
+    {
+      "name": "Inspect.Cursor",
+      "signature": "type, held = Inspect.Cursor()",
+      "confidence": "high",
+      "useCases": [
+        "cursor_contents_inspection"
+      ],
+      "limitations": [
+        "Documented for drag/drop cursor contents, not proven world-hover fishing cursor state."
+      ],
+      "sourceIds": [
+        "api_inspect_cursor"
+      ]
+    },
+    {
+      "name": "Event.Cursor",
+      "signature": "Event.Cursor(type, held)",
+      "confidence": "high",
+      "useCases": [
+        "cursor_contents_change_notification"
+      ],
+      "limitations": [
+        "Same fishing-hover ambiguity as Inspect.Cursor."
+      ],
+      "sourceIds": [
+        "api_event_cursor"
+      ]
+    },
+    {
+      "name": "Inspect.Interaction",
+      "signature": "interactions = Inspect.Interaction()",
+      "confidence": "high",
+      "useCases": [
+        "auction_bank_mail_state_detection"
+      ],
+      "limitations": [
+        "Documented interaction types are auction, bank, guildbank, and mail only.",
+        "Not suitable as a primary fishing interaction detector."
+      ],
+      "sourceIds": [
+        "api_inspect_interaction",
+        "api_event_interaction"
+      ]
+    },
+    {
+      "name": "Inspect.Map.Detail",
+      "signature": "detail = Inspect.Map.Detail(location)",
+      "confidence": "high",
+      "useCases": [
+        "route_profile_authoring",
+        "coordinate_capture_experiments"
+      ],
+      "limitations": [
+        "Needs live testing to determine best route-to-pool mapping flow."
+      ],
+      "sourceIds": [
+        "api_inspect_map_detail",
+        "slash_commands"
+      ]
+    }
+  ],
+  "whatWorked": [
+    {
+      "name": "track_fish_pool_tracking",
+      "confidence": "high",
+      "notes": [
+        "Native game feature.",
+        "Backed by both current gameplay references and historical addon behavior."
+      ],
+      "sourceIds": [
+        "cadrift_fishing",
+        "resource_tracker",
+        "rift_archive_fishing"
+      ]
+    },
+    {
+      "name": "external_cursor_change_detection",
+      "confidence": "medium",
+      "notes": [
+        "Worked in historical external scripts.",
+        "Still useful as a helper-side fallback candidate."
+      ],
+      "sourceIds": [
+        "cadrift_fishing",
+        "simple_autoit_fishing",
+        "ownedcore_working_fishbot"
+      ]
+    },
+    {
+      "name": "bag_position_based_lure_application",
+      "confidence": "medium",
+      "notes": [
+        "Historical scripts successfully clicked bag positions for lures when the bag remained open and calibrated."
+      ],
+      "sourceIds": [
+        "simple_autoit_fishing"
+      ]
+    },
+    {
+      "name": "config_portability_via_export_import_commands",
+      "confidence": "high",
+      "notes": [
+        "Useful for reproducing stable layouts and keybindings across characters."
+      ],
+      "sourceIds": [
+        "slash_commands",
+        "ui_import_support",
+        "mouselook_toggle"
+      ]
+    }
+  ],
+  "whatBrokeOrStayedFragile": [
+    {
+      "name": "historical_log_parsing",
+      "confidence": "medium",
+      "notes": [
+        "Historical scripts depended on /log and log.txt tokens.",
+        "Current official slash command docs expose /combatlog instead.",
+        "Forum snippets mention missing log.txt after updates."
+      ],
+      "sourceIds": [
+        "slash_commands",
+        "moefish",
+        "ownedcore_working_fishbot"
+      ]
+    },
+    {
+      "name": "resolution_and_ui_layout_assumptions",
+      "confidence": "medium",
+      "notes": [
+        "Changing resolution, UI scale, or chat placement repeatedly broke helper-side recognition."
+      ],
+      "sourceIds": [
+        "simple_autoit_fishing",
+        "moefish",
+        "mouselook_toggle"
+      ]
+    },
+    {
+      "name": "water_ripple_and_splash_pixels",
+      "confidence": "medium",
+      "notes": [
+        "Water visuals and reflections changed enough to break visual heuristics."
+      ],
+      "sourceIds": [
+        "simple_autoit_fishing",
+        "ownedcore_working_fishbot"
+      ]
+    },
+    {
+      "name": "language_specific_string_parsing",
+      "confidence": "medium",
+      "notes": [
+        "MoeFish explicitly required English.",
+        "Legacy token-matching approaches do not generalize cleanly."
+      ],
+      "sourceIds": [
+        "moefish"
+      ]
+    },
+    {
+      "name": "long_unattended_external_input_sessions",
+      "confidence": "low_medium",
+      "notes": [
+        "Historical forum threads mention reliability issues and at least one short ban report.",
+        "Fabd's project page cites Rift's historical AHK reliability countermeasures."
+      ],
+      "sourceIds": [
+        "ownedcore_simple_fish_bot",
+        "mouselook_toggle"
+      ]
+    }
+  ],
+  "recommendedArchitecture": {
+    "detectorPriority": [
+      "Track Fish / buff state",
+      "Castbar state",
+      "Inventory + lure item state",
+      "Secure/combat state",
+      "Route/location context",
+      "Helper-side calibrated cursor/loot detection",
+      "Raw splash or water pixel scanning"
+    ],
+    "moduleCandidates": [
+      "Observation/TrackFishDetector",
+      "Observation/BuffDetector",
+      "Observation/CastbarDetector",
+      "Observation/LureInventoryDetector",
+      "Observation/SettingsProbe",
+      "Observation/RouteContext",
+      "Execution/SecureMacroTrigger",
+      "Execution/ExternalInputHelper",
+      "Calibration/VisualProfile",
+      "Calibration/LayoutProfile",
+      "Diagnostics/SignalTrace"
+    ],
+    "featureFlags": [
+      "useTrackFish",
+      "useCastbarDetection",
+      "useLureInventoryDetection",
+      "useHelperCursorProbe",
+      "useHelperLootProbe",
+      "useLegacyLogExperiment",
+      "useRawWaterPixelFallback"
+    ],
+    "avoidAsPrimary": [
+      "historical_log_scraping",
+      "hardcoded_single_resolution_logic",
+      "raw_water_reflection_detection",
+      "language_specific_string_matching"
+    ]
+  }
+}

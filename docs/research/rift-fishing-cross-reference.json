@@ -1,0 +1,349 @@
+{
+  "updatedAt": "2026-04-15",
+  "basedOnFiles": [
+    "C:\\RIFT MODDING\\AutoFish\\docs\\research\\rift-fishing-research.md",
+    "C:\\RIFT MODDING\\AutoFish\\docs\\research\\rift-fishing-library.json"
+  ],
+  "verdictScale": {
+    "primary": "Design around this now.",
+    "probe_first": "Strong candidate, but needs live proof.",
+    "helper_fallback": "Useful only if native signals are insufficient.",
+    "avoid_primary": "Historically real, but too brittle as the main design.",
+    "not_applicable": "Relevant API exists, but not for this problem."
+  },
+  "signalCrossReference": [
+    {
+      "id": "track_fish_state",
+      "verdict": "primary",
+      "confidence": "high",
+      "apiCandidates": ["Inspect.Buff.List", "Inspect.Buff.Detail"],
+      "methods": ["native_buff_detection", "resource_tracker_style_tracking"],
+      "whatWorks": [
+        "Track Fish is a stable named game feature.",
+        "Buff inspection is the best addon-native acquisition path."
+      ],
+      "whatDoesNot": ["Treating fish-school tracking as helper-only logic."],
+      "moduleCandidates": ["Observation/TrackFishDetector", "Observation/BuffDetector"],
+      "sourceIds": ["cadrift_fishing", "resource_tracker", "rift_archive_fishing", "api_inspect_buff_list", "api_inspect_buff_detail"]
+    },
+    {
+      "id": "pool_type",
+      "verdict": "probe_first",
+      "confidence": "medium_high",
+      "apiCandidates": ["Inspect.Map.Detail", "Inspect.Buff.Detail"],
+      "methods": ["route_metadata_capture", "resource_tracker_style_tracking"],
+      "whatWorks": [
+        "Pool names are stable strings.",
+        "Route metadata can preserve classification before a full live detector exists."
+      ],
+      "whatDoesNot": ["Assuming one native API already returns pool type directly."],
+      "moduleCandidates": ["Observation/PoolClassifier", "Observation/RouteContext"],
+      "sourceIds": ["cadrift_fishing", "rift_archive_fishing", "api_inspect_map_detail"]
+    },
+    {
+      "id": "fishing_cast_state",
+      "verdict": "probe_first",
+      "confidence": "high",
+      "apiCandidates": ["Event.Unit.Castbar", "Inspect.Unit.Castbar"],
+      "methods": ["native_castbar_detection"],
+      "whatWorks": [
+        "Castbar APIs can expose ability name, duration, and remaining time.",
+        "This is the best native replacement for timer-only cast assumptions."
+      ],
+      "whatDoesNot": ["There is no live proof yet that fishing emits castbar state in the target client."],
+      "moduleCandidates": ["Observation/CastbarDetector"],
+      "sourceIds": ["api_event_unit_castbar", "api_inspect_unit_castbar"]
+    },
+    {
+      "id": "fish_ready_reel_signal",
+      "verdict": "helper_fallback",
+      "confidence": "medium",
+      "apiCandidates": ["Inspect.Cursor", "Event.Cursor"],
+      "methods": ["helper_visual_cursor_detection"],
+      "whatWorks": [
+        "Historical Rift fishing scripts used visible cursor changes successfully.",
+        "Cursor probing is better than raw splash-pixel logic."
+      ],
+      "whatDoesNot": ["The documented addon cursor API is not yet proven to expose the fishing hover cursor."],
+      "moduleCandidates": ["Observation/HelperCursorProbe", "Calibration/VisualProfile"],
+      "sourceIds": ["cadrift_fishing", "simple_autoit_fishing", "ownedcore_working_fishbot", "api_inspect_cursor", "api_event_cursor"]
+    },
+    {
+      "id": "lure_inventory_state",
+      "verdict": "primary",
+      "confidence": "high",
+      "apiCandidates": ["Inspect.Item.List", "Inspect.Item.Detail", "Inspect.Item.Find"],
+      "methods": ["native_item_inventory_probe"],
+      "whatWorks": [
+        "Inventory APIs are the cleanest way to discover lures without bag pixels.",
+        "This supports modular lure handling."
+      ],
+      "whatDoesNot": ["We still need live lure name and item-ID mapping."],
+      "moduleCandidates": ["Observation/LureInventoryDetector"],
+      "sourceIds": ["api_inspect_item_list", "api_inspect_item_detail", "api_inspect_item_find", "rift_archive_fishing"]
+    },
+    {
+      "id": "lure_active_state",
+      "verdict": "probe_first",
+      "confidence": "medium_high",
+      "apiCandidates": ["Inspect.Buff.List", "Inspect.Buff.Detail", "Inspect.Item.Detail"],
+      "methods": ["native_buff_detection", "native_item_inventory_probe"],
+      "whatWorks": [
+        "If lures surface as buffs, buff APIs should capture them.",
+        "Item detail may help with cooldown or reuse timing."
+      ],
+      "whatDoesNot": ["Legacy log token parsing is too fragile for primary lure handling."],
+      "moduleCandidates": ["Observation/BuffDetector", "Observation/LureInventoryDetector"],
+      "sourceIds": ["api_inspect_buff_list", "api_inspect_buff_detail", "api_inspect_item_detail", "ownedcore_working_fishbot"]
+    },
+    {
+      "id": "loot_ready_state",
+      "verdict": "helper_fallback",
+      "confidence": "medium",
+      "apiCandidates": ["Inspect.Setting.Detail"],
+      "methods": ["helper_loot_region_detection", "legacy_log_parsing"],
+      "whatWorks": [
+        "Historical scripts sometimes detected loot through static-region checks or logs.",
+        "Autoloot is an important dependency."
+      ],
+      "whatDoesNot": ["No strong native fishing-loot observation API has been found yet."],
+      "moduleCandidates": ["Observation/SettingsProbe", "Observation/HelperLootProbe", "Calibration/LayoutProfile"],
+      "sourceIds": ["simple_autoit_fishing", "moefish", "ownedcore_working_fishbot", "api_inspect_setting_detail"]
+    },
+    {
+      "id": "secure_combat_state",
+      "verdict": "primary",
+      "confidence": "high",
+      "apiCandidates": ["Inspect.System.Secure", "Event.System.Secure.Enter", "Event.System.Secure.Leave"],
+      "methods": ["native_secure_state_detection"],
+      "whatWorks": [
+        "Secure mode is directly represented in the API.",
+        "This aligns with the addon's existing guardrail architecture."
+      ],
+      "whatDoesNot": ["Treating combat restrictions as optional."],
+      "moduleCandidates": ["Observation/SecureStateDetector", "Core/Guardrails"],
+      "sourceIds": ["api_inspect_system_secure", "api_event_system_secure_enter", "api_event_system_secure_leave"]
+    },
+    {
+      "id": "route_location_context",
+      "verdict": "primary",
+      "confidence": "high",
+      "apiCandidates": ["Inspect.Map.Detail"],
+      "methods": ["route_metadata_capture"],
+      "whatWorks": [
+        "Map detail plus /loc supports route authoring.",
+        "Pool and zone knowledge can be stored outside fragile runtime heuristics."
+      ],
+      "whatDoesNot": ["Assuming location alone fully identifies what is in the water."],
+      "moduleCandidates": ["Observation/RouteContext"],
+      "sourceIds": ["api_inspect_map_detail", "slash_commands", "cadrift_fishing"]
+    },
+    {
+      "id": "autoloot_configuration",
+      "verdict": "probe_first",
+      "confidence": "medium_high",
+      "apiCandidates": ["Inspect.Setting.List", "Inspect.Setting.Detail"],
+      "methods": ["native_setting_probe"],
+      "whatWorks": [
+        "The setting exists and materially changes historical loot flow.",
+        "The settings API gives us a way to stop guessing."
+      ],
+      "whatDoesNot": ["Hardcoding one autoloot assumption for all users."],
+      "moduleCandidates": ["Observation/SettingsProbe"],
+      "sourceIds": ["api_inspect_setting_list", "api_inspect_setting_detail", "simple_autoit_fishing", "moefish", "mouselook_toggle"]
+    }
+  ],
+  "apiCrossReference": [
+    {
+      "name": "Inspect.Buff.List / Inspect.Buff.Detail",
+      "status": "primary_candidate",
+      "bestFor": ["track_fish_state", "lure_active_state"],
+      "notFor": ["fish_ready_reel_signal"],
+      "nextProbe": "Log buff names and timers while toggling Track Fish and applying lures.",
+      "sourceIds": ["api_inspect_buff_list", "api_inspect_buff_detail", "resource_tracker", "cadrift_fishing"]
+    },
+    {
+      "name": "Event.Unit.Castbar / Inspect.Unit.Castbar",
+      "status": "probe_first",
+      "bestFor": ["fishing_cast_state"],
+      "notFor": ["track_fish_state", "loot_ready_state"],
+      "nextProbe": "Log castbar changes during manual cast, wait, reel, and cancel actions.",
+      "sourceIds": ["api_event_unit_castbar", "api_inspect_unit_castbar"]
+    },
+    {
+      "name": "Inspect.Item.List / Detail / Find",
+      "status": "primary_candidate",
+      "bestFor": ["lure_inventory_state", "lure_active_state"],
+      "notFor": ["fish_ready_reel_signal"],
+      "nextProbe": "Dump item detail for poles, lures, and consumed lure slots.",
+      "sourceIds": ["api_inspect_item_list", "api_inspect_item_detail", "api_inspect_item_find"]
+    },
+    {
+      "name": "Inspect.Setting.List / Detail",
+      "status": "probe_first",
+      "bestFor": ["autoloot_configuration", "loot_ready_state"],
+      "notFor": ["track_fish_state"],
+      "nextProbe": "Diff settings before and after toggling Auto-Loot By Default.",
+      "sourceIds": ["api_inspect_setting_list", "api_inspect_setting_detail", "simple_autoit_fishing", "moefish"]
+    },
+    {
+      "name": "Inspect.System.Secure / Event.System.Secure.*",
+      "status": "primary_candidate",
+      "bestFor": ["secure_combat_state"],
+      "notFor": ["fish_ready_reel_signal"],
+      "nextProbe": "Log secure transitions while manually entering and leaving combat.",
+      "sourceIds": ["api_inspect_system_secure", "api_event_system_secure_enter", "api_event_system_secure_leave"]
+    },
+    {
+      "name": "Inspect.Map.Detail",
+      "status": "primary_candidate",
+      "bestFor": ["route_location_context", "pool_type"],
+      "notFor": ["fish_ready_reel_signal", "lure_active_state"],
+      "nextProbe": "Capture map detail in known fishing locations and compare it with /loc output.",
+      "sourceIds": ["api_inspect_map_detail", "slash_commands"]
+    },
+    {
+      "name": "Inspect.Cursor / Event.Cursor",
+      "status": "helper_fallback_candidate",
+      "bestFor": ["fish_ready_reel_signal"],
+      "notFor": ["track_fish_state"],
+      "nextProbe": "Test whether addon cursor APIs change during use-hand and fish-ready cursor transitions.",
+      "sourceIds": ["api_inspect_cursor", "api_event_cursor", "cadrift_fishing"]
+    },
+    {
+      "name": "Inspect.Interaction / Event.Interaction",
+      "status": "not_applicable",
+      "bestFor": [],
+      "notFor": ["fishing_world_interaction"],
+      "nextProbe": "None until live evidence suggests fishing-specific interaction state appears here.",
+      "sourceIds": ["api_inspect_interaction", "api_event_interaction"]
+    },
+    {
+      "name": "Layout:EventMacroSet",
+      "status": "probe_first",
+      "bestFor": ["execution_path_only"],
+      "notFor": ["observation"],
+      "nextProbe": "Prototype a minimal secure macro trigger for a player-approved fishing action.",
+      "sourceIds": ["api_layout_eventmacroset", "macros_support"]
+    },
+    {
+      "name": "Command.Message.*",
+      "status": "not_applicable",
+      "bestFor": ["addon_to_addon_only"],
+      "notFor": ["desktop_helper_transport"],
+      "nextProbe": "None for helper transport.",
+      "sourceIds": ["api_command_message_send", "api_command_message_broadcast", "api_command_message_accept", "api_event_message_receive"]
+    }
+  ],
+  "methodCrossReference": [
+    {
+      "id": "native_buff_detection",
+      "verdict": "primary",
+      "worksFor": ["track_fish_state", "lure_active_state"],
+      "failsFor": [],
+      "notes": ["Best native path for Track Fish and possible lure buffs."],
+      "sourceIds": ["api_inspect_buff_list", "api_inspect_buff_detail", "resource_tracker", "cadrift_fishing"]
+    },
+    {
+      "id": "native_castbar_detection",
+      "verdict": "probe_first",
+      "worksFor": ["fishing_cast_state"],
+      "failsFor": ["fish_ready_reel_signal"],
+      "notes": ["Very promising if fishing uses the castbar system; still unproven live."],
+      "sourceIds": ["api_event_unit_castbar", "api_inspect_unit_castbar"]
+    },
+    {
+      "id": "native_item_inventory_probe",
+      "verdict": "primary",
+      "worksFor": ["lure_inventory_state", "lure_active_state"],
+      "failsFor": [],
+      "notes": ["Avoids hardcoded bag pixels and supports modular lure handling."],
+      "sourceIds": ["api_inspect_item_list", "api_inspect_item_detail", "api_inspect_item_find"]
+    },
+    {
+      "id": "native_setting_probe",
+      "verdict": "probe_first",
+      "worksFor": ["autoloot_configuration", "loot_ready_state"],
+      "failsFor": [],
+      "notes": ["Turns user config from a hidden assumption into explicit state once IDs are known."],
+      "sourceIds": ["api_inspect_setting_list", "api_inspect_setting_detail", "simple_autoit_fishing", "moefish"]
+    },
+    {
+      "id": "helper_visual_cursor_detection",
+      "verdict": "helper_fallback",
+      "worksFor": ["fish_ready_reel_signal"],
+      "failsFor": ["track_fish_state"],
+      "notes": ["Historically better than raw splash scanning, but still screen-dependent."],
+      "sourceIds": ["simple_autoit_fishing", "ownedcore_working_fishbot", "cadrift_fishing"]
+    },
+    {
+      "id": "helper_loot_region_detection",
+      "verdict": "helper_fallback",
+      "worksFor": ["loot_ready_state"],
+      "failsFor": [],
+      "notes": ["Useful only behind calibration because layout and graphics changes break it easily."],
+      "sourceIds": ["simple_autoit_fishing", "moefish"]
+    },
+    {
+      "id": "legacy_log_parsing",
+      "verdict": "avoid_primary",
+      "worksFor": ["loot_ready_state", "lure_active_state"],
+      "failsFor": [],
+      "notes": ["Real historically, but patch-sensitive and language-sensitive."],
+      "sourceIds": ["slash_commands", "moefish", "ownedcore_working_fishbot"]
+    },
+    {
+      "id": "raw_water_pixel_scan",
+      "verdict": "avoid_primary",
+      "worksFor": ["fish_ready_reel_signal"],
+      "failsFor": [],
+      "notes": ["Repeatedly broken by reflections, ripple changes, shaders, and environment noise."],
+      "sourceIds": ["simple_autoit_fishing", "ownedcore_working_fishbot", "mouselook_toggle"]
+    },
+    {
+      "id": "route_metadata_capture",
+      "verdict": "primary",
+      "worksFor": ["route_location_context", "pool_type"],
+      "failsFor": [],
+      "notes": ["Lets the project preserve stable zone and pool knowledge outside fragile heuristics."],
+      "sourceIds": ["api_inspect_map_detail", "slash_commands", "cadrift_fishing"]
+    }
+  ],
+  "evidenceBacklog": [
+    {
+      "id": "capture_track_fish_buff_signature",
+      "priority": 1,
+      "goal": "Identify the exact Track Fish buff signature in the live client.",
+      "unlocks": ["track_fish_state", "pool_type"],
+      "targetApis": ["Inspect.Buff.List", "Inspect.Buff.Detail"]
+    },
+    {
+      "id": "capture_fishing_castbar_behavior",
+      "priority": 2,
+      "goal": "Prove whether fishing emits castbar state and which ability names appear.",
+      "unlocks": ["fishing_cast_state"],
+      "targetApis": ["Event.Unit.Castbar", "Inspect.Unit.Castbar"]
+    },
+    {
+      "id": "map_lure_items_and_slots",
+      "priority": 3,
+      "goal": "Map lure items, stacks, and slots through native item inspection.",
+      "unlocks": ["lure_inventory_state", "lure_active_state"],
+      "targetApis": ["Inspect.Item.List", "Inspect.Item.Detail", "Inspect.Item.Find"]
+    },
+    {
+      "id": "discover_autoloot_setting_ids",
+      "priority": 4,
+      "goal": "Identify which setting IDs control autoloot and related loot behavior.",
+      "unlocks": ["autoloot_configuration", "loot_ready_state"],
+      "targetApis": ["Inspect.Setting.List", "Inspect.Setting.Detail"]
+    },
+    {
+      "id": "test_addon_cursor_visibility_for_fishing",
+      "priority": 5,
+      "goal": "Determine whether addon cursor APIs can observe fishing-ready cursor transitions.",
+      "unlocks": ["fish_ready_reel_signal"],
+      "targetApis": ["Inspect.Cursor", "Event.Cursor"]
+    }
+  ]
+}

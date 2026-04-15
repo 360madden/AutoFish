@@ -9,11 +9,18 @@ function ProfileRuntime.fromProfile(profile)
 
     local thresholds = profile.thresholds or {}
     local guardrails = profile.guardrails or {}
+    local pacing = profile.pacing or {}
 
     return Defaults.normalize({
+        reactionFloorMs = pacing.reactionFloorMs,
+        reactionCeilingMs = pacing.reactionCeilingMs,
+        biteTimeoutMs = pacing.biteTimeoutMs,
+        lootTimeoutMs = pacing.lootTimeoutMs,
         rebaitAtOrBelow = thresholds.rebaitAtOrBelow,
         maintenanceAtFreeSlotsOrBelow = thresholds.maintenanceAtFreeSlotsOrBelow,
+        maxRecoveryAttempts = thresholds.maxRecoveryAttempts,
         pauseOnCombat = guardrails.pauseOnCombat,
+        pauseOnBridgeLoss = guardrails.pauseOnBridgeLoss,
         recoverOnDrift = guardrails.recoverOnDrift,
     })
 end

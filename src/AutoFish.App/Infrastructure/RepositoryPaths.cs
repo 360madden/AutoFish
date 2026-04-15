@@ -17,7 +17,8 @@ public static class RepositoryPaths
         while (current is not null)
         {
             var candidate = Path.Combine(current.FullName, "profiles");
-            if (Directory.Exists(candidate))
+            if (Directory.Exists(candidate)
+                && Directory.EnumerateFiles(candidate, "*.json", SearchOption.TopDirectoryOnly).Any())
             {
                 return candidate;
             }
