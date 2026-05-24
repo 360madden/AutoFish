@@ -1,6 +1,6 @@
 # AutoFish Lua Addon Scaffold
 
-This folder contains the **in-game Lua-side core** for the split AutoFish architecture.
+This folder contains the **in-game Lua-side core** for the split AutoFish architecture, plus a first live-loadable addon shell for probing player, buff, equipment, bag, and inventory state inside Rift.
 
 ## Included now
 
@@ -18,13 +18,39 @@ This folder contains the **in-game Lua-side core** for the split AutoFish archit
 - `UI/ViewModel.lua` - GUI view-model projection from session snapshot data.
 - `UI/Controller.lua` - UI intent-to-command translation.
 - `AutoFishAddon.lua` - composition root that wires state, bridge, and GUI model together.
+- `Main.lua` - live Rift addon entry point with `/autofish` diagnostics commands.
+- `RiftAddon.toc` - addon manifest for live loading and saved-variable persistence.
+
+## Prepared live diagnostics
+
+The repository now contains a prepared Rift addon shell that is intended to verify the following when live testing resumes:
+
+- addon startup/loading,
+- player availability and zone,
+- secure/combat state,
+- castbar visibility,
+- `Track Fish` buff presence,
+- equipped and carried fishing-pole candidates,
+- bag container discovery,
+- inventory item counts and bait/lure candidates.
+
+Slash commands:
+
+- `/autofish status`
+- `/autofish bags`
+- `/autofish inventory`
+- `/autofish pole`
+- `/autofish snapshot`
+
+For the current offline-only phase, treat these commands as documented/prepared rather than already live-verified.
 
 ## Intentionally deferred
 
-This scaffold does **not** claim to already be bound to the real Rift addon API.
+This scaffold does **not** yet claim to perform real fishing actions in the live client.
 
 The expected next live step is to map:
 
-- real Rift observations into `onObservation`,
+- real water/fishable-state observations into `onObservation`,
+- real cast/bite/loot transitions into the state machine,
 - real in-game UI primitives to `UI/Layout.lua` / `UI/ViewModel.lua`,
 - and the validated desktop bridge transport to `MessageBus.lua`.

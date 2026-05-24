@@ -22,3 +22,4 @@ The .NET 10 helper is the supervisory surface for:
 - The helper is intentionally supervisory.
 - The addon should still remain safe if the helper disconnects.
 - The active profile shown in session status may differ from the currently selected helper profile until the operator syncs it.
+- Live addon diagnostics are being documented separately in `C:\RIFT MODDING\AutoFish\docs\addon-probe-plan.md`; they are not yet part of the helper's verified runtime flow.

@@ -27,6 +27,7 @@ The current target is a modular, reliable foundation for:
 - `contracts` - JSON schemas for commands, envelopes, status, observations, and fishing profiles.
 - `profiles` - sample fishing profiles used by the helper.
 - `docs/framework-plan.md` - scoped delivery plan for the addon + helper product.
+- `docs/addon-probe-plan.md` - offline plan for the prepared in-game addon diagnostics shell.
 - `docs/profile-authoring.md` - profile field guidance and validation rules.
 - `docs/helper-operator-guide.md` - helper usage notes.
 - `docs/addon-architecture.md` - addon module map.
@@ -101,6 +102,12 @@ luac -p lua/AutoFish/AutoFishAddon.lua
 lua -e "package.path='lua/?.lua;lua/?/init.lua;lua/?/?.lua;' .. package.path; local Addon = require('AutoFish.AutoFishAddon'); local addon = Addon.new({}, {}); local decision = addon:onObservation({characterName='Tester', inGame=true, nearWater=true, inCombat=false, inventoryFull=false, baitAvailable=true, biteDetected=false, lootReady=false, lineCast=false, canCast=true}); print(decision)"
 ```
 
+### Syntax-check the prepared live-addon entrypoint offline
+
+```powershell
+luac -p lua/AutoFish/Main.lua
+```
+
 ## Current limitation
 
-The live Rift-specific addon binding and the real addon-to-helper transport are still the final integration phase. The codebase is intentionally scoped so those live pieces can be added later without reshaping the project.
+The repository now includes a prepared Rift addon manifest, entrypoint, and deployment script for future in-game diagnostics, but live verification is intentionally deferred. The live Rift-specific observation binding, real fishing actions, and the real addon-to-helper transport are still the final integration phase.

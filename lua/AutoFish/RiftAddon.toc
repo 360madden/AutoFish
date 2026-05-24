@@ -1,0 +1,17 @@
+Identifier = "AutoFish"
+Name = "AutoFish"
+NameShort = "AF"
+Description = "Live in-game diagnostics shell for AutoFish fishing readiness and inventory probing."
+Author = "OpenAI Codex"
+Website = ""
+Version = "0.1.0"
+Email = "noreply@example.com"
+Environment = "4.4"
+
+RunOnStartup = {
+  "Main.lua",
+}
+
+SavedVariables = {
+  AutoFish_State = "character",
+}

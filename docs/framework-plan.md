@@ -77,6 +77,7 @@ The following can be completed without the live client:
 - contract models and serializers,
 - Lua addon architecture,
 - Lua state/guardrail logic,
+- prepared live-addon manifest, slash-command shell, and deployment docs/scripts,
 - documentation and GitHub workflow setup.
 - local validation scripts and release/support docs.
 
@@ -84,6 +85,7 @@ The following can be completed without the live client:
 
 The following still require the live client:
 
+- verifying the prepared addon probe commands against real item/bag/buff data,
 - real Rift UI binding,
 - real observation mapping,
 - real transport implementation,
@@ -107,6 +109,7 @@ Next:
 
 - finish modular guardrail/config/profile application inside Lua,
 - finish snapshot builders, bridge envelopes, and GUI projection,
+- keep the live-addon diagnostics shell documented and ready without treating it as live-verified,
 - add stronger Lua-side smoke coverage.
 
 ### Phase 3 - Helper hardening
