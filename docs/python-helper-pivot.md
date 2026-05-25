@@ -30,7 +30,7 @@ Operator screenshots on 2026-05-25 proved the cast-start sequence:
 
 1. Hover the cursor over a valid fishable water point.
 2. Press/release actionbar 1 key `8`.
-3. Rift shows the yellow fishing placement circle at the cursor when the spot is valid.
+3. Rift shows a fishing placement reticle at the cursor.
 4. Left-click the placement point.
 5. The fishing pole animation starts and a visible line extends toward the placement point.
 
@@ -38,6 +38,19 @@ Evidence screenshots were captured locally from Rift on 2026-05-25:
 
 - `2026-05-25_134047.jpg` - yellow placement circle after pressing `8`.
 - `2026-05-25_134759.jpg` - fishing pole animation and visible line after left-click.
+- `2026-05-25_141050.jpg` through `2026-05-25_141140.jpg` - red, yellow, and blue/cyan reticle sweep.
+- `2026-05-25_141606.jpg` and `2026-05-25_141607.jpg` - blue/cyan reticle over water.
+- `2026-05-25_141610.jpg` and `2026-05-25_141611.jpg` - fishing line/cast animation after the blue/cyan reticle sequence.
+
+Current reticle model:
+
+| Reticle color | Helper behavior |
+| --- | --- |
+| Red | abort; do not click; recalibrate point |
+| Yellow | valid/click-confirmable |
+| Blue/cyan | valid/click-confirmable |
+
+The first Python helper can start with manually calibrated yellow or blue/cyan coordinates. A later helper pass should add screenshot-based reticle color detection near the cursor after pressing `8`.
 
 ## Migration rule
 
@@ -57,6 +70,7 @@ one-cast-start:
   focus target window
   move cursor to calibrated client coordinate without clicking
   press key 8
+  capture and confirm reticle is not red
   wait briefly
   left-click same coordinate
   capture evidence
@@ -92,7 +106,7 @@ Then rerun without `--dry-run` only after the exact-window and coordinate checks
 4. Implement screenshot capture.
 5. Implement hover without click.
 6. Implement key `8`.
-7. Implement left-click confirmation.
+7. Capture after keypress and record reticle color.
 8. Implement `one-cast-start --dry-run`.
-9. Run one real cast-start test.
+9. Implement left-click confirmation for yellow or blue/cyan reticles.
 10. Add bite/pull timing only after scripted cast-start is reproduced.

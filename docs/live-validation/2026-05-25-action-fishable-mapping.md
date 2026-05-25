@@ -280,7 +280,7 @@ New evidence-based conclusion:
 
 - Key `8` is confirmed working.
 - Valid cursor position before pressing `8` is required.
-- Left-click after the yellow placement circle is the cast-confirm action.
+- Left-click after a valid placement reticle is the cast-confirm action.
 - The next script shape should be `hover calibrated point -> press 8 -> left-click same point -> wait/observe`, not direct action-slot experiments.
 - Hotbar/action-slot alternatives should be paused unless the keybind changes.
 
@@ -289,3 +289,85 @@ Next smallest implementation slice:
 - Add a `HoverBeforeKey`-style mode, or equivalent cursor pre-position step, to `scripts/start-live-fishing-prototype.ps1`.
 - Run one bounded dry-run and then one real `MaxCasts=1` test at the calibrated water point.
 - Keep `PullClicks=0` until the scripted cast start is reproduced and captured.
+
+## Reticle color calibration update
+
+The operator then captured a focused reticle-color sweep in the Rift screenshot folder. These screenshots show the placement reticle at different water/shore spots and distances from the player.
+
+Review artifacts generated locally for comparison:
+
+- `.autofish-live/screenshot-review-20260525-1411/reticle-cluster-contact-sheet.jpg`
+- `.autofish-live/screenshot-review-20260525-1411/reticle-color-crops.jpg`
+- `.autofish-live/screenshot-review-20260525-1416/blue-reticle-latest-contact-sheet.jpg`
+
+### Red reticle
+
+Examples:
+
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141050.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141053.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141055.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141056.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141058.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141134.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141135.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141138.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141140.jpg`
+
+Working interpretation:
+
+- Red means invalid or unsafe placement for fishing confirmation.
+- Helper logic should not left-click a red reticle.
+- Red commonly appeared near shoreline/edge geometry, near the bottom edge, or other likely invalid target surfaces.
+
+### Yellow reticle
+
+Examples:
+
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_134047.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141120.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141121.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141122.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141124.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141125.jpg`
+
+Working interpretation:
+
+- Yellow is a valid/click-confirmable fishing placement state.
+- Yellow already had supporting cast-start evidence from the earlier left-click/line screenshot.
+
+### Blue/cyan reticle
+
+Examples:
+
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141606.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141607.jpg`
+
+Follow-up cast-start evidence:
+
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141610.jpg`
+- `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_141611.jpg`
+
+Working interpretation:
+
+- Blue/cyan is also a valid/click-confirmable fishing placement state.
+- The 14:16 screenshot sequence strongly indicates `blue/cyan reticle -> left-click -> fishing line/cast animation`.
+
+### Updated automation rule
+
+Use this reticle color model for the Python helper:
+
+| Reticle color | Helper action | Confidence |
+| --- | --- | --- |
+| Red | abort / do not click / recalibrate point | high |
+| Yellow | left-click confirm is allowed | high |
+| Blue/cyan | left-click confirm is allowed | high enough for the next bounded test |
+
+Suggested first Python behavior:
+
+1. Move cursor to calibrated water point without clicking.
+2. Press/release `8`.
+3. Capture screenshot immediately after keypress.
+4. If reticle is red, abort and record the candidate as invalid.
+5. If reticle is yellow or blue/cyan, left-click the same point.
+6. Capture after click and verify fishing line/cast animation before adding bite/pull timing.
