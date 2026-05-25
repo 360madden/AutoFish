@@ -6,6 +6,7 @@ local addonVersion = (addonInfo and addonInfo.version) or "0.1.0"
 
 local REFRESH_INTERVAL = 1.0
 local MAX_MATCHES = 6
+local MAX_TRACE_SAMPLES = 90
 
 local Console = {}
 local AutoFishLive = {}
@@ -17,10 +18,14 @@ local runtime = {
   dirty = true,
   pendingReason = "startup",
   lastRefreshAt = 0,
+  lastAbilityScanAt = 0,
+  abilityCandidates = {},
+  abilityScanError = nil,
 }
 
 local POLE_KEYWORDS = { "fishing", "pole", "rod" }
 local BAIT_KEYWORDS = { "bait", "lure" }
+local FISHING_ABILITY_KEYWORDS = { "fish", "fishing", "pole", "bait", "lure" }
 
 local function now()
   if Inspect and Inspect.Time and Inspect.Time.Real then
@@ -303,14 +308,116 @@ local function collectMatches(entries, keywords, limit)
   return trimmed
 end
 
+local function collectAbilityMatches(keywords, limit)
+  local matches = {}
+
+  if not (Inspect and Inspect.Ability and Inspect.Ability.New and Inspect.Ability.New.List and Inspect.Ability.New.Detail) then
+    return matches, "Inspect.Ability.New API unavailable"
+  end
+
+  local abilityList = safeCall(Inspect.Ability.New.List)
+  if type(abilityList) ~= "table" then
+    return matches, "Inspect.Ability.New.List returned no table"
+  end
+
+  local details = safeCall(Inspect.Ability.New.Detail, abilityList)
+  if type(details) ~= "table" then
+    details = {}
+  end
+
+  for abilityId in pairs(abilityList) do
+    local detail = details[abilityId]
+    if type(detail) ~= "table" then
+      detail = safeCall(Inspect.Ability.New.Detail, abilityId)
+    end
+
+    if type(detail) == "table" then
+      local entry = {
+        id = toString(abilityId),
+        name = toString(detail.name),
+        description = toString(detail.description),
+        category = toString(detail.category),
+        icon = toString(detail.icon),
+        requiredSkill = toString(detail.requiredSkill),
+        rangeMax = toNumber(detail.rangeMax),
+        castingTime = toNumber(detail.castingTime),
+        cooldown = toNumber(detail.cooldown),
+        currentCooldownRemaining = toNumber(detail.currentCooldownRemaining or detail.cooldownRemaining),
+        unusable = detail.unusable and true or false,
+        outOfRange = detail.outOfRange and true or false,
+        passive = detail.passive and true or false,
+        channeled = detail.channeled and true or false,
+      }
+
+      local score = keywordScore(entry, keywords)
+      if score > 0 then
+        entry.matchScore = score
+        matches[#matches + 1] = entry
+      end
+    end
+  end
+
+  table.sort(matches, function(left, right)
+    if (left.matchScore or 0) ~= (right.matchScore or 0) then
+      return (left.matchScore or 0) > (right.matchScore or 0)
+    end
+
+    return tostring(left.name or left.id or "") < tostring(right.name or right.id or "")
+  end)
+
+  local maxCount = math.min(#matches, limit or MAX_MATCHES)
+  local trimmed = {}
+  for index = 1, maxCount do
+    trimmed[index] = matches[index]
+  end
+
+  return trimmed, nil
+end
+
+local function getFishingAbilityCandidates(force)
+  local currentTime = now()
+  if not force and type(runtime.abilityCandidates) == "table" and (currentTime - (runtime.lastAbilityScanAt or 0)) < 10 then
+    return runtime.abilityCandidates, runtime.abilityScanError
+  end
+
+  local candidates, errorText = collectAbilityMatches(FISHING_ABILITY_KEYWORDS, MAX_MATCHES)
+  runtime.abilityCandidates = candidates
+  runtime.abilityScanError = errorText
+  runtime.lastAbilityScanAt = currentTime
+  return candidates, errorText
+end
+
+local function collectUsableLureAbilities(abilityCandidates)
+  local matches = {}
+  if type(abilityCandidates) ~= "table" then
+    return matches
+  end
+
+  for _, ability in ipairs(abilityCandidates) do
+    local name = lower(ability.name)
+    local category = lower(ability.category)
+    local description = lower(ability.description)
+    if (containsText(name, "lure") or containsText(category, "lure") or containsText(description, "lure"))
+      and ability.unusable ~= true
+      and ability.passive ~= true then
+      matches[#matches + 1] = ability
+    end
+  end
+
+  return matches
+end
+
 local function collectBagSummaries()
   if not (Utility and Utility.Item and Utility.Item.Slot and Utility.Item.Slot.Inventory) then
-    return {}, 0
+    return {}, 0, nil, nil
   end
 
   local bagSlotSpecifier = safeCall(Utility.Item.Slot.Inventory, "bag")
   local bagEntries = collectItemEntries(bagSlotSpecifier, "bag")
   local knownContainerSlots = 0
+  local knownUsedSlots = 0
+  local estimatedFreeSlots = 0
+  local hasFreeSlotDetail = false
 
   for index, bagEntry in ipairs(bagEntries) do
     bagEntry.containerIndex = index
@@ -325,12 +432,19 @@ local function collectBagSummaries()
     local usedSlots = countEntries(contentItems)
 
     bagEntry.usedSlots = usedSlots
+    knownUsedSlots = knownUsedSlots + usedSlots
     if bagEntry.slots ~= nil then
       bagEntry.freeSlots = math.max(0, bagEntry.slots - usedSlots)
+      estimatedFreeSlots = estimatedFreeSlots + bagEntry.freeSlots
+      hasFreeSlotDetail = true
     end
   end
 
-  return bagEntries, knownContainerSlots
+  if not hasFreeSlotDetail then
+    estimatedFreeSlots = nil
+  end
+
+  return bagEntries, knownContainerSlots, knownUsedSlots, estimatedFreeSlots
 end
 
 local function collectBuffEntries(unit)
@@ -434,7 +548,7 @@ local function buildSnapshot(reason)
 
   local equipmentEntries = collectItemEntries(equipmentSpecifier, "equipment")
   local inventoryEntries = collectItemEntries(inventorySpecifier, "inventory")
-  local bagSummaries, knownContainerSlots = collectBagSummaries()
+  local bagSummaries, knownContainerSlots, knownUsedSlots, estimatedFreeSlots = collectBagSummaries()
 
   local allEntries = {}
   for _, entry in ipairs(equipmentEntries) do
@@ -446,6 +560,8 @@ local function buildSnapshot(reason)
 
   local poleCandidates = collectMatches(allEntries, POLE_KEYWORDS, MAX_MATCHES)
   local baitCandidates = collectMatches(inventoryEntries, BAIT_KEYWORDS, MAX_MATCHES)
+  local abilityCandidates, abilityScanError = getFishingAbilityCandidates(false)
+  local lureAbilityCandidates = collectUsableLureAbilities(abilityCandidates)
   local buffs = collectBuffEntries(playerUnit or "player")
   local trackFishBuff = findTrackFish(buffs)
 
@@ -459,11 +575,6 @@ local function buildSnapshot(reason)
     end
   end
 
-  local estimatedFreeSlots = nil
-  if knownContainerSlots > 0 then
-    estimatedFreeSlots = math.max(0, knownContainerSlots - #inventoryEntries)
-  end
-
   return {
     capturedAt = now(),
     reason = toString(reason) or "unspecified",
@@ -475,6 +586,7 @@ local function buildSnapshot(reason)
       equipmentCount = #equipmentEntries,
       bagCount = #bagSummaries,
       knownContainerSlots = knownContainerSlots,
+      knownUsedSlots = knownUsedSlots,
       estimatedFreeSlots = estimatedFreeSlots,
       bagSummaries = bagSummaries,
     },
@@ -484,8 +596,240 @@ local function buildSnapshot(reason)
       inventoryPole = inventoryPole,
       poleCandidates = poleCandidates,
       baitCandidates = baitCandidates,
+      abilityCandidates = abilityCandidates,
+      abilityScanError = abilityScanError,
+      lureAbilityCandidates = lureAbilityCandidates,
     },
   }
+end
+
+local function addObservationNote(notes, text)
+  notes[#notes + 1] = tostring(text)
+end
+
+local function hasEntries(value)
+  return type(value) == "table" and #value > 0
+end
+
+local function apiProbeEntry(name, available)
+  return {
+    name = name,
+    available = available and true or false,
+  }
+end
+
+local function collectApiProbe()
+  return {
+    apiProbeEntry("Command.Console.Display", Command and Command.Console and type(Command.Console.Display) == "function"),
+    apiProbeEntry("Command.Event.Attach", Command and Command.Event and type(Command.Event.Attach) == "function"),
+    apiProbeEntry("Command.Slash.Register", Command and Command.Slash and type(Command.Slash.Register) == "function"),
+    apiProbeEntry("Inspect.Ability.New.List", Inspect and Inspect.Ability and Inspect.Ability.New and type(Inspect.Ability.New.List) == "function"),
+    apiProbeEntry("Inspect.Ability.New.Detail", Inspect and Inspect.Ability and Inspect.Ability.New and type(Inspect.Ability.New.Detail) == "function"),
+    apiProbeEntry("Inspect.Ability.List", Inspect and Inspect.Ability and type(Inspect.Ability.List) == "function"),
+    apiProbeEntry("Inspect.Ability.Detail", Inspect and Inspect.Ability and type(Inspect.Ability.Detail) == "function"),
+    apiProbeEntry("Inspect.Buff.List", Inspect and Inspect.Buff and type(Inspect.Buff.List) == "function"),
+    apiProbeEntry("Inspect.Buff.Detail", Inspect and Inspect.Buff and type(Inspect.Buff.Detail) == "function"),
+    apiProbeEntry("Inspect.Item.List", Inspect and Inspect.Item and type(Inspect.Item.List) == "function"),
+    apiProbeEntry("Inspect.Item.Detail", Inspect and Inspect.Item and type(Inspect.Item.Detail) == "function"),
+    apiProbeEntry("Inspect.Unit.Lookup", Inspect and Inspect.Unit and type(Inspect.Unit.Lookup) == "function"),
+    apiProbeEntry("Inspect.Unit.Detail", Inspect and Inspect.Unit and type(Inspect.Unit.Detail) == "function"),
+    apiProbeEntry("Inspect.Unit.Castbar", Inspect and Inspect.Unit and type(Inspect.Unit.Castbar) == "function"),
+    apiProbeEntry("Inspect.Cursor", Inspect and type(Inspect.Cursor) == "table"),
+    apiProbeEntry("Inspect.Interaction", Inspect and type(Inspect.Interaction) == "table"),
+    apiProbeEntry("Utility.Item.Slot.Inventory", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Inventory) == "function"),
+    apiProbeEntry("Utility.Item.Slot.Equipment", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Equipment) == "function"),
+    apiProbeEntry("Utility.Item.Slot.Parse", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Parse) == "function"),
+  }
+end
+
+local function collectTableKeys(root, limit)
+  local keys = {}
+  if type(root) ~= "table" then
+    return keys
+  end
+
+  for key, value in pairs(root) do
+    keys[#keys + 1] = {
+      name = tostring(key),
+      valueType = type(value),
+    }
+  end
+
+  table.sort(keys, function(left, right)
+    return tostring(left.name) < tostring(right.name)
+  end)
+
+  local maxCount = math.min(#keys, limit or 24)
+  local trimmed = {}
+  for index = 1, maxCount do
+    trimmed[index] = keys[index]
+  end
+
+  return trimmed
+end
+
+local function printTableKeys(title, root, limit)
+  local keys = collectTableKeys(root, limit)
+  Console.Write(title .. " keys=" .. tostring(#keys), "#FFFF88")
+
+  if #keys == 0 then
+    Console.Write("  none or unavailable", "#FFAA44")
+    return
+  end
+
+  for _, entry in ipairs(keys) do
+    Console.Write("  " .. tostring(entry.name) .. "=" .. tostring(entry.valueType), "#CCCCCC")
+  end
+end
+
+local function buildObservationSnapshot(snapshot)
+  snapshot = type(snapshot) == "table" and snapshot or {}
+
+  local player = type(snapshot.player) == "table" and snapshot.player or {}
+  local inventory = type(snapshot.inventory) == "table" and snapshot.inventory or {}
+  local fishing = type(snapshot.fishing) == "table" and snapshot.fishing or {}
+  local castbar = type(snapshot.castbar) == "table" and snapshot.castbar or {}
+  local notes = {}
+
+  local inGame = player.available == true
+  if not inGame then
+    addObservationNote(notes, "player native unit is unavailable")
+  end
+
+  local inCombat = player.combat == true
+  if inCombat then
+    addObservationNote(notes, "player is in combat")
+  end
+
+  if snapshot.secureMode == true then
+    addObservationNote(notes, "Rift secure mode is active")
+  end
+
+  local inventoryFull = true
+  if type(inventory.estimatedFreeSlots) == "number" then
+    inventoryFull = inventory.estimatedFreeSlots <= 0
+  else
+    addObservationNote(notes, "inventory free slots are unknown; treating inventory as full")
+  end
+
+  local poleCandidate = fishing.equippedPole or fishing.inventoryPole
+  if type(poleCandidate) ~= "table" then
+    addObservationNote(notes, "no native fishing pole candidate is visible")
+  end
+
+  local baitAvailable = hasEntries(fishing.baitCandidates) or hasEntries(fishing.lureAbilityCandidates)
+  if not baitAvailable then
+    addObservationNote(notes, "no native bait/lure candidate matched inventory or usable ability scans")
+  end
+
+  local trackFishVisible = type(fishing.trackFishBuff) == "table"
+  if not trackFishVisible then
+    addObservationNote(notes, "Track Fish buff was not detected")
+  end
+
+  local lineCast = castbar.active == true and containsText(castbar.abilityName, "fish")
+  if castbar.active == true and not lineCast then
+    addObservationNote(notes, "a non-fishing castbar is active")
+  end
+
+  local nearWater = false
+  addObservationNote(notes, "near_water is not confirmed by native addon APIs yet")
+
+  local canCast = inGame
+    and not inCombat
+    and snapshot.secureMode ~= true
+    and not inventoryFull
+    and type(poleCandidate) == "table"
+    and baitAvailable
+    and nearWater
+
+  local confidence = 0.2
+  if inGame then
+    confidence = confidence + 0.15
+  end
+  if type(poleCandidate) == "table" then
+    confidence = confidence + 0.10
+  end
+  if type(inventory.estimatedFreeSlots) == "number" then
+    confidence = confidence + 0.10
+  end
+  if trackFishVisible then
+    confidence = confidence + 0.05
+  end
+  if canCast then
+    confidence = 0.85
+  elseif not nearWater or not baitAvailable then
+    confidence = math.min(confidence, 0.45)
+  end
+
+  return {
+    timestamp = toNumber(snapshot.capturedAt) or now(),
+    in_game = inGame,
+    near_water = nearWater,
+    in_combat = inCombat,
+    inventory_full = inventoryFull,
+    bait_available = baitAvailable,
+    line_cast = lineCast,
+    bobber_visible = false,
+    bite_detected = false,
+    loot_window_open = false,
+    skill_up_ready = false,
+    durability_low = false,
+    can_cast = canCast,
+    stuck_for_seconds = 0,
+    confidence = confidence,
+    notes = notes,
+  }
+end
+
+local function ensureTrace()
+  ensureState()
+  state.trace = type(state.trace) == "table" and state.trace or {}
+  state.trace.samples = type(state.trace.samples) == "table" and state.trace.samples or {}
+  state.trace.active = state.trace.active == true
+  state.trace.maxSamples = toNumber(state.trace.maxSamples) or MAX_TRACE_SAMPLES
+  return state.trace
+end
+
+local function trimTraceSamples(trace)
+  local maxSamples = math.max(1, math.min(MAX_TRACE_SAMPLES, toNumber(trace.maxSamples) or MAX_TRACE_SAMPLES))
+  while #trace.samples > maxSamples do
+    table.remove(trace.samples, 1)
+  end
+end
+
+local function recordTraceSample(snapshot, observation)
+  if state == nil or type(state.trace) ~= "table" or state.trace.active ~= true then
+    return
+  end
+
+  local trace = ensureTrace()
+  local player = type(snapshot.player) == "table" and snapshot.player or {}
+  local inventory = type(snapshot.inventory) == "table" and snapshot.inventory or {}
+  local fishing = type(snapshot.fishing) == "table" and snapshot.fishing or {}
+  local castbar = type(snapshot.castbar) == "table" and snapshot.castbar or {}
+  local pole = fishing.equippedPole or fishing.inventoryPole
+
+  trace.samples[#trace.samples + 1] = {
+    capturedAt = snapshot.capturedAt,
+    reason = snapshot.reason,
+    playerAvailable = player.available == true,
+    zone = toString(player.zone or player.locationName),
+    combat = player.combat == true,
+    secure = snapshot.secureMode == true,
+    castbarActive = castbar.active == true,
+    castbarAbility = toString(castbar.abilityName),
+    lineCast = observation.line_cast == true,
+    canCast = observation.can_cast == true,
+    confidence = toNumber(observation.confidence) or 0,
+    inventoryFreeSlots = inventory.estimatedFreeSlots,
+    pole = type(pole) == "table" and (pole.matchText or buildMatchText(pole)) or nil,
+    trackFish = type(fishing.trackFishBuff) == "table",
+  }
+
+  trace.lastCapturedAt = snapshot.capturedAt
+  trace.lastReason = snapshot.reason
+  trimTraceSamples(trace)
 end
 
 local function queueRefresh(reason)
@@ -504,8 +848,12 @@ function AutoFishLive.Refresh(reason, incrementCount)
 
   snapshot.refreshCount = state.session.refreshCount
   state.current = snapshot
+  local observation = buildObservationSnapshot(snapshot)
+  state.currentObservation = observation
+  recordTraceSample(snapshot, observation)
   state.session.lastCapturedAt = snapshot.capturedAt
   state.session.lastReason = snapshot.reason
+  AutoFish_State = state
 
   runtime.lastRefreshAt = snapshot.capturedAt or now()
   runtime.pendingReason = nil
@@ -572,6 +920,14 @@ function AutoFishLive.PrintStatus()
     Console.Write("track fish buff not detected.", "#FFAA44")
   end
 
+  Console.Write(
+    string.format(
+      "abilityCandidates=%s usableLureAbilities=%s abilityScan=%s",
+      tostring(type(snapshot.fishing.abilityCandidates) == "table" and #snapshot.fishing.abilityCandidates or 0),
+      tostring(type(snapshot.fishing.lureAbilityCandidates) == "table" and #snapshot.fishing.lureAbilityCandidates or 0),
+      tostring(snapshot.fishing.abilityScanError or "ok")),
+    "#CCCCCC")
+
   if snapshot.castbar and snapshot.castbar.active then
     Console.Write(
       string.format(
@@ -627,18 +983,199 @@ function AutoFishLive.PrintPoleCandidates()
   printCandidateList("Fishing pole candidates:", snapshot.fishing.poleCandidates, "  No fishing-pole candidates matched equipped or carried items.")
 end
 
+function AutoFishLive.PrintAbilityCandidates(argsText)
+  AutoFishLive.Refresh("slash.abilities", true)
+
+  local filter = string.match(argsText or "", "^%S+%s+(%S+)")
+  local keywords = FISHING_ABILITY_KEYWORDS
+  if filter ~= nil and filter ~= "" then
+    keywords = { filter }
+  end
+
+  local candidates, errorText = nil, nil
+  if filter ~= nil and filter ~= "" then
+    candidates, errorText = collectAbilityMatches(keywords, MAX_MATCHES)
+  else
+    candidates, errorText = getFishingAbilityCandidates(true)
+  end
+  state.lastAbilityCandidates = candidates
+  state.lastAbilityScanError = errorText
+
+  Console.Write("Fishing-related ability candidates:", "#FFFF88")
+
+  if errorText then
+    Console.Write("  " .. tostring(errorText), "#FF4444")
+    return
+  end
+
+  if type(candidates) ~= "table" or #candidates == 0 then
+    Console.Write("  No fishing-related ability candidates matched Inspect.Ability.New.", "#FFAA44")
+    return
+  end
+
+  for index, candidate in ipairs(candidates) do
+    Console.Write(
+      string.format(
+        "  %s. %s id=%s unusable=%s range=%s cd=%s cast=%s",
+        tostring(index),
+        trimText(candidate.name or "unknown", 32),
+        tostring(candidate.id or "?"),
+        tostring(candidate.unusable and true or false),
+        tostring(candidate.outOfRange and "out" or "ok"),
+        tostring(candidate.currentCooldownRemaining or 0),
+        tostring(candidate.castingTime or 0)),
+      "#CCCCCC")
+  end
+end
+
+function AutoFishLive.PrintApiProbe()
+  AutoFishLive.Refresh("slash.api", true)
+
+  local probe = collectApiProbe()
+  state.lastApiProbe = probe
+
+  Console.Write("API probe:", "#FFFF88")
+
+  for _, entry in ipairs(probe) do
+    Console.Write(
+      string.format(
+        "  %s=%s",
+        tostring(entry.name or "?"),
+        tostring(entry.available and true or false)),
+      entry.available and "#CCCCCC" or "#FFAA44")
+  end
+end
+
+function AutoFishLive.PrintApiTables()
+  AutoFishLive.Refresh("slash.apis", true)
+
+  printTableKeys("Command", Command, 32)
+  printTableKeys("Command.Ability", Command and Command.Ability, 32)
+  printTableKeys("Command.Item", Command and Command.Item, 32)
+  printTableKeys("Command.Macro", Command and Command.Macro, 32)
+  printTableKeys("Inspect.Action", Inspect and Inspect.Action, 32)
+  printTableKeys("Inspect.Macro", Inspect and Inspect.Macro, 32)
+end
+
+function AutoFishLive.PrintObservation()
+  local snapshot = AutoFishLive.Refresh("slash.observation", true)
+  local observation = state.currentObservation or buildObservationSnapshot(snapshot)
+
+  Console.Write(
+    string.format(
+      "observation in_game=%s near_water=%s inventory_full=%s bait_available=%s line_cast=%s can_cast=%s confidence=%.2f",
+      tostring(observation.in_game and true or false),
+      tostring(observation.near_water and true or false),
+      tostring(observation.inventory_full and true or false),
+      tostring(observation.bait_available and true or false),
+      tostring(observation.line_cast and true or false),
+      tostring(observation.can_cast and true or false),
+      toNumber(observation.confidence) or 0),
+    "#66CCFF")
+
+  Console.Write(
+    string.format(
+      "observation combat=%s bobber=%s bite=%s loot=%s stuck=%s",
+      tostring(observation.in_combat and true or false),
+      tostring(observation.bobber_visible and true or false),
+      tostring(observation.bite_detected and true or false),
+      tostring(observation.loot_window_open and true or false),
+      tostring(observation.stuck_for_seconds or 0)),
+    "#CCCCCC")
+
+  if type(observation.notes) == "table" then
+    for _, note in ipairs(observation.notes) do
+      Console.Write("  note: " .. tostring(note), "#FFAA44")
+    end
+  end
+end
+
+function AutoFishLive.PrintTrace(argsText)
+  local subcommand = string.match(argsText or "", "^%S+%s+(%S+)")
+  if subcommand then
+    subcommand = string.lower(subcommand)
+  else
+    subcommand = "status"
+  end
+
+  local trace = ensureTrace()
+
+  if subcommand == "start" then
+    trace.active = true
+    trace.startedAt = now()
+    trace.samples = {}
+    AutoFishLive.Refresh("trace.start", true)
+    Console.Write("Trace started. Manually perform one action, then use /autofish trace status or /autofish trace stop.", "#00CC88")
+    return
+  end
+
+  if subcommand == "stop" then
+    AutoFishLive.Refresh("trace.stop", true)
+    trace.active = false
+    trace.stoppedAt = now()
+    Console.Write("Trace stopped. samples=" .. tostring(#trace.samples), "#00CC88")
+    return
+  end
+
+  if subcommand == "clear" then
+    trace.active = false
+    trace.samples = {}
+    trace.startedAt = nil
+    trace.stoppedAt = nil
+    trace.lastCapturedAt = nil
+    trace.lastReason = nil
+    Console.Write("Trace cleared.", "#00CC88")
+    return
+  end
+
+  if subcommand ~= "status" then
+    Console.Write("Unknown trace command. Use /autofish trace start|status|stop|clear.", "#FF4444")
+    return
+  end
+
+  AutoFishLive.Refresh("trace.status", true)
+  local last = trace.samples[#trace.samples] or {}
+  Console.Write(
+    string.format(
+      "trace active=%s samples=%s lastReason=%s",
+      tostring(trace.active and true or false),
+      tostring(#trace.samples),
+      tostring(trace.lastReason or "?")),
+    "#66CCFF")
+  Console.Write(
+    string.format(
+      "trace last castbar=%s ability=%s line_cast=%s can_cast=%s confidence=%.2f free=%s",
+      tostring(last.castbarActive and true or false),
+      tostring(last.castbarAbility or "?"),
+      tostring(last.lineCast and true or false),
+      tostring(last.canCast and true or false),
+      toNumber(last.confidence) or 0,
+      tostring(last.inventoryFreeSlots ~= nil and last.inventoryFreeSlots or "?")),
+    "#CCCCCC")
+end
+
 function AutoFishLive.PrintHelp()
   Console.Write("Commands:", "#FFFF88")
   Console.Write("  /autofish status    - show player, zone, secure state, and inventory summary", "#CCCCCC")
   Console.Write("  /autofish bags      - inspect bag containers and used/free slot counts", "#CCCCCC")
   Console.Write("  /autofish inventory - inspect bait/lure-related inventory candidates", "#CCCCCC")
   Console.Write("  /autofish pole      - search equipped and carried fishing-pole candidates", "#CCCCCC")
+  Console.Write("  /autofish abilities - search fishing-related native abilities", "#CCCCCC")
+  Console.Write("  /autofish api       - show native API availability relevant to fishing probes", "#CCCCCC")
+  Console.Write("  /autofish apis      - list use/action-related API table keys", "#CCCCCC")
+  Console.Write("  /autofish observe   - show fail-closed bridge observation mapping", "#CCCCCC")
+  Console.Write("  /autofish trace     - start/status/stop a bounded manual one-cast trace", "#CCCCCC")
   Console.Write("  /autofish snapshot  - refresh the saved snapshot without extra output", "#CCCCCC")
   Console.Write("  /autofish help      - show this help", "#CCCCCC")
 end
 
-function AutoFishLive.OnSlashCommand(args)
-  local command = string.match(args or "", "^(%S+)")
+function AutoFishLive.OnSlashCommand(handle, args)
+  local argsText = args
+  if argsText == nil and type(handle) == "string" then
+    argsText = handle
+  end
+
+  local command = string.match(argsText or "", "^(%S+)")
   if command then
     command = string.lower(command)
   end
@@ -668,6 +1205,30 @@ function AutoFishLive.OnSlashCommand(args)
     return
   end
 
+  if command == "abilities" or command == "ability" then
+    AutoFishLive.PrintAbilityCandidates(argsText)
+    return
+  end
+
+  if command == "api" or command == "apis" or command == "probe" then
+    if command == "apis" then
+      AutoFishLive.PrintApiTables()
+    else
+      AutoFishLive.PrintApiProbe()
+    end
+    return
+  end
+
+  if command == "observe" or command == "observation" then
+    AutoFishLive.PrintObservation()
+    return
+  end
+
+  if command == "trace" then
+    AutoFishLive.PrintTrace(argsText)
+    return
+  end
+
   if command == "snapshot" then
     AutoFishLive.Refresh("slash.snapshot", true)
     Console.Write("Snapshot refreshed.", "#00CC88")
@@ -677,7 +1238,16 @@ function AutoFishLive.OnSlashCommand(args)
   Console.Write("Unknown command. Use /autofish help.", "#FF4444")
 end
 
-function AutoFishLive.OnSavedVariablesLoad(addon)
+local function resolveAddonArgument(first, second)
+  if second ~= nil then
+    return second
+  end
+
+  return first
+end
+
+function AutoFishLive.OnSavedVariablesLoad(handle, addon)
+  addon = resolveAddonArgument(handle, addon)
   if addon ~= addonIdentifier then
     return
   end
@@ -685,7 +1255,8 @@ function AutoFishLive.OnSavedVariablesLoad(addon)
   ensureState()
 end
 
-function AutoFishLive.OnSavedVariablesSave(addon)
+function AutoFishLive.OnSavedVariablesSave(handle, addon)
+  addon = resolveAddonArgument(handle, addon)
   if addon ~= addonIdentifier then
     return
   end
@@ -695,7 +1266,12 @@ function AutoFishLive.OnSavedVariablesSave(addon)
   AutoFish_State = state
 end
 
-function AutoFishLive.OnStartup()
+function AutoFishLive.OnStartup(handle, addon)
+  addon = resolveAddonArgument(handle, addon)
+  if addon ~= nil and addon ~= addonIdentifier then
+    return
+  end
+
   ensureState()
   runtime.started = true
   AutoFishLive.Refresh("startup", true)
@@ -715,19 +1291,46 @@ end
 
 local function attach(eventTable, handler, label)
   if type(eventTable) ~= "table" then
-    return
+    return false
+  end
+
+  if Command and Command.Event and Command.Event.Attach then
+    Command.Event.Attach(eventTable, handler, label)
+    return true
   end
 
   table.insert(eventTable, { handler, addonIdentifier, label })
+  return true
 end
 
-attach(Command.Slash.Register("autofish"), AutoFishLive.OnSlashCommand, "AutoFish slash command")
+local slashEvent = Command and Command.Slash and Command.Slash.Register and Command.Slash.Register("autofish")
+attach(slashEvent, AutoFishLive.OnSlashCommand, "AutoFish slash command")
 
-attach(Event.Addon.SavedVariables.Load.End, AutoFishLive.OnSavedVariablesLoad, "AutoFish load saved variables")
-attach(Event.Addon.SavedVariables.Save.Begin, AutoFishLive.OnSavedVariablesSave, "AutoFish save saved variables")
-attach(Event.Addon.Startup.End, AutoFishLive.OnStartup, "AutoFish startup")
-attach(Event.System.Update.End, AutoFishLive.OnUpdateEnd, "AutoFish update")
-attach(Event.Item.Slot, function() queueRefresh("event.item_slot") end, "AutoFish item slot change")
-attach(Event.Item.Update, function() queueRefresh("event.item_update") end, "AutoFish item update")
-attach(Event.System.Secure.Enter, function() queueRefresh("event.secure_enter") end, "AutoFish secure enter")
-attach(Event.System.Secure.Leave, function() queueRefresh("event.secure_leave") end, "AutoFish secure leave")
+local addonEvents = Event and Event.Addon
+local savedVariableEvents = addonEvents and addonEvents.SavedVariables
+local savedVariableLoadEvent = savedVariableEvents and savedVariableEvents.Load and savedVariableEvents.Load.End
+local savedVariableSaveEvent = savedVariableEvents and savedVariableEvents.Save and savedVariableEvents.Save.Begin
+local addonLoadEvent = addonEvents and addonEvents.Load and addonEvents.Load.End
+
+if not addonLoadEvent and addonEvents and addonEvents.Startup then
+  addonLoadEvent = addonEvents.Startup.End
+end
+
+attach(savedVariableLoadEvent, AutoFishLive.OnSavedVariablesLoad, "AutoFish load saved variables")
+attach(savedVariableSaveEvent, AutoFishLive.OnSavedVariablesSave, "AutoFish save saved variables")
+attach(addonLoadEvent, AutoFishLive.OnStartup, "AutoFish addon load")
+
+local systemEvents = Event and Event.System
+local updateEvent = systemEvents and systemEvents.Update and systemEvents.Update.End
+local secureEnterEvent = systemEvents and systemEvents.Secure and systemEvents.Secure.Enter
+local secureLeaveEvent = systemEvents and systemEvents.Secure and systemEvents.Secure.Leave
+
+local itemEvents = Event and Event.Item
+local itemSlotEvent = itemEvents and itemEvents.Slot
+local itemUpdateEvent = itemEvents and itemEvents.Update
+
+attach(updateEvent, AutoFishLive.OnUpdateEnd, "AutoFish update")
+attach(itemSlotEvent, function() queueRefresh("event.item_slot") end, "AutoFish item slot change")
+attach(itemUpdateEvent, function() queueRefresh("event.item_update") end, "AutoFish item update")
+attach(secureEnterEvent, function() queueRefresh("event.secure_enter") end, "AutoFish secure enter")
+attach(secureLeaveEvent, function() queueRefresh("event.secure_leave") end, "AutoFish secure leave")

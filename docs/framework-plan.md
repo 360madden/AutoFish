@@ -1,5 +1,9 @@
 # AutoFish Framework Plan
 
+## Live workflow override
+
+For live-client work, `docs/prototype-first-workflow.md` is the active workflow. It intentionally favors a simple bounded working prototype over broad framework completion. Do not use this framework plan to block calibrated-coordinate casting, one-cast timing, or short capped prototype runs.
+
 ## Scope freeze
 
 AutoFish is currently scoped to:

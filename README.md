@@ -19,6 +19,10 @@ The current target is a modular, reliable foundation for:
 - an in-game addon GUI,
 - and a desktop helper GUI.
 
+## Live-development workflow
+
+Use `docs/prototype-first-workflow.md` for live work. It is the active rule set for getting to a working prototype: calibrated fishable coordinate, exact PID/HWND, bounded casts, simple timing, then hardening. Do not block the prototype on perfect native `near_water` proof or broad bridge architecture.
+
 ## Repository layout
 
 - `lua/AutoFish` - Lua addon core, GUI model, and bridge queue abstraction.
@@ -31,6 +35,7 @@ The current target is a modular, reliable foundation for:
 - `docs/profile-authoring.md` - profile field guidance and validation rules.
 - `docs/helper-operator-guide.md` - helper usage notes.
 - `docs/addon-architecture.md` - addon module map.
+- `docs/prototype-first-workflow.md` - live prototype-first workflow that prevents process drift.
 - `scripts/run-local-checks.ps1` - one-command offline verification.
 
 ## Runtime responsibilities
@@ -108,6 +113,32 @@ lua -e "package.path='lua/?.lua;lua/?/init.lua;lua/?/?.lua;' .. package.path; lo
 luac -p lua/AutoFish/Main.lua
 ```
 
-## Current limitation
+## Current live status
 
-The repository now includes a prepared Rift addon manifest, entrypoint, and deployment script for future in-game diagnostics, but live verification is intentionally deferred. The live Rift-specific observation binding, real fishing actions, and the real addon-to-helper transport are still the final integration phase.
+Live addon diagnostics have started against a Rift client, but AutoFish is still fail-closed and must not run an unattended loop yet.
+
+Confirmed live:
+
+- `/autofish help`, `/autofish status`, `/autofish bags`, `/autofish inventory`, `/autofish pole`, `/autofish abilities`, `/autofish api`, `/autofish observe`, and `/autofish trace`
+- exact PID/HWND target preflight and capture via RiftReader helpers
+- player, combat/secure, inventory/free-slot, pole, Track Fish, ability scan, and castbar signals
+- low-confidence observation mapping when fishable-water/bait/cast state is unproven
+
+Current blocker:
+
+- slot `8` input reaches the client, but the tested water points did not produce a cast; one probe reported `This area is not fishable`
+- no native `Inspect.Cursor` or `Inspect.Interaction` API was found for fishable-hover detection
+
+Useful live scripts:
+
+```powershell
+.\scripts\run-live-preflight.ps1 -ExpectedProcessId <pid> -ExpectedWindowHandle <hwnd> -Focus -Capture
+
+.\scripts\invoke-live-fishable-point-probe.ps1 -TargetProcessId <pid> -TargetWindowHandle <hwnd> -ClientX <x> -ClientY <y> -DryRun
+
+.\scripts\invoke-live-fishable-point-probe.ps1 -TargetProcessId <pid> -TargetWindowHandle <hwnd> -ClientX <x> -ClientY <y>
+
+.\scripts\start-live-fishing-prototype.ps1 -TargetProcessId <pid> -TargetWindowHandle <hwnd> -ClientX <x> -ClientY <y> -MaxCasts 1 -DryRun
+```
+
+Next live gate: calibrate one known fishable client coordinate, capture a successful one-cast trace, then advance to advisory mode. Until then, `can_cast=false` and low confidence are the correct safe outcome.
