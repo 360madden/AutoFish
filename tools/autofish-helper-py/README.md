@@ -51,6 +51,8 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof reticle `
 
 `--confirm-input` allows exactly one cursor move, one keypress, and one left-click. Optional `--watch-seconds` keeps capturing cursor/crop evidence after the click without sending more input. It writes a `manifest.json` plus BMP crops under `.autofish-live\signal-proof-reticle-*`.
 
+For reticle color/state calibration where a cast should not be clicked yet, add `--skip-click` with `--confirm-input`. That still requires exact PID/HWND, moves the cursor, presses the fishing key once, captures `after-key`, and records any optional watch captures after the keypress, but sends no left click. Add `--cancel-after-key` to press Escape after the post-key captures and record `after-cancel`.
+
 The manifest records:
 
 - target PID/HWND/client size,

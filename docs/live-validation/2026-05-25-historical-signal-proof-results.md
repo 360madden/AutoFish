@@ -125,6 +125,17 @@ Evidence:
 - `.autofish-live/reticle-large-live-1244-382-latest/after-key.bmp`
 - `.autofish-live/reticle-large-live-1244-382-latest/watch-015.bmp`
 - `.autofish-live/signal-proof-summary-after-large-reticle-latest/summary.md`
+- `.autofish-live/reticle-skip-click-dryrun-validation-latest/manifest.json`
+- `.autofish-live/reticle-skip-click-live-validation-latest/manifest.json`
+- `.autofish-live/reticle-skip-click-live-validation-latest/after-key.bmp`
+- `.autofish-live/signal-proof-summary-after-skip-click-latest/summary.md`
+- `.autofish-live/post-skip-click-state-latest/g0-baseline.png`
+- `.autofish-live/slash-signals-during-reticle-latest/manifest.json`
+- `.autofish-live/slash-signals-during-reticle-latest/command-001-autofish-signals-full-client.bmp`
+- `.autofish-live/signal-proof-summary-after-reticle-signals-latest/summary.md`
+- `.autofish-live/reticle-escape-cancel-latest/manifest.json`
+- `.autofish-live/reticle-skip-click-cancel-live-validation-latest/manifest.json`
+- `.autofish-live/signal-proof-summary-after-cancel-option-latest/summary.md`
 
 Result:
 
@@ -146,11 +157,16 @@ Large-window follow-up:
 - One left click immediately after the yellow reticle produced visible fishing cast evidence in the watch captures: a line leading to the water and a splash/ripple at the target area.
 - The bounded run sent only one cursor move, one key `8`, and one left click; it did not send movement input or start an unattended loop.
 - The large-window live run observed cursor handles `0x630ED0`, `0x3BF07A0`, and `0xBB065A`. The handle change is useful evidence, but it is not yet enough to define a durable state machine.
+- A follow-up skip-click validation added `--skip-click` for reticle calibration. The live validation at `(1244,382)` sent one cursor move and one key `8`, captured the yellow `after-key` reticle plus short after-key watch captures, and sent no left click.
+- The post-skip-click full screenshot showed a visible game tooltip at the reticle: `Deep Water`, `Requires Fishing 1`, and `Your skill is 9`.
+- `/autofish signals` was run while that yellow reticle/tooltip was still visible. The addon printed `Inspect.Cursor type=nil held=nil`, `Inspect.Tooltip type=nil shown=nil extra=nil`, and `Inspect.Interaction none-active`.
+- Escape cancellation was validated with the same exact PID/HWND: the crop changed from yellow reticle/cursor handle `0x3BF07A0` to normal water/cursor handle `0x630ED0`. `--cancel-after-key` was then added and live-validated so future skip-click proofs can automatically clear the targeting reticle unless the operator intentionally wants it left active.
 
 Reviewed status:
 
 - Cursor-handle changes are useful evidence.
 - The large-window proof confirms the user's observation that key `8` can display a yellow cast reticle over water and that left click can start the fishing-pole cast animation.
+- The visible `Deep Water` tooltip is useful visual evidence, but the current native `Inspect.Tooltip` and `Inspect.Interaction` probes did not expose that tooltip/hover state to the addon during this run.
 - Pixel/reticle color classification remains `needs-more-evidence` because promotion still requires repeated casts and clean separation of valid reticle, invalid reticle, cast-start, bite-ready, and post-loot states.
 - Reticle/cursor should remain a fallback candidate until repeated clean crops distinguish valid reticle, cast-start, bite-ready, and invalid states.
 

@@ -92,7 +92,7 @@ Store short live evidence in `docs/live-validation/`. Store reusable research co
 
 The next helper work should be a **signal-proof harness**, not a full fishing loop.
 
-Implemented first slice: `tools/autofish-helper-py/autofish_helper.py signal-proof reticle` captures cursor-centered BMP crops, OS cursor handle/position, rough reticle color counts, optional timed post-click watch captures, and a JSON manifest. Live input still requires explicit `--confirm-input`; `--dry-run` sends no input.
+Implemented first slice: `tools/autofish-helper-py/autofish_helper.py signal-proof reticle` captures cursor-centered BMP crops, OS cursor handle/position, rough reticle color counts, optional timed watch captures, and a JSON manifest. Live input still requires explicit `--confirm-input`; `--dry-run` sends no input. Use `--skip-click` with `--confirm-input` for post-key reticle calibration without sending the left click/cast-start action, and use `--cancel-after-key` to press Escape and record the cleared state after the post-key captures.
 
 Implemented second slice: `tools/autofish-helper-py/autofish_helper.py signal-proof log` watches newly appended log text, scans fishing terms, and writes `appended-log.txt` plus a JSON manifest without sending any input.
 
@@ -116,6 +116,9 @@ autofish_helper.py signal-proof reticle
 
 autofish_helper.py signal-proof reticle
   --pid <pid> --hwnd <hwnd> --x <client-x> --y <client-y> --key 8 --watch-seconds 18 --confirm-input
+
+autofish_helper.py signal-proof reticle
+  --pid <pid> --hwnd <hwnd> --x <client-x> --y <client-y> --key 8 --watch-seconds 3 --confirm-input --skip-click --cancel-after-key
 
 Addon API/chat-output proof:
   autofish_helper.py signal-proof slash

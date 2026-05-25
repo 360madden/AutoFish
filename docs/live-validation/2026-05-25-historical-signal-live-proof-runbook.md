@@ -96,6 +96,8 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof reticle `
   --confirm-input
 ```
 
+Use `--skip-click` with `--confirm-input` when the current objective is only to capture the post-key reticle at a candidate coordinate. That mode still sends one cursor move and one fishing-key press, but it stops after the `after-key` capture and sends no left click. Prefer adding `--cancel-after-key` after any post-key watch window so Escape clears the targeting reticle and the helper records `after-cancel`.
+
 Decision:
 
 - `promote` only if cursor handle/color/crop states distinguish useful fishing phases across at least 3 casts.

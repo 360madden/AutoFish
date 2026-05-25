@@ -845,6 +845,8 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
         raise RuntimeError("Use only one of --dry-run or --confirm-input.")
     if args.key == "-" and args.confirm_input and not args.allow_reload_key:
         raise RuntimeError("Refusing to send '-' because it triggers reloadui on this setup. Use --allow-reload-key only intentionally.")
+    if args.cancel_after_key and not args.skip_click:
+        raise RuntimeError("--cancel-after-key is only valid with --skip-click.")
 
     manifest: dict[str, Any] = {
         "schema": "autofish.signalProof.reticle.v1",
@@ -855,7 +857,8 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
             "sendsLoop": False,
             "requiresExactPidHwnd": True,
             "sendsFishingKeyOnce": bool(args.confirm_input),
-            "clickCount": 1 if args.confirm_input else 0,
+            "clickCount": 1 if args.confirm_input and not args.skip_click else 0,
+            "cancelKeySent": bool(args.confirm_input and args.skip_click and args.cancel_after_key),
             "blocksReloadKeyByDefault": True,
         },
         "request": {
@@ -867,6 +870,8 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
             "cropSize": args.crop_size,
             "watchSeconds": args.watch_seconds,
             "watchIntervalMs": args.watch_interval_ms,
+            "skipClick": bool(args.skip_click),
+            "cancelAfterKey": bool(args.cancel_after_key),
         },
         "target": None,
         "captures": [],
@@ -913,13 +918,16 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
             time.sleep(args.post_key_delay_ms / 1000.0)
             capture("after-key")
 
-            validate_target(hwnd, args.pid, require_foreground=True)
-            move_cursor_to(screen_x, screen_y)
-            time.sleep(0.05)
-            left_click()
-            manifest["actions"].append({"name": "left-click", "screenX": screen_x, "screenY": screen_y})
-            time.sleep(args.post_click_delay_ms / 1000.0)
-            capture("after-click")
+            if args.skip_click:
+                manifest["actions"].append({"name": "skip-click", "reason": "--skip-click"})
+            else:
+                validate_target(hwnd, args.pid, require_foreground=True)
+                move_cursor_to(screen_x, screen_y)
+                time.sleep(0.05)
+                left_click()
+                manifest["actions"].append({"name": "left-click", "screenX": screen_x, "screenY": screen_y})
+                time.sleep(args.post_click_delay_ms / 1000.0)
+                capture("after-click")
             if args.watch_seconds > 0:
                 watch_started = time.monotonic()
                 deadline = watch_started + args.watch_seconds
@@ -927,17 +935,30 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
                 while time.monotonic() <= deadline:
                     validate_target(hwnd, args.pid, require_foreground=True)
                     elapsed_ms = int((time.monotonic() - watch_started) * 1000)
-                    capture(f"watch-{index:03d}", {"elapsedSinceWatchStartMs": elapsed_ms})
+                    phase = "after-key" if args.skip_click else "after-click"
+                    capture(f"watch-{index:03d}", {"elapsedSinceWatchStartMs": elapsed_ms, "watchPhase": phase})
                     index += 1
                     time.sleep(max(args.watch_interval_ms, 50) / 1000.0)
+            if args.skip_click and args.cancel_after_key:
+                validate_target(hwnd, args.pid, require_foreground=True)
+                cancel_info = press_key_once("escape", args.key_hold_ms)
+                manifest["actions"].append({"name": "cancel-after-key", **cancel_info})
+                time.sleep(0.2)
+                capture("after-cancel")
         else:
+            would_capture_labels = ["baseline", "after-hover", "after-key"]
+            if not args.skip_click:
+                would_capture_labels.append("after-click")
+            elif args.cancel_after_key:
+                would_capture_labels.append("after-cancel")
             manifest["actions"].append(
                 {
                     "name": "dry-run-plan",
                     "wouldMoveCursor": True,
                     "wouldPressKey": args.key,
-                    "wouldLeftClick": True,
-                    "wouldCaptureLabels": ["baseline", "after-hover", "after-key", "after-click"],
+                    "wouldLeftClick": not args.skip_click,
+                    "wouldPressCancelKey": bool(args.skip_click and args.cancel_after_key),
+                    "wouldCaptureLabels": would_capture_labels,
                     "wouldWatchSeconds": args.watch_seconds,
                 }
             )
@@ -1653,13 +1674,15 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--dry-run", action="store_true", help="Validate and capture baseline only; send no input")
     mode.add_argument("--confirm-input", action="store_true", help="Allow one cursor move, one keypress, and one left-click")
     reticle.add_argument("--allow-reload-key", action="store_true", help="Allow '-' key despite local reloadui binding")
+    reticle.add_argument("--skip-click", action="store_true", help="With --confirm-input, stop after after-key capture and send no left click")
+    reticle.add_argument("--cancel-after-key", action="store_true", help="With --skip-click, press Escape after after-key/watch captures and capture after-cancel")
     reticle.add_argument("--crop-size", type=int, default=180, help="Square crop size around client point; default: 180")
     reticle.add_argument("--key-hold-ms", type=int, default=80, help="Key hold duration; default: 80")
     reticle.add_argument("--post-hover-delay-ms", type=int, default=150, help="Delay after cursor move before capture")
     reticle.add_argument("--post-key-delay-ms", type=int, default=350, help="Delay after keypress before capture")
     reticle.add_argument("--post-click-delay-ms", type=int, default=800, help="Delay after click before capture")
-    reticle.add_argument("--watch-seconds", type=float, default=0.0, help="After click, keep capturing cursor/crop evidence for this many seconds")
-    reticle.add_argument("--watch-interval-ms", type=int, default=500, help="Interval between post-click watch captures; default: 500")
+    reticle.add_argument("--watch-seconds", type=float, default=0.0, help="Keep capturing cursor/crop evidence after click, or after key when --skip-click is used")
+    reticle.add_argument("--watch-interval-ms", type=int, default=500, help="Interval between watch captures; default: 500")
     reticle.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-reticle-*.")
     reticle.set_defaults(func=run_signal_proof_reticle)
 
