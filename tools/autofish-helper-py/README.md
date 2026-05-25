@@ -110,7 +110,19 @@ Inventory deltas are better proven from the addon API than from fixed bag pixels
 /autofish invproof diff
 ```
 
-This stores before/after snapshots in AutoFish saved state and prints item quantity deltas. Use this before trusting any fixed bag coordinate fallback.
+This stores before/after snapshots in AutoFish saved state and prints item quantity deltas plus raw slot-level add/remove/change diagnostics. Use this before trusting any fixed bag coordinate fallback.
+
+## Lua API discovery probes
+
+Use these read-only commands in game before adding new addon-side signal assumptions:
+
+```text
+/autofish api
+/autofish apis
+/autofish events
+```
+
+They list availability/table keys for inventory, chat, cursor/interaction, and candidate skill/currency/experience/profession/crafting namespaces. A discovered namespace is only a lead; promote it only after a live proof packet shows useful fishing evidence.
 
 ## Proof summary / review buckets
 

@@ -94,9 +94,11 @@ Implemented third slice: `tools/autofish-helper-py/autofish_helper.py signal-pro
 
 Implemented fourth slice: `tools/autofish-helper-py/autofish_helper.py signal-proof audio` records a bounded WAV sample from the current Windows recording input and writes peak/RMS timing windows for bite/splash cue experiments.
 
-Implemented fifth slice: `/autofish invproof before|after|diff|status|clear` stores before/after native inventory snapshots in the Lua addon and prints quantity deltas so catch success can be proven without fixed bag pixels.
+Implemented fifth slice: `/autofish invproof before|after|diff|status|clear` stores before/after native inventory snapshots in the Lua addon and prints quantity deltas plus raw slot-level add/remove/change diagnostics so catch success can be proven without fixed bag pixels.
 
 Implemented sixth slice: `tools/autofish-helper-py/autofish_helper.py signal-proof summarize` scans proof manifests and writes `summary.json` plus `summary.md` review buckets so stale methods are classified consistently before promotion.
+
+Implemented seventh slice: `/autofish api`, `/autofish apis`, and `/autofish events` include read-only table/availability discovery for inventory, chat, cursor/interaction, and candidate skill/currency/experience/profession/crafting namespaces. These probes only report whether namespaces and keys exist; do not treat a listed namespace as a supported fishing signal until a live proof packet shows useful values or events.
 
 Target Python commands:
 

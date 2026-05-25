@@ -634,6 +634,11 @@ local function collectApiProbe()
     apiProbeEntry("Inspect.Unit.Lookup", Inspect and Inspect.Unit and type(Inspect.Unit.Lookup) == "function"),
     apiProbeEntry("Inspect.Unit.Detail", Inspect and Inspect.Unit and type(Inspect.Unit.Detail) == "function"),
     apiProbeEntry("Inspect.Unit.Castbar", Inspect and Inspect.Unit and type(Inspect.Unit.Castbar) == "function"),
+    apiProbeEntry("Inspect.Skill", Inspect and type(Inspect.Skill) == "table"),
+    apiProbeEntry("Inspect.Currency", Inspect and type(Inspect.Currency) == "table"),
+    apiProbeEntry("Inspect.Experience", Inspect and type(Inspect.Experience) == "table"),
+    apiProbeEntry("Inspect.Profession", Inspect and type(Inspect.Profession) == "table"),
+    apiProbeEntry("Inspect.Crafting", Inspect and type(Inspect.Crafting) == "table"),
     apiProbeEntry("Inspect.Cursor", Inspect and type(Inspect.Cursor) == "function"),
     apiProbeEntry("Inspect.Interaction", Inspect and type(Inspect.Interaction) == "function"),
     apiProbeEntry("Inspect.Tooltip", Inspect and type(Inspect.Tooltip) == "function"),
@@ -642,6 +647,11 @@ local function collectApiProbe()
     apiProbeEntry("Event.Interaction", Event and type(Event.Interaction) == "table"),
     apiProbeEntry("Event.Chat", Event and type(Event.Chat) == "table"),
     apiProbeEntry("Event.Chat.Notify", Event and Event.Chat and type(Event.Chat.Notify) == "table"),
+    apiProbeEntry("Event.Skill", Event and type(Event.Skill) == "table"),
+    apiProbeEntry("Event.Currency", Event and type(Event.Currency) == "table"),
+    apiProbeEntry("Event.Experience", Event and type(Event.Experience) == "table"),
+    apiProbeEntry("Event.Profession", Event and type(Event.Profession) == "table"),
+    apiProbeEntry("Event.Crafting", Event and type(Event.Crafting) == "table"),
     apiProbeEntry("Event.System.Error", Event and Event.System and type(Event.System.Error) == "table"),
     apiProbeEntry("Event.Item.Slot", Event and Event.Item and type(Event.Item.Slot) == "table"),
     apiProbeEntry("Event.Item.Update", Event and Event.Item and type(Event.Item.Update) == "table"),
@@ -1187,6 +1197,82 @@ local function computeInventoryProofDiff(before, after)
   return changes
 end
 
+local function inventoryProofSlotIdentity(entry)
+  if type(entry) ~= "table" then
+    return ""
+  end
+
+  return table.concat({
+    tostring(entry.id or ""),
+    tostring(entry.itemId or ""),
+    tostring(entry.name or ""),
+    tostring(entry.stack or ""),
+  }, "|")
+end
+
+local function buildInventoryProofSlotMap(snapshot)
+  local map = {}
+  local entries = type(snapshot) == "table" and type(snapshot.entries) == "table" and snapshot.entries or {}
+
+  for _, entry in ipairs(entries) do
+    if type(entry) == "table" and entry.slot ~= nil then
+      map[tostring(entry.slot)] = entry
+    end
+  end
+
+  return map
+end
+
+local function computeInventoryProofSlotChanges(before, after)
+  local changes = {}
+  local seen = {}
+  local beforeSlots = buildInventoryProofSlotMap(before)
+  local afterSlots = buildInventoryProofSlotMap(after)
+
+  for slot, afterEntry in pairs(afterSlots) do
+    seen[slot] = true
+    local beforeEntry = beforeSlots[slot]
+    if type(beforeEntry) ~= "table" then
+      changes[#changes + 1] = {
+        slot = slot,
+        kind = "added",
+        afterName = afterEntry.name,
+        afterId = afterEntry.id or afterEntry.itemId,
+        afterStack = afterEntry.stack,
+      }
+    elseif inventoryProofSlotIdentity(beforeEntry) ~= inventoryProofSlotIdentity(afterEntry) then
+      changes[#changes + 1] = {
+        slot = slot,
+        kind = "changed",
+        beforeName = beforeEntry.name,
+        beforeId = beforeEntry.id or beforeEntry.itemId,
+        beforeStack = beforeEntry.stack,
+        afterName = afterEntry.name,
+        afterId = afterEntry.id or afterEntry.itemId,
+        afterStack = afterEntry.stack,
+      }
+    end
+  end
+
+  for slot, beforeEntry in pairs(beforeSlots) do
+    if not seen[slot] then
+      changes[#changes + 1] = {
+        slot = slot,
+        kind = "removed",
+        beforeName = beforeEntry.name,
+        beforeId = beforeEntry.id or beforeEntry.itemId,
+        beforeStack = beforeEntry.stack,
+      }
+    end
+  end
+
+  table.sort(changes, function(left, right)
+    return tostring(left.slot or "") < tostring(right.slot or "")
+  end)
+
+  return changes
+end
+
 local function printInventoryProofSnapshot(label, snapshot)
   Console.Write(
     string.format(
@@ -1228,6 +1314,7 @@ function AutoFishLive.PrintInventoryProof(argsText)
 
     state.inventoryProof.after = buildInventoryProofSnapshot("after")
     state.inventoryProof.changes = computeInventoryProofDiff(state.inventoryProof.before, state.inventoryProof.after)
+    state.inventoryProof.slotChanges = computeInventoryProofSlotChanges(state.inventoryProof.before, state.inventoryProof.after)
     AutoFish_State = state
     printInventoryProofSnapshot("after", state.inventoryProof.after)
     AutoFishLive.PrintInventoryProof("invproof diff")
@@ -1265,10 +1352,37 @@ function AutoFishLive.PrintInventoryProof(argsText)
 
   local changes = type(proof.changes) == "table" and proof.changes or computeInventoryProofDiff(before, after)
   proof.changes = changes
+  local slotChanges = type(proof.slotChanges) == "table" and proof.slotChanges or computeInventoryProofSlotChanges(before, after)
+  proof.slotChanges = slotChanges
   AutoFish_State = state
 
   if #changes == 0 then
-    Console.Write("Inventory proof diff: no item quantity changes detected.", "#FFAA44")
+    if #slotChanges == 0 then
+      Console.Write("Inventory proof diff: no item quantity or raw slot changes detected.", "#FFAA44")
+      return
+    end
+
+    Console.Write("Inventory proof diff: no item quantity changes; raw slot changes detected:", "#FFAA44")
+    for index = 1, math.min(#slotChanges, 10) do
+      local change = slotChanges[index]
+      local beforeText = trimText(change.beforeName or change.beforeId or "-", 28)
+      local afterText = trimText(change.afterName or change.afterId or "-", 28)
+      Console.Write(
+        string.format(
+          "  %s. slot=%s %s %s(x%s) -> %s(x%s)",
+          tostring(index),
+          tostring(change.slot or "?"),
+          tostring(change.kind or "changed"),
+          beforeText,
+          tostring(change.beforeStack or "-"),
+          afterText,
+          tostring(change.afterStack or "-")),
+        "#CCCCCC")
+    end
+
+    if #slotChanges > 10 then
+      Console.Write("  ... " .. tostring(#slotChanges - 10) .. " more raw slot changes omitted.", "#CCCCCC")
+    end
     return
   end
 
@@ -1370,7 +1484,19 @@ function AutoFishLive.PrintApiTables()
   printTableKeys("Command.Item", Command and Command.Item, 32)
   printTableKeys("Command.Macro", Command and Command.Macro, 32)
   printTableKeys("Inspect.Action", Inspect and Inspect.Action, 32)
+  printTableKeys("Inspect.Ability", Inspect and Inspect.Ability, 32)
+  printTableKeys("Inspect.Ability.New", Inspect and Inspect.Ability and Inspect.Ability.New, 32)
+  printTableKeys("Inspect.Buff", Inspect and Inspect.Buff, 32)
+  printTableKeys("Inspect.Item", Inspect and Inspect.Item, 32)
+  printTableKeys("Inspect.Unit", Inspect and Inspect.Unit, 32)
+  printTableKeys("Inspect.Skill", Inspect and Inspect.Skill, 32)
+  printTableKeys("Inspect.Currency", Inspect and Inspect.Currency, 32)
+  printTableKeys("Inspect.Experience", Inspect and Inspect.Experience, 32)
+  printTableKeys("Inspect.Profession", Inspect and Inspect.Profession, 32)
+  printTableKeys("Inspect.Crafting", Inspect and Inspect.Crafting, 32)
   printTableKeys("Inspect.Macro", Inspect and Inspect.Macro, 32)
+  printTableKeys("Utility.Item", Utility and Utility.Item, 32)
+  printTableKeys("Utility.Item.Slot", Utility and Utility.Item and Utility.Item.Slot, 32)
 end
 
 function AutoFishLive.PrintApiSignals()
@@ -1392,6 +1518,11 @@ function AutoFishLive.PrintApiEvents()
   printTableKeys("Event.Item", Event and Event.Item, 32)
   printTableKeys("Event.Ability.New", Event and Event.Ability and Event.Ability.New, 32)
   printTableKeys("Event.Buff", Event and Event.Buff, 32)
+  printTableKeys("Event.Skill", Event and Event.Skill, 32)
+  printTableKeys("Event.Currency", Event and Event.Currency, 32)
+  printTableKeys("Event.Experience", Event and Event.Experience, 32)
+  printTableKeys("Event.Profession", Event and Event.Profession, 32)
+  printTableKeys("Event.Crafting", Event and Event.Crafting, 32)
   printTableKeys("Inspect.Console", Inspect and Inspect.Console, 24)
 end
 

@@ -25,7 +25,7 @@ Historical Rift fishing tools repeatedly used cursor-change detection, `/log`, p
 
 Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` before promoting any historical signal into runtime behavior. The current proof tools are:
 
-- `/autofish invproof before|after|diff` for native inventory/catch deltas.
+- `/autofish invproof before|after|diff` for native inventory/catch deltas, including raw slot-level add/remove/change diagnostics.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof reticle` for cursor/reticle/pixel crops.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof log` for read-only current log checks.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof layout` for fixed hotbar/bag region proof.
@@ -33,6 +33,8 @@ Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` be
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof summarize` and `decide` to review and record `promote`, `fallback-only`, `retire`, or `needs-more-evidence` decisions.
 
 Do not copy, execute, or port public bot scripts/binaries. Use old methods only as clues, then classify them from current local evidence.
+
+Current reviewed proof result: `docs/live-validation/2026-05-25-historical-signal-proof-results.md`.
 
 ## Live-development workflow
 
@@ -141,16 +143,19 @@ Live addon diagnostics have started against a Rift client, but AutoFish is still
 
 Confirmed live:
 
-- `/autofish help`, `/autofish status`, `/autofish bags`, `/autofish inventory`, `/autofish pole`, `/autofish abilities`, `/autofish api`, `/autofish observe`, and `/autofish trace`
-- exact PID/HWND target preflight and capture via RiftReader helpers
+- `/autofish help`, `/autofish status`, `/autofish bags`, `/autofish inventory`, `/autofish invproof`, `/autofish pole`, `/autofish abilities`, `/autofish api`, `/autofish apis`, `/autofish events`, `/autofish observe`, and `/autofish trace`
+- exact PID/HWND target preflight and capture via the Python helper/RiftReader helpers
 - player, combat/secure, inventory/free-slot, pole, Track Fish, ability scan, and castbar signals
+- read-only API/event table discovery for inventory, chat, cursor/interaction, and candidate progression namespaces
 - low-confidence observation mapping when fishable-water/bait/cast state is unproven
 
 Current blocker:
 
-- key `8` is now confirmed to arm/show the yellow fishing placement circle when the cursor is already over valid fishable water
+- key `8` is confirmed to arm/show the yellow fishing placement circle when the cursor is already over valid fishable water
 - a left-click after the yellow circle appears starts the fishing pole animation and casts a visible line
-- the next live gate is reproducing this `hover valid water -> press 8 -> left-click` sequence from the Python helper, then measuring bite/pull/loot timing
+- the bounded helper reticle proof captured cursor-handle transitions, but pixel/reticle color classification still needs cleaner non-chat-overlapped crops before promotion
+- the first inventory proof attempt did not show item quantity or raw slot changes, so catch/loot success remains `needs-more-evidence`
+- current-client `/log` proof is blocked until a known enabled Rift log path/config is found
 - no native `Inspect.Cursor` or `Inspect.Interaction` API was found for fishable-hover detection, so cursor/fishable-point calibration remains helper/operator driven
 
 Useful live scripts:
@@ -165,4 +170,4 @@ Useful live scripts:
 .\scripts\start-live-fishing-prototype.ps1 -TargetProcessId <pid> -TargetWindowHandle <hwnd> -ClientX <x> -ClientY <y> -MaxCasts 1 -DryRun
 ```
 
-Next live gate: implement a Python helper dry-run and one-cast-start command for the confirmed mechanic, capture a scripted successful cast-start trace, then advance to bite/pull timing. Until then, unattended loops remain out of scope.
+Next live gate: use the expanded API probes plus one visibly successful manual catch/loot cycle to decide whether native inventory/chat/progression signals can prove success. Until then, unattended loops remain out of scope.
