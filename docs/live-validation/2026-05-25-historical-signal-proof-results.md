@@ -117,6 +117,14 @@ Evidence:
 - `.autofish-live/signal-proof-reticle-20260525-181656/manifest.json`
 - `.autofish-live/signal-proof-reticle-20260525-181656/reticle-proof-contact-sheet.jpg`
 - `.autofish-live/post-reticle-proof-full-20260525-182110/post-reticle-proof-full.png`
+- `.autofish-live/preflight-large-reticle-candidate-latest/g0-preflight-summary.json`
+- `.autofish-live/preflight-large-reticle-candidate-latest/g0-baseline.png`
+- `.autofish-live/reticle-large-dryrun-1000-450-latest/manifest.json`
+- `.autofish-live/reticle-large-dryrun-1244-382-latest/manifest.json`
+- `.autofish-live/reticle-large-live-1244-382-latest/manifest.json`
+- `.autofish-live/reticle-large-live-1244-382-latest/after-key.bmp`
+- `.autofish-live/reticle-large-live-1244-382-latest/watch-015.bmp`
+- `.autofish-live/signal-proof-summary-after-large-reticle-latest/summary.md`
 
 Result:
 
@@ -128,10 +136,22 @@ Result:
   - after key/click/watch: `0x39D40FA9`
 - Heuristic crop colors included `blueCyan`, `green`, and `unknown`.
 
+Large-window follow-up:
+
+- Exact target was revalidated at PID `89748`, HWND `0x2CD0D30`, foreground, with a `1920x1009` client.
+- Focus preservation did not call `SW_RESTORE` because the window was not minimized, so the large/maximized Rift window remained readable.
+- The first large-window dry-run candidate `(1000,450)` was rejected because the crop overlapped the player.
+- The second dry-run candidate `(1244,382)` was clean water and was used for one bounded live proof.
+- At `(1244,382)`, pressing actionbar key `8` produced the yellow fishing reticle in the `after-key` capture.
+- One left click immediately after the yellow reticle produced visible fishing cast evidence in the watch captures: a line leading to the water and a splash/ripple at the target area.
+- The bounded run sent only one cursor move, one key `8`, and one left click; it did not send movement input or start an unattended loop.
+- The large-window live run observed cursor handles `0x630ED0`, `0x3BF07A0`, and `0xBB065A`. The handle change is useful evidence, but it is not yet enough to define a durable state machine.
+
 Reviewed status:
 
 - Cursor-handle changes are useful evidence.
-- Pixel/reticle color classification remains `needs-more-evidence` because the crop was contaminated by UI/chat overlap.
+- The large-window proof confirms the user's observation that key `8` can display a yellow cast reticle over water and that left click can start the fishing-pole cast animation.
+- Pixel/reticle color classification remains `needs-more-evidence` because promotion still requires repeated casts and clean separation of valid reticle, invalid reticle, cast-start, bite-ready, and post-loot states.
 - Reticle/cursor should remain a fallback candidate until repeated clean crops distinguish valid reticle, cast-start, bite-ready, and invalid states.
 
 ## `/log` proof
@@ -160,34 +180,9 @@ Classification:
 
 ## Next useful live step
 
-Reload the latest deployed addon if it has not already been reloaded after the API-discovery patch, then run the read-only API probes:
+Use current PID/HWND, not stale values, if the Rift process has restarted. Keep the larger window size whenever practical and recalibrate all client X/Y points after any resize.
 
-```text
-/autofish api
-/autofish apicompact
-/autofish apis
-/autofish events
-```
-
-Helper evidence command:
-
-```powershell
-python tools\autofish-helper-py\autofish_helper.py signal-proof slash `
-  --pid 89748 `
-  --hwnd 0x2CD0D30 `
-  --command "/autofish apicompact" `
-  --dry-run
-
-python tools\autofish-helper-py\autofish_helper.py signal-proof slash `
-  --pid 89748 `
-  --hwnd 0x2CD0D30 `
-  --command "/autofish apicompact" `
-  --confirm-input
-```
-
-Use current PID/HWND, not stale values, if the Rift process has restarted.
-
-After that, run a new manual catch cycle with visible catch/loot confirmation:
+Run a new manual catch cycle with visible catch/loot confirmation:
 
 1. `/autofish invproof before`
 2. one visibly successful manual catch/loot
@@ -198,3 +193,5 @@ The new expected diagnostic is either:
 
 - `no item quantity or raw slot changes detected`, or
 - `raw slot changes detected` with per-slot add/remove/change lines.
+
+Then repeat the clean reticle proof around the current fishable coordinate enough times to classify reticle/cursor as `fallback-only`, `promote`, or `retire`. Promotion still requires repeatability across multiple casts and a clear distinction between cast-valid, invalid, bite-ready, and post-loot states.
