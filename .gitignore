@@ -3,6 +3,9 @@ obj/
 .vs/
 __pycache__/
 *.pyc
+.venv/
+venv/
+.pytest_cache/
 *.user
 
 .autofish-live/

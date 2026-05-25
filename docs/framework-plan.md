@@ -9,24 +9,25 @@ For live-client work, `docs/prototype-first-workflow.md` is the active workflow.
 AutoFish is currently scoped to:
 
 1. a **Lua addon** for fishing automation and in-game status/control,
-2. a **.NET 10 helper** for profiles, supervision, and operator controls,
+2. a **Python helper/runtime automation layer** for local Rift-window control and prototype orchestration,
 3. **shared contracts** for command and session data,
 4. **fishing profiles** for leveling-focused behavior.
 
-No extra runtimes or prototype stacks are part of the product scope now.
+The older .NET helper is legacy/reference until it is explicitly migrated or retired. New live helper behavior should be Python-first. No additional helper runtimes should be added unless they replace a Python gap with a documented reason.
 
 ## Objective
 
 Build a modular, reliable fishing-focused system where:
 
 - the **Lua addon** owns local decisions and safety,
-- the **.NET helper** owns operator supervision and profile management,
+- the **Python helper** owns same-PC Rift-window automation, screenshots, and prototype orchestration,
 - and both sides evolve through stable contracts.
 
 ## Design constraints
 
 - The addon must remain fail-safe if the helper is absent.
-- The helper must remain useful offline with mock data and profile loading.
+- The Python helper must require exact PID/HWND validation before live input.
+- The Python helper must support dry-run flows before any real click/key sequence.
 - Contracts must be stable and explicit before any real bridge transport is chosen.
 - Bridge contract versioning rules are documented in `docs/bridge-contract-versioning.md` and must be followed before live transport work starts.
 - Profiles must be data-driven so leveling behavior can scale without rewriting the core.
@@ -44,14 +45,26 @@ Owns:
 - command intake,
 - session snapshot production.
 
-### .NET helper (`src/AutoFish.App`)
+### Python helper (`tools/autofish-helper-py`)
 
 Owns:
 
-- operator GUI,
-- profile catalog loading,
-- session dashboard,
-- logs and supervisory commands.
+- exact process/window validation,
+- foreground/focus checks,
+- screenshots, crops, and visual-diff artifacts,
+- cursor hover/move/click and keypress orchestration,
+- bounded prototype commands,
+- future bite/pull/loot timing and visual detection.
+
+### Legacy .NET helper (`src/AutoFish.App`)
+
+Owns for now:
+
+- legacy profile catalog loading,
+- legacy session dashboard and logs,
+- reference supervisory command patterns.
+
+Do not add new live-window automation here unless Python cannot cover the requirement and the exception is documented.
 
 ### Shared contracts (`src/AutoFish.Contracts`, `contracts`)
 
@@ -76,7 +89,8 @@ Own:
 The following can be completed without the live client:
 
 - final repo structure,
-- helper build and GUI scaffold,
+- Python helper scaffold and dry-run checks,
+- legacy helper build and GUI scaffold,
 - profile catalog and profile samples,
 - contract models and serializers,
 - Lua addon architecture,
@@ -102,7 +116,8 @@ The following still require the live client:
 Current repository target:
 
 - Lua addon structure,
-- .NET helper structure,
+- Python helper structure,
+- legacy .NET helper structure,
 - shared contracts,
 - sample profiles,
 - docs and repo hygiene.
@@ -116,13 +131,16 @@ Next:
 - keep the live-addon diagnostics shell documented and ready without treating it as live-verified,
 - add stronger Lua-side smoke coverage.
 
-### Phase 3 - Helper hardening
+### Phase 3 - Python helper pivot
 
 Next:
 
-- improve profile presentation,
-- persist helper preferences,
-- add helper-side profile validation and richer logs.
+- add the Python helper scaffold,
+- implement exact PID/HWND validation,
+- implement screenshot capture,
+- implement cursor hover without clicking,
+- implement the confirmed cast-start sequence: hover valid water, press `8`, left-click,
+- keep the .NET helper frozen as legacy/reference.
 
 ### Phase 4 - Live integration
 
@@ -130,7 +148,7 @@ Next:
 
 - bind real Rift addon APIs,
 - enforce the documented bridge contract versioning policy,
-- bind the actual helper bridge transport,
+- bind the actual helper bridge transport only after the Python prototype proves the live mechanic,
 - verify helper/addon sync and reconnect behavior.
 
 ### Phase 5 - Release hardening
@@ -146,8 +164,9 @@ Next:
 
 Offline completion for this scope means:
 
-- the repo contains only the Lua addon, helper, contracts, and profiles,
-- the helper builds and runs,
+- the repo contains only the Lua addon, Python helper, legacy helper, contracts, and profiles,
+- the Python helper can dry-run exact-window and cast-start flows,
+- the legacy helper still builds until removed,
 - the Lua addon passes syntax and smoke checks,
 - profiles load correctly,
 - and the remaining work is genuinely live-client integration, not architecture cleanup.
