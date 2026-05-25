@@ -258,3 +258,34 @@ Current practical conclusion:
 - The click/key infrastructure is no longer the main unknown.
 - The current blocker is identifying the correct live action surface for starting fishing: the visible rod/key assumptions did not arm a cast.
 - `/autofish apis` was added to inspect live API surfaces. It showed `Command.Ability` has entries but `Command.Item` is unavailable/empty in this addon context, so direct item-use via addon is not currently proven.
+
+## Operator-confirmed cast-start mechanic update
+
+Later operator-provided in-game screenshots corrected the action model and supersede the earlier "slot/key assumptions did not arm a cast" conclusion.
+
+Screenshots:
+
+- Yellow placement circle after pressing `8`: `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_134047.jpg`
+- Fishing pole animation / line cast after left-click: `C:\Users\mrkoo\OneDrive\Documents\RIFT\Screenshots\2026-05-25_134759.jpg`
+
+Corrected mechanic:
+
+1. Put the cursor over a valid fishable water point.
+2. Press/release actionbar 1 key `8`.
+3. A yellow placement circle appears immediately at the cursor if the cursor is over an eligible water spot.
+4. Left-click that placement point.
+5. The character starts the fishing pole animation and a fishing line extends from the pole toward the placement point.
+
+New evidence-based conclusion:
+
+- Key `8` is confirmed working.
+- Valid cursor position before pressing `8` is required.
+- Left-click after the yellow placement circle is the cast-confirm action.
+- The next script shape should be `hover calibrated point -> press 8 -> left-click same point -> wait/observe`, not direct action-slot experiments.
+- Hotbar/action-slot alternatives should be paused unless the keybind changes.
+
+Next smallest implementation slice:
+
+- Add a `HoverBeforeKey`-style mode, or equivalent cursor pre-position step, to `scripts/start-live-fishing-prototype.ps1`.
+- Run one bounded dry-run and then one real `MaxCasts=1` test at the calibrated water point.
+- Keep `PullClicks=0` until the scripted cast start is reproduced and captured.
