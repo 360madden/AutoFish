@@ -21,8 +21,11 @@ Before any proof run:
 
 1. Confirm exact Rift PID/HWND.
 2. Confirm the target window is the intended local game client.
-3. Confirm the character is stable at a fishable water edge.
-4. Confirm key `8` is still the fishing action binding for this character/profile.
+3. Prefer a readable Rift client size before evidence capture. `640x360` works mechanically but is too small for reliable chat/API screenshot review; use at least `960x540` when practical.
+4. Confirm the character is stable at a fishable water edge.
+5. Confirm key `8` is still the fishing action binding for this character/profile.
+
+If the Rift window size changes, rerun preflight/capture and recalibrate fishable client X/Y before any input. Helper coordinates are client-relative, not screen-resolution-relative.
 5. Do not use `-`; this local setup binds it to `reloadui`.
 6. Keep the run supervised; no unattended loop.
 

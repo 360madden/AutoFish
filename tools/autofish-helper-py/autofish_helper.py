@@ -41,6 +41,11 @@ MOUSEEVENTF_LEFTUP = 0x0004
 KEYEVENTF_KEYUP = 0x0002
 CURSOR_SHOWING = 0x00000001
 SW_RESTORE = 9
+VK_SHIFT = 0x10
+VK_CONTROL = 0x11
+VK_MENU = 0x12
+PREFERRED_READABLE_CLIENT_WIDTH = 960
+PREFERRED_READABLE_CLIENT_HEIGHT = 540
 DEFAULT_LOG_TERMS = (
     "fish",
     "fishing",
@@ -54,7 +59,7 @@ DEFAULT_LOG_TERMS = (
     "bait",
 )
 SIGNAL_DECISIONS = ("promote", "fallback-only", "retire", "needs-more-evidence")
-SIGNAL_NAMES = ("reticle", "log", "layout", "audio", "inventory")
+SIGNAL_NAMES = ("reticle", "log", "layout", "audio", "inventory", "slash")
 
 
 class POINT(ctypes.Structure):
@@ -138,6 +143,8 @@ user32.SetForegroundWindow.argtypes = [wintypes.HWND]
 user32.SetForegroundWindow.restype = wintypes.BOOL
 user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
 user32.ShowWindow.restype = wintypes.BOOL
+user32.IsIconic.argtypes = [wintypes.HWND]
+user32.IsIconic.restype = wintypes.BOOL
 user32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
 user32.SetCursorPos.restype = wintypes.BOOL
 user32.mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p]
@@ -267,13 +274,30 @@ def validate_target(hwnd: int, expected_pid: int, *, require_foreground: bool) -
             f"Foreground mismatch: foreground={hwnd_hex(foreground)}, expected={hwnd_hex(hwnd)}"
         )
 
+    client_width = int(rect.right - rect.left)
+    client_height = int(rect.bottom - rect.top)
+    below_readable_preference = (
+        client_width < PREFERRED_READABLE_CLIENT_WIDTH
+        or client_height < PREFERRED_READABLE_CLIENT_HEIGHT
+    )
+
     return {
         "hwnd": hwnd_hex(hwnd),
         "ownerProcessId": int(owner_pid.value),
-        "clientWidth": int(rect.right - rect.left),
-        "clientHeight": int(rect.bottom - rect.top),
+        "clientWidth": client_width,
+        "clientHeight": client_height,
         "foregroundWindow": hwnd_hex(foreground),
         "foregroundMatches": foreground_matches,
+        "readability": {
+            "preferredMinimumClientWidth": PREFERRED_READABLE_CLIENT_WIDTH,
+            "preferredMinimumClientHeight": PREFERRED_READABLE_CLIENT_HEIGHT,
+            "belowPreferredMinimum": below_readable_preference,
+            "warning": (
+                "Client is below preferred proof-capture size; enlarge Rift before evidence runs if readable screenshots matter."
+                if below_readable_preference
+                else None
+            ),
+        },
     }
 
 
@@ -292,8 +316,9 @@ def client_to_screen(hwnd: int, x: int, y: int) -> tuple[int, int]:
 
 
 def focus_target(hwnd: int) -> None:
-    user32.ShowWindow(hwnd, SW_RESTORE)
-    time.sleep(0.05)
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, SW_RESTORE)
+        time.sleep(0.05)
     user32.SetForegroundWindow(hwnd)
     time.sleep(0.20)
 
@@ -338,6 +363,71 @@ def press_key_once(key: str, hold_ms: int) -> dict[str, Any]:
     time.sleep(max(hold_ms, 0) / 1000.0)
     user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, None)
     return {"key": key, "virtualKey": f"0x{vk:02X}", "holdMs": hold_ms}
+
+
+def virtual_key_sequence_for_character(character: str) -> tuple[int, list[int]]:
+    if len(character) != 1:
+        raise ValueError("Expected exactly one character")
+    scan = user32.VkKeyScanW(character)
+    if scan == -1:
+        raise ValueError(f"Unable to map character {character!r} to a virtual key")
+    modifiers = (int(scan) >> 8) & 0xFF
+    unsupported = modifiers & ~0x07
+    if unsupported:
+        raise ValueError(f"Unsupported modifier state 0x{modifiers:02X} for character {character!r}")
+    modifier_keys: list[int] = []
+    if modifiers & 0x01:
+        modifier_keys.append(VK_SHIFT)
+    if modifiers & 0x02:
+        modifier_keys.append(VK_CONTROL)
+    if modifiers & 0x04:
+        modifier_keys.append(VK_MENU)
+    return int(scan) & 0xFF, modifier_keys
+
+
+def press_virtual_key(vk: int, hold_ms: int) -> None:
+    user32.keybd_event(vk, 0, 0, None)
+    time.sleep(max(hold_ms, 0) / 1000.0)
+    user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, None)
+
+
+def type_text_keys(text: str, *, key_hold_ms: int, inter_key_delay_ms: int) -> None:
+    for character in text:
+        if character in ("\r", "\n"):
+            raise ValueError("Slash command text must not contain newlines")
+        vk, modifier_keys = virtual_key_sequence_for_character(character)
+        for modifier in modifier_keys:
+            user32.keybd_event(modifier, 0, 0, None)
+        try:
+            press_virtual_key(vk, key_hold_ms)
+        finally:
+            for modifier in reversed(modifier_keys):
+                user32.keybd_event(modifier, 0, KEYEVENTF_KEYUP, None)
+        time.sleep(max(inter_key_delay_ms, 0) / 1000.0)
+
+
+def validate_slash_command(command: str, *, allow_reload_key: bool, allow_non_autofish: bool) -> str:
+    normalized = command.strip()
+    if not normalized:
+        raise ValueError("Slash command cannot be empty")
+    if "\r" in normalized or "\n" in normalized:
+        raise ValueError("Slash command must be one line")
+    if not normalized.startswith("/"):
+        raise ValueError(f"Slash command must start with '/': {command!r}")
+    if "-" in normalized and not allow_reload_key:
+        raise ValueError("Refusing a command containing '-' because that key triggers reloadui on this setup")
+    if not allow_non_autofish and not normalized.lower().startswith("/autofish"):
+        raise ValueError("Refusing non-/autofish command without --allow-non-autofish")
+    if len(normalized) > 160:
+        raise ValueError("Slash command is too long for this bounded proof helper")
+    return normalized
+
+
+def safe_file_stem(value: str, fallback: str) -> str:
+    text = value.strip().lower().replace("/", "")
+    safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "-" for ch in text)
+    safe = "-".join(part for part in safe.split("-") if part)
+    return safe[:48] or fallback
 
 
 def move_cursor_to(screen_x: int, screen_y: int) -> None:
@@ -1036,6 +1126,137 @@ def run_signal_proof_layout(args: argparse.Namespace) -> int:
         return 1
 
 
+def run_signal_proof_slash(args: argparse.Namespace) -> int:
+    hwnd = parse_hwnd(args.hwnd)
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-slash-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+    commands = list(args.command or [])
+    if args.default_api_probes:
+        commands.extend(["/autofish api", "/autofish apis", "/autofish events"])
+    if not commands:
+        raise RuntimeError("Provide --command at least once, or use --default-api-probes.")
+    commands = [
+        validate_slash_command(
+            command,
+            allow_reload_key=args.allow_reload_key,
+            allow_non_autofish=args.allow_non_autofish,
+        )
+        for command in commands
+    ]
+
+    mode = "dry-run" if args.dry_run else "confirm-input"
+    manifest: dict[str, Any] = {
+        "schema": "autofish.signalProof.slash.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "mode": mode,
+        "safety": {
+            "sendsInput": bool(args.confirm_input),
+            "sendsMovement": False,
+            "sendsLoop": False,
+            "requiresExactPidHwnd": True,
+            "requiresForegroundForInput": True,
+            "blocksReloadKeyByDefault": True,
+            "restrictsToAutofishByDefault": True,
+        },
+        "request": {
+            "pid": args.pid,
+            "hwnd": hwnd_hex(hwnd),
+            "commands": commands,
+            "defaultApiProbes": bool(args.default_api_probes),
+            "regions": args.region or [],
+            "dryRun": bool(args.dry_run),
+            "confirmInput": bool(args.confirm_input),
+            "postCommandDelayMs": args.post_command_delay_ms,
+            "interKeyDelayMs": args.inter_key_delay_ms,
+            "keyHoldMs": args.key_hold_ms,
+        },
+        "target": None,
+        "captures": [],
+        "actions": [],
+        "decision": {
+            "classification": "evidence-only",
+            "notes": [
+                "Slash proof only captures visual addon/chat output.",
+                "Human review must read screenshots before promoting any API or chat signal.",
+            ],
+        },
+    }
+    write_manifest(output_root, manifest)
+
+    def capture_regions(label: str, target: dict[str, Any], regions: list[dict[str, Any]]) -> None:
+        full_region = {
+            "name": "full-client",
+            "safeName": "full-client",
+            "left": 0,
+            "top": 0,
+            "width": int(target["clientWidth"]),
+            "height": int(target["clientHeight"]),
+        }
+        for region in [full_region, *regions]:
+            output_path = output_root / f"{label}-{region['safeName']}.bmp"
+            capture = capture_client_region(
+                hwnd,
+                args.pid,
+                region,
+                output_path,
+                require_foreground=bool(args.confirm_input),
+            )
+            capture["label"] = label
+            capture["capturedAtUtc"] = datetime.now(timezone.utc).isoformat()
+            manifest["captures"].append(capture)
+            write_manifest(output_root, manifest)
+
+    try:
+        if args.confirm_input:
+            focus_target(hwnd)
+        target = validate_target(hwnd, args.pid, require_foreground=bool(args.confirm_input))
+        manifest["target"] = target
+        regions = [parse_region_spec(spec) for spec in (args.region or [])]
+        capture_regions("baseline", target, regions)
+
+        if args.dry_run:
+            manifest["actions"].append(
+                {
+                    "name": "dry-run",
+                    "wouldSendCommands": commands,
+                    "wouldCaptureAfterEachCommand": True,
+                }
+            )
+            write_manifest(output_root, manifest)
+            print(json.dumps({"ok": True, "outputRoot": str(output_root), "manifest": str(output_root / "manifest.json")}, indent=2))
+            return 0
+
+        for index, command in enumerate(commands, start=1):
+            validate_target(hwnd, args.pid, require_foreground=True)
+            type_text_keys(
+                command,
+                key_hold_ms=args.key_hold_ms,
+                inter_key_delay_ms=args.inter_key_delay_ms,
+            )
+            press_key_once("enter", args.key_hold_ms)
+            manifest["actions"].append(
+                {
+                    "name": "send-slash-command",
+                    "index": index,
+                    "command": command,
+                    "sentAtUtc": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            write_manifest(output_root, manifest)
+            time.sleep(max(args.post_command_delay_ms, 0) / 1000.0)
+            target = validate_target(hwnd, args.pid, require_foreground=True)
+            capture_regions(f"command-{index:03d}-{safe_file_stem(command, 'slash')}", target, regions)
+
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": True, "outputRoot": str(output_root), "manifest": str(output_root / "manifest.json")}, indent=2))
+        return 0
+    except Exception as exc:
+        manifest["error"] = str(exc)
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+
+
 def run_signal_proof_audio(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-audio-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -1165,6 +1386,10 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
         if summary.get("changeCount", 0) > 0:
             return "promote-candidate-review"
         return "needs-catch-delta-evidence"
+    if signal == "slash":
+        if summary.get("captureCount", 0) > 0 and summary.get("commandCount", 0) > 0:
+            return "manual-review-addon-output"
+        return "needs-slash-output-evidence"
     return "manual-review"
 
 
@@ -1251,6 +1476,27 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
     elif signal == "inventory":
         changes = manifest.get("changes") if isinstance(manifest.get("changes"), list) else []
         summary.update({"changeCount": len(changes), "changes": changes[:10]})
+    elif signal == "slash":
+        captures = manifest.get("captures") if isinstance(manifest.get("captures"), list) else []
+        actions = manifest.get("actions") if isinstance(manifest.get("actions"), list) else []
+        sent_commands = [
+            action.get("command")
+            for action in actions
+            if isinstance(action, dict) and action.get("name") == "send-slash-command"
+        ]
+        requested = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
+        requested_commands = requested.get("commands") if isinstance(requested.get("commands"), list) else []
+        summary.update(
+            {
+                "captureCount": len(captures),
+                "captureLabels": sorted(
+                    set(str(capture.get("label")) for capture in captures if isinstance(capture, dict) and capture.get("label"))
+                ),
+                "commandCount": len(sent_commands) or len(requested_commands),
+                "commands": sent_commands or requested_commands,
+                "target": manifest.get("target"),
+            }
+        )
 
     summary["suggestedReview"] = suggest_review(signal, summary)
     return summary
@@ -1294,6 +1540,10 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- peak normalized: {summary.get('peakNormalized')}; rms normalized: {summary.get('rmsNormalized')}")
         elif summary["signal"] == "inventory":
             lines.append(f"- changes: {summary.get('changeCount', 0)}")
+        elif summary["signal"] == "slash":
+            lines.append(f"- commands: {summary.get('commandCount', 0)}")
+            lines.append(f"- captures: {summary.get('captureCount', 0)}")
+            lines.append(f"- labels: {', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -1437,6 +1687,23 @@ def build_parser() -> argparse.ArgumentParser:
     layout.add_argument("--allow-not-foreground", action="store_true", help="Allow capture when Rift is not foreground; screenshots may include occlusion")
     layout.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-layout-*.")
     layout.set_defaults(func=run_signal_proof_layout)
+
+    slash = signal_sub.add_parser("slash", help="Send bounded /autofish slash commands and capture visual addon/chat output")
+    slash.add_argument("--pid", type=int, required=True, help="Expected Rift process ID")
+    slash.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
+    slash.add_argument("--command", action="append", help="Slash command to send; repeat for multiple commands")
+    slash.add_argument("--default-api-probes", action="store_true", help="Send /autofish api, /autofish apis, and /autofish events")
+    slash_mode = slash.add_mutually_exclusive_group(required=True)
+    slash_mode.add_argument("--dry-run", action="store_true", help="Validate target and capture baseline only; send no input")
+    slash_mode.add_argument("--confirm-input", action="store_true", help="Allow bounded slash-command input")
+    slash.add_argument("--region", action="append", help="Extra client region to capture as name:left,top,width,height; full client is always captured")
+    slash.add_argument("--post-command-delay-ms", type=int, default=800, help="Delay before capturing after each command; default: 800")
+    slash.add_argument("--inter-key-delay-ms", type=int, default=20, help="Delay between typed keys; default: 20")
+    slash.add_argument("--key-hold-ms", type=int, default=25, help="Key hold duration while typing; default: 25")
+    slash.add_argument("--allow-reload-key", action="store_true", help="Allow '-' in command text despite local reloadui binding")
+    slash.add_argument("--allow-non-autofish", action="store_true", help="Allow commands outside /autofish")
+    slash.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-slash-*.")
+    slash.set_defaults(func=run_signal_proof_slash)
 
     audio = signal_sub.add_parser("audio", help="Read-only audio proof for bite/splash cue experiments")
     audio.add_argument("--seconds", type=float, required=True, help="Recording duration in seconds")

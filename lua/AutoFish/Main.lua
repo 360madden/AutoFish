@@ -802,6 +802,27 @@ local function printTableKeys(title, root, limit)
   end
 end
 
+local function formatCompactTableKeys(root, limit)
+  local keys = collectTableKeys(root, limit or 6)
+  if #keys == 0 then
+    return "none"
+  end
+
+  local parts = {}
+  for _, entry in ipairs(keys) do
+    parts[#parts + 1] = tostring(entry.name) .. ":" .. tostring(entry.valueType)
+  end
+  return table.concat(parts, ",")
+end
+
+local function formatCompactAvailability(entries)
+  local parts = {}
+  for _, entry in ipairs(entries) do
+    parts[#parts + 1] = tostring(entry[1]) .. "=" .. tostring(entry[2] and true or false)
+  end
+  return table.concat(parts, " ")
+end
+
 local function buildObservationSnapshot(snapshot)
   snapshot = type(snapshot) == "table" and snapshot or {}
 
@@ -1526,6 +1547,53 @@ function AutoFishLive.PrintApiEvents()
   printTableKeys("Inspect.Console", Inspect and Inspect.Console, 24)
 end
 
+function AutoFishLive.PrintApiCompact()
+  AutoFishLive.Refresh("slash.apicompact", true)
+
+  Console.Write("API compact proof:", "#FFFF88")
+  Console.Write(
+    "  inventory " .. formatCompactAvailability({
+      { "Item.List", Inspect and Inspect.Item and type(Inspect.Item.List) == "function" },
+      { "Item.Detail", Inspect and Inspect.Item and type(Inspect.Item.Detail) == "function" },
+      { "Slot.Inventory", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Inventory) == "function" },
+      { "Event.Item.Slot", Event and Event.Item and type(Event.Item.Slot) == "table" },
+      { "Event.Item.Update", Event and Event.Item and type(Event.Item.Update) == "table" },
+    }),
+    "#CCCCCC")
+  Console.Write(
+    "  chat/cursor " .. formatCompactAvailability({
+      { "Event.Chat.Notify", Event and Event.Chat and type(Event.Chat.Notify) == "table" },
+      { "Inspect.Cursor", Inspect and type(Inspect.Cursor) == "function" },
+      { "Inspect.Tooltip", Inspect and type(Inspect.Tooltip) == "function" },
+      { "Inspect.Interaction", Inspect and type(Inspect.Interaction) == "function" },
+    }),
+    "#CCCCCC")
+  Console.Write(
+    "  inspect progression " .. formatCompactAvailability({
+      { "Skill", Inspect and type(Inspect.Skill) == "table" },
+      { "Currency", Inspect and type(Inspect.Currency) == "table" },
+      { "Experience", Inspect and type(Inspect.Experience) == "table" },
+      { "Profession", Inspect and type(Inspect.Profession) == "table" },
+      { "Crafting", Inspect and type(Inspect.Crafting) == "table" },
+    }),
+    "#CCCCCC")
+  Console.Write(
+    "  event progression " .. formatCompactAvailability({
+      { "Skill", Event and type(Event.Skill) == "table" },
+      { "Currency", Event and type(Event.Currency) == "table" },
+      { "Experience", Event and type(Event.Experience) == "table" },
+      { "Profession", Event and type(Event.Profession) == "table" },
+      { "Crafting", Event and type(Event.Crafting) == "table" },
+    }),
+    "#CCCCCC")
+  Console.Write("  Event.Chat keys=" .. formatCompactTableKeys(Event and Event.Chat, 5), "#CCCCCC")
+  Console.Write("  Event.Item keys=" .. formatCompactTableKeys(Event and Event.Item, 5), "#CCCCCC")
+  Console.Write("  Event.Currency keys=" .. formatCompactTableKeys(Event and Event.Currency, 5), "#CCCCCC")
+  Console.Write("  Event.Experience keys=" .. formatCompactTableKeys(Event and Event.Experience, 5), "#CCCCCC")
+  Console.Write("  Inspect.Skill keys=" .. formatCompactTableKeys(Inspect and Inspect.Skill, 5), "#CCCCCC")
+  Console.Write("  Inspect.Currency keys=" .. formatCompactTableKeys(Inspect and Inspect.Currency, 5), "#CCCCCC")
+end
+
 function AutoFishLive.PrintObservation()
   local snapshot = AutoFishLive.Refresh("slash.observation", true)
   local observation = state.currentObservation or buildObservationSnapshot(snapshot)
@@ -1632,6 +1700,7 @@ function AutoFishLive.PrintHelp()
   Console.Write("  /autofish pole      - search equipped and carried fishing-pole candidates", "#CCCCCC")
   Console.Write("  /autofish abilities - search fishing-related native abilities", "#CCCCCC")
   Console.Write("  /autofish api       - show native API availability relevant to fishing probes", "#CCCCCC")
+  Console.Write("  /autofish apicompact - compact API proof for screenshot capture", "#CCCCCC")
   Console.Write("  /autofish apis      - list use/action-related API table keys", "#CCCCCC")
   Console.Write("  /autofish signals   - show cursor, tooltip, and interaction API values", "#CCCCCC")
   Console.Write("  /autofish events    - list useful event table keys for feedback probes", "#CCCCCC")
@@ -1684,6 +1753,11 @@ function AutoFishLive.OnSlashCommand(handle, args)
 
   if command == "abilities" or command == "ability" then
     AutoFishLive.PrintAbilityCandidates(argsText)
+    return
+  end
+
+  if command == "apicompact" or command == "compactapi" then
+    AutoFishLive.PrintApiCompact()
     return
   end
 

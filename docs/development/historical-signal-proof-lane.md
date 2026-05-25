@@ -32,6 +32,12 @@ No public AutoIt/AHK/bot binary or script should be executed. Archived scripts r
 
 Live proof runbook: `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md`. Use it to execute the priority lane in order and classify each stale signal.
 
+## Window size rule
+
+Use larger Rift windows for proof capture whenever practical. The helper does not require `640x360`; it captures the current HWND client size and records it in manifests. `640x360` is tolerated for continuity but should be treated as low-readability evidence, especially for chat/API screenshots. Prefer at least `960x540` before running slash-output, reticle-color, or layout proof. After any resize, recalibrate fishable client X/Y and fixed regions before input because all helper coordinates are client-relative.
+
+Focus operations must preserve the current window size. Do not use a focus path that blindly calls Windows `SW_RESTORE`, because it can shrink a maximized Rift window back to its saved restored size. AutoFish helper/preflight focus should restore only minimized windows.
+
 
 ## Current execution stance
 
@@ -98,7 +104,9 @@ Implemented fifth slice: `/autofish invproof before|after|diff|status|clear` sto
 
 Implemented sixth slice: `tools/autofish-helper-py/autofish_helper.py signal-proof summarize` scans proof manifests and writes `summary.json` plus `summary.md` review buckets so stale methods are classified consistently before promotion.
 
-Implemented seventh slice: `/autofish api`, `/autofish apis`, and `/autofish events` include read-only table/availability discovery for inventory, chat, cursor/interaction, and candidate skill/currency/experience/profession/crafting namespaces. These probes only report whether namespaces and keys exist; do not treat a listed namespace as a supported fishing signal until a live proof packet shows useful values or events.
+Implemented seventh slice: `/autofish api`, `/autofish apicompact`, `/autofish apis`, and `/autofish events` include read-only table/availability discovery for inventory, chat, cursor/interaction, and candidate skill/currency/experience/profession/crafting namespaces. These probes only report whether namespaces and keys exist; do not treat a listed namespace as a supported fishing signal until a live proof packet shows useful values or events. Use `/autofish apicompact` when the output needs to fit in one screenshot.
+
+Implemented eighth slice: `tools/autofish-helper-py/autofish_helper.py signal-proof slash` sends only explicitly confirmed, bounded slash commands and captures full-client screenshots after each one. By default it refuses non-`/autofish` commands and refuses command text containing `-` because that key triggers reloadui on this setup.
 
 Target Python commands:
 
@@ -108,6 +116,13 @@ autofish_helper.py signal-proof reticle
 
 autofish_helper.py signal-proof reticle
   --pid <pid> --hwnd <hwnd> --x <client-x> --y <client-y> --key 8 --watch-seconds 18 --confirm-input
+
+Addon API/chat-output proof:
+  autofish_helper.py signal-proof slash
+    --pid <pid> --hwnd <hwnd> --command "/autofish apicompact" --dry-run
+
+  autofish_helper.py signal-proof slash
+    --pid <pid> --hwnd <hwnd> --command "/autofish apicompact" --confirm-input
 
 Lua addon inventory proof:
   /autofish invproof before

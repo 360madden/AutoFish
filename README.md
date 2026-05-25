@@ -27,12 +27,17 @@ Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` be
 
 - `/autofish invproof before|after|diff` for native inventory/catch deltas, including raw slot-level add/remove/change diagnostics.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof reticle` for cursor/reticle/pixel crops.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof slash` for bounded `/autofish` command output screenshots.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof log` for read-only current log checks.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof layout` for fixed hotbar/bag region proof.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof audio` for bounded audio cue experiments.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof summarize` and `decide` to review and record `promote`, `fallback-only`, `retire`, or `needs-more-evidence` decisions.
 
 Do not copy, execute, or port public bot scripts/binaries. Use old methods only as clues, then classify them from current local evidence.
+
+Larger Rift windows are supported and preferred for proof capture. The helper and preflight capture record the live client width/height and warn when the client is below `960x540`, because tiny `640x360` screenshots are often too hard to read. Coordinates remain client-relative; after resizing the game window, recalibrate the fishable client X/Y before sending input.
+
+Focus must preserve the current Rift window size. AutoFish's Python helper and preflight script only restore minimized windows; they should not de-maximize or shrink a normal/maximized Rift window before proof capture.
 
 Current reviewed proof result: `docs/live-validation/2026-05-25-historical-signal-proof-results.md`.
 
@@ -143,7 +148,7 @@ Live addon diagnostics have started against a Rift client, but AutoFish is still
 
 Confirmed live:
 
-- `/autofish help`, `/autofish status`, `/autofish bags`, `/autofish inventory`, `/autofish invproof`, `/autofish pole`, `/autofish abilities`, `/autofish api`, `/autofish apis`, `/autofish events`, `/autofish observe`, and `/autofish trace`
+- `/autofish help`, `/autofish status`, `/autofish bags`, `/autofish inventory`, `/autofish invproof`, `/autofish pole`, `/autofish abilities`, `/autofish api`, `/autofish apicompact`, `/autofish apis`, `/autofish events`, `/autofish observe`, and `/autofish trace`
 - exact PID/HWND target preflight and capture via the Python helper/RiftReader helpers
 - player, combat/secure, inventory/free-slot, pole, Track Fish, ability scan, and castbar signals
 - read-only API/event table discovery for inventory, chat, cursor/interaction, and candidate progression namespaces

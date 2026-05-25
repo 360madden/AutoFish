@@ -14,6 +14,14 @@ This note records the first live historical-signal proof pass after adding the P
 - No unattended loop was run.
 - The local `-` key was not used.
 
+Window-size note:
+
+- The live captures in this proof pass used the then-current small client size of roughly `640x360`.
+- That size is not a helper limit. Larger Rift windows are supported and should be preferred for future proof screenshots.
+- After resizing, rerun exact PID/HWND preflight and recalibrate fishable client X/Y before sending input.
+- The helper now records a readability warning when the client is below `960x540`.
+- A later focus-preflight bug was found: the old focus path used `SW_RESTORE` and could shrink/maximize-state-reset Rift back to its small restored size. AutoFish focus paths now only call `SW_RESTORE` when the target window is minimized.
+
 ## Sequential result
 
 The strict Top 20 lane reached step 20, but two steps remain blocked/not promoted:
@@ -62,6 +70,44 @@ Result: the saved before/after proof replayed with the new raw-slot branch and r
 The next addon-side evidence lane is read-only API discovery, not assumptions about historical bots. `/autofish api`, `/autofish apis`, and `/autofish events` now expose inventory, chat, cursor/interaction, and candidate progression namespaces (`Skill`, `Currency`, `Experience`, `Profession`, `Crafting`) when the local Rift API makes them visible.
 
 This only proves namespace/key availability. A namespace must still produce useful live values or events during a manual fishing attempt before it can be promoted as a catch, loot, skill-up, or currency signal.
+
+Follow-up helper gap found and patched:
+
+- The normal `/autofish api`, `/autofish apis`, and `/autofish events` output is too tall for one visible chat screenshot.
+- `signal-proof slash` now captures bounded slash-command output as full-client screenshots.
+- `/autofish apicompact` now prints the key API proof facts in a compact screenshot-oriented form.
+
+Live evidence:
+
+- `.autofish-live/slash-help-live-validation-latest/manifest.json`
+- `.autofish-live/slash-help-live-validation-latest/command-001-autofish-help-full-client.bmp`
+- `.autofish-live/slash-api-live-validation-latest/manifest.json`
+- `.autofish-live/slash-api-live-validation-latest/command-001-autofish-api-full-client.bmp`
+- `.autofish-live/slash-api-live-validation-latest/command-002-autofish-apis-full-client.bmp`
+- `.autofish-live/slash-api-live-validation-latest/command-003-autofish-events-full-client.bmp`
+- `.autofish-live/slash-reloadui-live-validation-latest/manifest.json`
+- `.autofish-live/slash-reloadui-live-validation-latest/command-001-reloadui-full-client.bmp`
+- `.autofish-live/slash-apicompact-live-validation-latest/manifest.json`
+- `.autofish-live/slash-apicompact-live-validation-latest/command-001-autofish-apicompact-full-client.bmp`
+- `.autofish-live/slash-apicompact-live-validation-latest/command-001-autofish-apicompact-chat-crop-4x.png`
+- `.autofish-live/preflight-focus-preserve-large-validation-latest/g0-preflight-summary.json`
+- `.autofish-live/preflight-focus-preserve-large-validation-latest/g0-baseline.png`
+- `.autofish-live/slash-apicompact-large-validation-latest/manifest.json`
+- `.autofish-live/slash-apicompact-large-validation-latest/command-001-autofish-apicompact-full-client.bmp`
+- `.autofish-live/slash-apicompact-large-validation-latest/command-001-autofish-apicompact-large-chat-crop.png`
+
+Observed from the readable large-window `/autofish apicompact` capture:
+
+- inventory APIs/signals are present: item list/detail, inventory slot utility, item slot/update events.
+- chat/cursor/interact probes are present: `Event.Chat.Notify`, `Inspect.Cursor`, `Inspect.Tooltip`, and `Inspect.Interaction`.
+- inspect progression: `Inspect.Currency` is available; `Inspect.Skill`, `Inspect.Experience`, `Inspect.Profession`, and `Inspect.Crafting` were not visible as available inspect namespaces.
+- event progression: `Event.Currency` and `Event.Experience` are available; `Event.Skill`, `Event.Profession`, and `Event.Crafting` were not visible as available event namespaces.
+- key details visible in the large capture: `Inspect.Currency` exposes `Category`, `Detail`, and `List`; `Event.Experience` exposes `Accumulated` and `Rested`; `Event.Chat` exposes `Notify` and `Npc`; `Event.Item` exposes `Slot` and `Update`.
+
+Classification:
+
+- slash-command output capture: `promote` as an evidence collection helper only.
+- compact API namespace proof: `needs-more-evidence` until candidate event namespaces produce useful values during a manual catch/loot/skill-up attempt.
 
 ## Reticle and cursor proof
 
@@ -118,9 +164,28 @@ Reload the latest deployed addon if it has not already been reloaded after the A
 
 ```text
 /autofish api
+/autofish apicompact
 /autofish apis
 /autofish events
 ```
+
+Helper evidence command:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof slash `
+  --pid 89748 `
+  --hwnd 0x2CD0D30 `
+  --command "/autofish apicompact" `
+  --dry-run
+
+python tools\autofish-helper-py\autofish_helper.py signal-proof slash `
+  --pid 89748 `
+  --hwnd 0x2CD0D30 `
+  --command "/autofish apicompact" `
+  --confirm-input
+```
+
+Use current PID/HWND, not stale values, if the Rift process has restarted.
 
 After that, run a new manual catch cycle with visible catch/loot confirmation:
 
