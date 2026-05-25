@@ -42,8 +42,10 @@ Do not spend more live time on:
 - helper UI polish,
 - release packaging,
 - exhaustive docs,
-- old-source archaeology beyond one targeted question,
+- unbounded old-source archaeology,
 - multi-agent research unless the current blocker is truly unknown.
+
+Targeted historical-signal validation is now allowed when it directly proves or retires a bite, reticle, loot, log, audio, cursor, hotbar, or bag signal for the current local client.
 
 Do not add an unattended loop until the bounded prototype catches fish repeatedly.
 
@@ -57,6 +59,7 @@ Keep these because they prevent wasted time and bad input:
 - no broad automation loop,
 - explicit `-MaxCasts`,
 - `-DryRun` for new coordinates,
+- known local keybind: pressing `-` in-game initiates `reloadui`; do not use `-` as a helper hotkey or scripted input unless intentionally reloading the UI,
 - stop if target drifts, window loses foreground, combat appears, or the operator interrupts.
 
 Everything else is optional until the prototype catches fish.
@@ -119,6 +122,19 @@ Do not write long narrative docs during live iteration unless handing off or com
 - If visual/bite detection is hard, start with conservative timed clicks.
 - If a safety feature delays a working prototype and is not essential for a capped run, defer it.
 
+## Historical signal priority lane
+
+The current priority is to prove or retire the historical fallback signals before trusting them:
+
+1. cursor/pointer/reticle changes,
+2. pixel/color/image checks,
+3. inventory and bag deltas,
+4. `/log` or chat/notification text,
+5. audio amplitude or splash cues,
+6. fixed hotbar/bag assumptions.
+
+Treat every historical method as **stale until proven current**. Use `docs/development/historical-signal-proof-lane.md` as the proof checklist. Promote a signal only after a current local evidence packet shows it is repeatable and bounded.
+
 ## Near-term implementation order
 
 1. Keep `scripts\invoke-live-fishable-point-probe.ps1` for coordinate proof.
@@ -140,3 +156,5 @@ Current script status:
 ## Non-negotiable stop line
 
 If the character falls into water, recover manually or with one bounded backpedal/jump recovery, then stop live fishing probes until the character is stable on shore again.
+
+If `reloadui` is triggered, whether intentionally or by pressing the local `-` keybind, treat the live test state as reset. Wait for the addon to reload, reacquire exact PID/HWND, and rerun `/autofish status` or `/autofish api` before continuing.

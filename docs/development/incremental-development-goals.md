@@ -44,4 +44,6 @@ Each agent must return evidence and a recommendation for one milestone-bounded t
 
 ## Historical reference policy
 
-Archived AutoIt/AHK/log/pixel sources under `docs/research` are reference-only. They may suggest signals to observe, such as cursor changes, autoloot, lure state, loot windows, and timeout thresholds, but must not be ported as primary runtime logic. Native addon APIs are preferred; helper-side cursor/pixel/log methods are fallback modules only after native signals fail.
+Archived AutoIt/AHK/log/pixel sources under `docs/research` are reference-only. They may suggest signals to observe, such as cursor changes, autoloot, lure state, loot windows, and timeout thresholds, but must not be ported as primary runtime logic. Native addon APIs are preferred; helper-side cursor/pixel/log/audio methods are fallback modules only after native signals fail or cannot expose the needed state.
+
+Because these historical methods are now a priority risk area, validate them through `docs/development/historical-signal-proof-lane.md`: each candidate must be proven current with a local evidence packet, then classified as `promote`, `fallback-only`, or `retire`.

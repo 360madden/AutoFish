@@ -640,6 +640,18 @@ local function collectApiProbe()
     apiProbeEntry("Command.Cursor", Command and type(Command.Cursor) == "function"),
     apiProbeEntry("Event.Cursor", Event and type(Event.Cursor) == "table"),
     apiProbeEntry("Event.Interaction", Event and type(Event.Interaction) == "table"),
+    apiProbeEntry("Event.Chat", Event and type(Event.Chat) == "table"),
+    apiProbeEntry("Event.Chat.Notify", Event and Event.Chat and type(Event.Chat.Notify) == "table"),
+    apiProbeEntry("Event.System.Error", Event and Event.System and type(Event.System.Error) == "table"),
+    apiProbeEntry("Event.Item.Slot", Event and Event.Item and type(Event.Item.Slot) == "table"),
+    apiProbeEntry("Event.Item.Update", Event and Event.Item and type(Event.Item.Update) == "table"),
+    apiProbeEntry("Event.Ability.New.Usable.True", Event and Event.Ability and Event.Ability.New and Event.Ability.New.Usable and type(Event.Ability.New.Usable.True) == "table"),
+    apiProbeEntry("Event.Ability.New.Usable.False", Event and Event.Ability and Event.Ability.New and Event.Ability.New.Usable and type(Event.Ability.New.Usable.False) == "table"),
+    apiProbeEntry("Event.Buff.Add", Event and Event.Buff and type(Event.Buff.Add) == "table"),
+    apiProbeEntry("Event.Buff.Change", Event and Event.Buff and type(Event.Buff.Change) == "table"),
+    apiProbeEntry("Event.Buff.Remove", Event and Event.Buff and type(Event.Buff.Remove) == "table"),
+    apiProbeEntry("Inspect.Console.List", Inspect and Inspect.Console and type(Inspect.Console.List) == "function"),
+    apiProbeEntry("Inspect.Console.Detail", Inspect and Inspect.Console and type(Inspect.Console.Detail) == "function"),
     apiProbeEntry("Utility.Item.Slot.Inventory", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Inventory) == "function"),
     apiProbeEntry("Utility.Item.Slot.Equipment", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Equipment) == "function"),
     apiProbeEntry("Utility.Item.Slot.Parse", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Parse) == "function"),
@@ -702,6 +714,42 @@ local function printLiveApiSignals()
       "#CCCCCC"
     )
   end
+end
+
+local function printCursorSignal()
+  if not (Inspect and type(Inspect.Cursor) == "function") then
+    Console.Write("Inspect.Cursor unavailable.", "#FFAA44")
+    return
+  end
+
+  local cursorType, held = safeCall(Inspect.Cursor)
+  Console.Write(
+    "Inspect.Cursor type=" .. formatProbeValue(cursorType) .. " held=" .. formatProbeValue(held),
+    "#66CCFF"
+  )
+end
+
+local function printTooltipSignal()
+  if not (Inspect and type(Inspect.Tooltip) == "function") then
+    Console.Write("Inspect.Tooltip unavailable.", "#FFAA44")
+    return
+  end
+
+  local tooltipType, shown, extra = safeCall(Inspect.Tooltip)
+  Console.Write(
+    "Inspect.Tooltip type=" .. formatProbeValue(tooltipType) .. " shown=" .. formatProbeValue(shown) .. " extra=" .. formatProbeValue(extra),
+    "#66CCFF"
+  )
+end
+
+local function printInteractionSignal()
+  if not (Inspect and type(Inspect.Interaction) == "function") then
+    Console.Write("Inspect.Interaction unavailable.", "#FFAA44")
+    return
+  end
+
+  local interactions = safeCall(Inspect.Interaction)
+  Console.Write("Inspect.Interaction " .. formatInteractionSummary(interactions), "#66CCFF")
 end
 
 local function collectTableKeys(root, limit)
@@ -1040,6 +1088,209 @@ function AutoFishLive.PrintInventory()
   printCandidateList("Bait / lure candidates:", snapshot.fishing.baitCandidates, "  No bait/lure candidates matched the current inventory scan.")
 end
 
+local function buildInventoryProofSnapshot(label)
+  local inventorySpecifier = Utility and Utility.Item and Utility.Item.Slot and Utility.Item.Slot.Inventory and safeCall(Utility.Item.Slot.Inventory) or nil
+  local entries = collectItemEntries(inventorySpecifier, "inventory")
+  local bagSummaries, knownContainerSlots, knownUsedSlots, estimatedFreeSlots = collectBagSummaries()
+  local aggregates = {}
+
+  for _, entry in ipairs(entries) do
+    local key = entry.id or entry.itemId or entry.name or entry.slot or "unknown"
+    local aggregate = aggregates[key]
+    if type(aggregate) ~= "table" then
+      aggregate = {
+        key = key,
+        id = entry.id,
+        itemId = entry.itemId,
+        name = entry.name,
+        category = entry.category,
+        typeName = entry.typeName,
+        quantity = 0,
+        stacks = 0,
+        slots = {},
+      }
+      aggregates[key] = aggregate
+    end
+
+    aggregate.quantity = aggregate.quantity + (toNumber(entry.stack) or 1)
+    aggregate.stacks = aggregate.stacks + 1
+    aggregate.slots[#aggregate.slots + 1] = entry.slot
+  end
+
+  return {
+    label = label,
+    capturedAt = now(),
+    itemCount = #entries,
+    knownContainerSlots = knownContainerSlots,
+    knownUsedSlots = knownUsedSlots,
+    estimatedFreeSlots = estimatedFreeSlots,
+    bagSummaries = bagSummaries,
+    entries = entries,
+    aggregates = aggregates,
+  }
+end
+
+local function inventoryProofDisplayName(entry)
+  if type(entry) ~= "table" then
+    return "unknown"
+  end
+
+  return trimText(entry.name or entry.key or entry.id or entry.itemId or "unknown", 46)
+end
+
+local function computeInventoryProofDiff(before, after)
+  local changes = {}
+  local seen = {}
+  local beforeAggregates = type(before) == "table" and type(before.aggregates) == "table" and before.aggregates or {}
+  local afterAggregates = type(after) == "table" and type(after.aggregates) == "table" and after.aggregates or {}
+
+  for key, afterEntry in pairs(afterAggregates) do
+    seen[key] = true
+    local beforeEntry = beforeAggregates[key] or {}
+    local delta = (toNumber(afterEntry.quantity) or 0) - (toNumber(beforeEntry.quantity) or 0)
+    if delta ~= 0 then
+      changes[#changes + 1] = {
+        key = key,
+        name = afterEntry.name or beforeEntry.name,
+        beforeQuantity = toNumber(beforeEntry.quantity) or 0,
+        afterQuantity = toNumber(afterEntry.quantity) or 0,
+        delta = delta,
+      }
+    end
+  end
+
+  for key, beforeEntry in pairs(beforeAggregates) do
+    if not seen[key] then
+      local beforeQuantity = toNumber(beforeEntry.quantity) or 0
+      if beforeQuantity ~= 0 then
+        changes[#changes + 1] = {
+          key = key,
+          name = beforeEntry.name,
+          beforeQuantity = beforeQuantity,
+          afterQuantity = 0,
+          delta = -beforeQuantity,
+        }
+      end
+    end
+  end
+
+  table.sort(changes, function(left, right)
+    local leftAbs = math.abs(toNumber(left.delta) or 0)
+    local rightAbs = math.abs(toNumber(right.delta) or 0)
+    if leftAbs ~= rightAbs then
+      return leftAbs > rightAbs
+    end
+
+    return lower(left.name or left.key) < lower(right.name or right.key)
+  end)
+
+  return changes
+end
+
+local function printInventoryProofSnapshot(label, snapshot)
+  Console.Write(
+    string.format(
+      "%s inventory proof: items=%s knownSlots=%s used=%s estFree=%s",
+      tostring(label),
+      tostring(snapshot.itemCount or 0),
+      tostring(snapshot.knownContainerSlots or 0),
+      tostring(snapshot.knownUsedSlots or 0),
+      tostring(snapshot.estimatedFreeSlots ~= nil and snapshot.estimatedFreeSlots or "?")),
+    "#66CCFF")
+end
+
+function AutoFishLive.PrintInventoryProof(argsText)
+  ensureState()
+  state.inventoryProof = type(state.inventoryProof) == "table" and state.inventoryProof or {}
+
+  local subcommand = string.match(argsText or "", "^%S+%s+(%S+)")
+  if subcommand then
+    subcommand = string.lower(subcommand)
+  else
+    subcommand = "status"
+  end
+
+  if subcommand == "before" or subcommand == "start" then
+    state.inventoryProof.before = buildInventoryProofSnapshot("before")
+    state.inventoryProof.after = nil
+    state.inventoryProof.changes = nil
+    AutoFish_State = state
+    printInventoryProofSnapshot("before", state.inventoryProof.before)
+    Console.Write("Now perform one manual cast/catch, then run /autofish invproof after.", "#CCCCCC")
+    return
+  end
+
+  if subcommand == "after" or subcommand == "stop" then
+    if type(state.inventoryProof.before) ~= "table" then
+      Console.Write("No before snapshot. Run /autofish invproof before first.", "#FFAA44")
+      return
+    end
+
+    state.inventoryProof.after = buildInventoryProofSnapshot("after")
+    state.inventoryProof.changes = computeInventoryProofDiff(state.inventoryProof.before, state.inventoryProof.after)
+    AutoFish_State = state
+    printInventoryProofSnapshot("after", state.inventoryProof.after)
+    AutoFishLive.PrintInventoryProof("invproof diff")
+    return
+  end
+
+  if subcommand == "clear" then
+    state.inventoryProof = {}
+    AutoFish_State = state
+    Console.Write("Inventory proof snapshots cleared.", "#00CC88")
+    return
+  end
+
+  if subcommand ~= "status" and subcommand ~= "diff" then
+    Console.Write("Unknown inventory proof command. Use /autofish invproof before|after|diff|status|clear.", "#FF4444")
+    return
+  end
+
+  local proof = state.inventoryProof or {}
+  local before = proof.before
+  local after = proof.after
+  if type(before) ~= "table" then
+    Console.Write("Inventory proof has no before snapshot. Use /autofish invproof before.", "#FFAA44")
+    return
+  end
+
+  printInventoryProofSnapshot("before", before)
+
+  if type(after) ~= "table" then
+    Console.Write("No after snapshot yet. Use /autofish invproof after one manual catch/loot attempt.", "#FFAA44")
+    return
+  end
+
+  printInventoryProofSnapshot("after", after)
+
+  local changes = type(proof.changes) == "table" and proof.changes or computeInventoryProofDiff(before, after)
+  proof.changes = changes
+  AutoFish_State = state
+
+  if #changes == 0 then
+    Console.Write("Inventory proof diff: no item quantity changes detected.", "#FFAA44")
+    return
+  end
+
+  Console.Write("Inventory proof diff:", "#FFFF88")
+  for index = 1, math.min(#changes, 10) do
+    local change = changes[index]
+    Console.Write(
+      string.format(
+        "  %s. %+d %s before=%s after=%s",
+        tostring(index),
+        toNumber(change.delta) or 0,
+        inventoryProofDisplayName(change),
+        tostring(change.beforeQuantity or 0),
+        tostring(change.afterQuantity or 0)),
+      change.delta and change.delta > 0 and "#00CC88" or "#FFAA44")
+  end
+
+  if #changes > 10 then
+    Console.Write("  ... " .. tostring(#changes - 10) .. " more changes omitted.", "#CCCCCC")
+  end
+end
+
 function AutoFishLive.PrintPoleCandidates()
   local snapshot = AutoFishLive.Refresh("slash.pole", true)
   printCandidateList("Fishing pole candidates:", snapshot.fishing.poleCandidates, "  No fishing-pole candidates matched equipped or carried items.")
@@ -1120,6 +1371,28 @@ function AutoFishLive.PrintApiTables()
   printTableKeys("Command.Macro", Command and Command.Macro, 32)
   printTableKeys("Inspect.Action", Inspect and Inspect.Action, 32)
   printTableKeys("Inspect.Macro", Inspect and Inspect.Macro, 32)
+end
+
+function AutoFishLive.PrintApiSignals()
+  AutoFishLive.Refresh("slash.signals", true)
+
+  Console.Write("Focused live API signals:", "#FFFF88")
+  printCursorSignal()
+  printTooltipSignal()
+  printInteractionSignal()
+end
+
+function AutoFishLive.PrintApiEvents()
+  AutoFishLive.Refresh("slash.events", true)
+
+  printTableKeys("Event.Cursor", Event and Event.Cursor, 24)
+  printTableKeys("Event.Interaction", Event and Event.Interaction, 24)
+  printTableKeys("Event.Chat", Event and Event.Chat, 32)
+  printTableKeys("Event.System", Event and Event.System, 32)
+  printTableKeys("Event.Item", Event and Event.Item, 32)
+  printTableKeys("Event.Ability.New", Event and Event.Ability and Event.Ability.New, 32)
+  printTableKeys("Event.Buff", Event and Event.Buff, 32)
+  printTableKeys("Inspect.Console", Inspect and Inspect.Console, 24)
 end
 
 function AutoFishLive.PrintObservation()
@@ -1224,10 +1497,13 @@ function AutoFishLive.PrintHelp()
   Console.Write("  /autofish status    - show player, zone, secure state, and inventory summary", "#CCCCCC")
   Console.Write("  /autofish bags      - inspect bag containers and used/free slot counts", "#CCCCCC")
   Console.Write("  /autofish inventory - inspect bait/lure-related inventory candidates", "#CCCCCC")
+  Console.Write("  /autofish invproof  - before/after/diff proof for inventory catch deltas", "#CCCCCC")
   Console.Write("  /autofish pole      - search equipped and carried fishing-pole candidates", "#CCCCCC")
   Console.Write("  /autofish abilities - search fishing-related native abilities", "#CCCCCC")
   Console.Write("  /autofish api       - show native API availability relevant to fishing probes", "#CCCCCC")
   Console.Write("  /autofish apis      - list use/action-related API table keys", "#CCCCCC")
+  Console.Write("  /autofish signals   - show cursor, tooltip, and interaction API values", "#CCCCCC")
+  Console.Write("  /autofish events    - list useful event table keys for feedback probes", "#CCCCCC")
   Console.Write("  /autofish observe   - show fail-closed bridge observation mapping", "#CCCCCC")
   Console.Write("  /autofish trace     - start/status/stop a bounded manual one-cast trace", "#CCCCCC")
   Console.Write("  /autofish snapshot  - refresh the saved snapshot without extra output", "#CCCCCC")
@@ -1265,6 +1541,11 @@ function AutoFishLive.OnSlashCommand(handle, args)
     return
   end
 
+  if command == "invproof" or command == "inventoryproof" then
+    AutoFishLive.PrintInventoryProof(argsText)
+    return
+  end
+
   if command == "pole" then
     AutoFishLive.PrintPoleCandidates()
     return
@@ -1281,6 +1562,16 @@ function AutoFishLive.OnSlashCommand(handle, args)
     else
       AutoFishLive.PrintApiProbe()
     end
+    return
+  end
+
+  if command == "signals" or command == "cursor" or command == "tooltip" or command == "interaction" then
+    AutoFishLive.PrintApiSignals()
+    return
+  end
+
+  if command == "events" then
+    AutoFishLive.PrintApiEvents()
     return
   end
 

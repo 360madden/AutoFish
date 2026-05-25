@@ -95,12 +95,28 @@ Then rerun without `--dry-run` only after the exact-window and coordinate checks
 - Require exact PID/HWND before input.
 - Support dry-run for every live action command.
 - Send no movement for fishing casts.
+- Never use `-` as a helper hotkey or scripted input on this setup; the operator confirmed that pressing `-` in-game initiates `reloadui`.
 - Keep one-cast tests capped until bite/pull/loot timing is proven.
-- Stop if the target window changes, loses foreground, or the character falls into water.
+- Stop if the target window changes, loses foreground, `reloadui` occurs, or the character falls into water.
+
+## Historical fallback signal priority
+
+The Python helper should prioritize a signal-proof harness before a longer fishing loop. Historical cursor, `/log`, pixel, audio, and fixed hotbar/bag methods are stale until proven on the current local Rift client.
+
+First prove or retire them in this order:
+
+1. cursor/reticle screenshots and OS-cursor correlation,
+2. reticle color crops for red/yellow/blue/green,
+3. inventory/bag deltas through addon API evidence,
+4. current log/chat/notification output,
+5. audio bite/splash cue separation,
+6. explicit profile fields for hotbar and bag assumptions.
+
+See `docs/development/historical-signal-proof-lane.md` for the evidence format and promotion criteria.
 
 ## Near-term implementation checklist
 
-1. Add `tools/autofish-helper-py/`.
+1. Add `tools/autofish-helper-py/`. Done: initial `signal-proof reticle`, read-only `signal-proof log`, read-only `signal-proof layout`, and read-only `signal-proof audio` harnesses exist. Lua now also has `/autofish invproof` for native inventory-delta proof.
 2. Add Python cache/venv ignores.
 3. Implement exact PID/HWND validation.
 4. Implement screenshot capture.

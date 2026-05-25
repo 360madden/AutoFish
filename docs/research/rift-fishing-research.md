@@ -1,6 +1,6 @@
 # Rift Fishing Research Library
 
-Last updated: 2026-04-15
+Last updated: 2026-05-25
 
 ## Scope
 
@@ -28,6 +28,8 @@ This folder now has three separate roles:
 - `C:\RIFT MODDING\AutoFish\docs\research\archive`
   - preserved third-party Rift artifacts that were actually retrievable
   - includes a manifest of archived vs unresolved script sources
+- `C:\RIFT MODDING\AutoFish\docs\research\2026-05-25-online-fishing-research-refresh.md`
+  - agentic online refresh covering addon API surfaces, historical fishing scripts/tools, and installed-addon source-pattern lessons
 
 Use them in this order:
 

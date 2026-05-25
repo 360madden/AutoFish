@@ -57,6 +57,12 @@ Command logs:
 - Kept existing fail-closed observation behavior; no schema change was made.
 - Deployed patched addon to both discovered Rift addon folders and reloaded the UI.
 
+Operational keybind note:
+
+- The operator confirmed that pressing `-` in-game initiates `reloadui` on this setup.
+- Avoid `-` as a helper/script hotkey or fishing input.
+- If `reloadui` is triggered, treat the test state as reset: wait for addon reload, reacquire exact PID/HWND, and rerun `/autofish status` or `/autofish api`.
+
 ## API probe result
 
 Live `/autofish api` output confirmed:

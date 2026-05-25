@@ -19,6 +19,21 @@ The current target is a modular, reliable foundation for:
 - an in-game addon GUI,
 - and a local Python helper that can safely drive bounded desktop automation against the same PC running Rift.
 
+## Historical signal proof priority
+
+Historical Rift fishing tools repeatedly used cursor-change detection, `/log`, pixel checks, audio cues, and fixed hotbar/bag assumptions. AutoFish treats those as **stale until proven current**.
+
+Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` before promoting any historical signal into runtime behavior. The current proof tools are:
+
+- `/autofish invproof before|after|diff` for native inventory/catch deltas.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof reticle` for cursor/reticle/pixel crops.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof log` for read-only current log checks.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof layout` for fixed hotbar/bag region proof.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof audio` for bounded audio cue experiments.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof summarize` and `decide` to review and record `promote`, `fallback-only`, `retire`, or `needs-more-evidence` decisions.
+
+Do not copy, execute, or port public bot scripts/binaries. Use old methods only as clues, then classify them from current local evidence.
+
 ## Live-development workflow
 
 Use `docs/prototype-first-workflow.md` for live work. It is the active rule set for getting to a working prototype: calibrated fishable coordinate, exact PID/HWND, bounded casts, simple timing, then hardening. Do not block the prototype on perfect native `near_water` proof or broad bridge architecture.
