@@ -634,12 +634,74 @@ local function collectApiProbe()
     apiProbeEntry("Inspect.Unit.Lookup", Inspect and Inspect.Unit and type(Inspect.Unit.Lookup) == "function"),
     apiProbeEntry("Inspect.Unit.Detail", Inspect and Inspect.Unit and type(Inspect.Unit.Detail) == "function"),
     apiProbeEntry("Inspect.Unit.Castbar", Inspect and Inspect.Unit and type(Inspect.Unit.Castbar) == "function"),
-    apiProbeEntry("Inspect.Cursor", Inspect and type(Inspect.Cursor) == "table"),
-    apiProbeEntry("Inspect.Interaction", Inspect and type(Inspect.Interaction) == "table"),
+    apiProbeEntry("Inspect.Cursor", Inspect and type(Inspect.Cursor) == "function"),
+    apiProbeEntry("Inspect.Interaction", Inspect and type(Inspect.Interaction) == "function"),
+    apiProbeEntry("Inspect.Tooltip", Inspect and type(Inspect.Tooltip) == "function"),
+    apiProbeEntry("Command.Cursor", Command and type(Command.Cursor) == "function"),
+    apiProbeEntry("Event.Cursor", Event and type(Event.Cursor) == "table"),
+    apiProbeEntry("Event.Interaction", Event and type(Event.Interaction) == "table"),
     apiProbeEntry("Utility.Item.Slot.Inventory", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Inventory) == "function"),
     apiProbeEntry("Utility.Item.Slot.Equipment", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Equipment) == "function"),
     apiProbeEntry("Utility.Item.Slot.Parse", Utility and Utility.Item and Utility.Item.Slot and type(Utility.Item.Slot.Parse) == "function"),
   }
+end
+
+local function formatProbeValue(value)
+  if value == nil then
+    return "nil"
+  end
+
+  if type(value) == "table" then
+    return "table(" .. tostring(countEntries(value)) .. ")"
+  end
+
+  return trimText(tostring(value), 40)
+end
+
+local function formatInteractionSummary(interactions)
+  if type(interactions) ~= "table" then
+    return formatProbeValue(interactions)
+  end
+
+  local names = {}
+  for name, active in pairs(interactions) do
+    if active then
+      names[#names + 1] = tostring(name)
+    end
+  end
+
+  table.sort(names)
+  if #names == 0 then
+    return "none-active"
+  end
+
+  return table.concat(names, ",")
+end
+
+local function printLiveApiSignals()
+  if Inspect and type(Inspect.Cursor) == "function" then
+    local cursorType, held = safeCall(Inspect.Cursor)
+    Console.Write(
+      "  Inspect.Cursor: type=" .. formatProbeValue(cursorType) .. " held=" .. formatProbeValue(held),
+      "#CCCCCC"
+    )
+  end
+
+  if Inspect and type(Inspect.Tooltip) == "function" then
+    local tooltipType, shown, extra = safeCall(Inspect.Tooltip)
+    Console.Write(
+      "  Inspect.Tooltip: type=" .. formatProbeValue(tooltipType) .. " shown=" .. formatProbeValue(shown) .. " extra=" .. formatProbeValue(extra),
+      "#CCCCCC"
+    )
+  end
+
+  if Inspect and type(Inspect.Interaction) == "function" then
+    local interactions = safeCall(Inspect.Interaction)
+    Console.Write(
+      "  Inspect.Interaction: " .. formatInteractionSummary(interactions),
+      "#CCCCCC"
+    )
+  end
 end
 
 local function collectTableKeys(root, limit)
@@ -1044,6 +1106,9 @@ function AutoFishLive.PrintApiProbe()
         tostring(entry.available and true or false)),
       entry.available and "#CCCCCC" or "#FFAA44")
   end
+
+  Console.Write("Live read-only API signals:", "#FFFF88")
+  printLiveApiSignals()
 end
 
 function AutoFishLive.PrintApiTables()
