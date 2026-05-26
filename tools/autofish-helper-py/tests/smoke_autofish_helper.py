@@ -164,6 +164,56 @@ def test_direct_live_command_stop_file_defaults(helper) -> None:
     assert bounded_session.max_plan_age_minutes == helper.DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES
 
 
+def test_stale_session_plan_refuses_plan_backed_proofs(helper) -> None:
+    with tempfile.TemporaryDirectory(prefix="autofish-helper-stale-plan-") as tmp:
+        plan_path = Path(tmp) / "stale-session-plan.json"
+        plan = {
+            "schema": "autofish.sessionPlan.v1",
+            "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+            "target": {"pid": 1234, "hwnd": "0x1234"},
+            "fishablePoint": {"x": 100, "y": 200, "coordinateSpace": "client"},
+            "profile": {"id": "starter-pond", "root": "profiles"},
+            "defaults": {"key": "8", "maxCasts": 3, "maxAllowedCasts": 10, "pullClicks": 1},
+            "safety": {"requiresExactPidHwnd": True, "noMovement": True},
+        }
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+
+        parser = helper.build_parser()
+        one_cast = parser.parse_args(
+            [
+                "signal-proof",
+                "one-cast",
+                "--session-plan",
+                str(plan_path),
+                "--dry-run",
+                "--max-plan-age-minutes",
+                "1",
+                "--output-root",
+                str(Path(tmp) / "one-cast-out"),
+            ]
+        )
+        with contextlib.redirect_stderr(io.StringIO()) as one_cast_error:
+            assert helper.run_signal_proof_one_cast(one_cast) == 1
+        assert "too old" in one_cast_error.getvalue()
+
+        bounded_session = parser.parse_args(
+            [
+                "signal-proof",
+                "bounded-session",
+                "--session-plan",
+                str(plan_path),
+                "--dry-run",
+                "--max-plan-age-minutes",
+                "1",
+                "--output-root",
+                str(Path(tmp) / "bounded-session-out"),
+            ]
+        )
+        with contextlib.redirect_stderr(io.StringIO()) as bounded_error:
+            assert helper.run_signal_proof_bounded_session(bounded_session) == 1
+        assert "too old" in bounded_error.getvalue()
+
+
 def test_fishability_fan_suggested_commands(helper) -> None:
     candidates, _geometry = helper.generate_fan_candidates(
         origin_x=100,
@@ -645,6 +695,7 @@ def main() -> int:
     test_session_plan_defaults(helper)
     test_runbook_render(helper)
     test_direct_live_command_stop_file_defaults(helper)
+    test_stale_session_plan_refuses_plan_backed_proofs(helper)
     test_fishability_fan_suggested_commands(helper)
     test_fishability_fan_runbook_render(helper)
     test_session_plan_from_fan_candidate(helper)
