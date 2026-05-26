@@ -17,6 +17,25 @@ normalized X/Y coordinate delta
 
 The result is useful for choosing a forward screen-space fishability fan direction, but it is not exact native facing.
 
+## Direct addon coordinate probe
+
+Before relying on the helper-side ChromaLink bridge, the AutoFish addon can print its own current coordinates:
+
+```text
+/autofish coords
+```
+
+The command reads the same Rift unit detail fields used by the normal snapshot path:
+
+```lua
+Inspect.Unit.Lookup("player")
+Inspect.Unit.Detail(playerUnit).coordX
+Inspect.Unit.Detail(playerUnit).coordY
+Inspect.Unit.Detail(playerUnit).coordZ
+```
+
+Use this for a visible chat/screenshot cross-check against ChromaLink `player.position`. If the addon printout and ChromaLink disagree, stop and classify the coordinate provider as blocked/stale before sending any movement pulse.
+
 ## AutoFish proof command
 
 Dry-run first:
@@ -88,7 +107,7 @@ Result:
 
 ## Next gate
 
-Restore/start ChromaLink outside AutoFish, then rerun:
+Reload AutoFish and verify `/autofish coords` prints plausible coordinates. Then restore/start ChromaLink outside AutoFish and rerun:
 
 ```powershell
 python tools\autofish-helper-py\autofish_helper.py signal-proof chromalink --require-fresh

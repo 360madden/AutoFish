@@ -98,11 +98,19 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan 
   --dry-run
 ```
 
-This writes a `fishabilityFan` manifest with candidate client points and optional no-input crops. It does not press the fishing key, click, move, or classify water. Future confirmed probing must classify points from game feedback such as castbar start, chat/system errors, item events, inventory deltas, or progression events. Coordinate-backed micro-step facing requires a reliable before/after player coordinate source and is not implemented yet.
+This writes a `fishabilityFan` manifest with candidate client points and optional no-input crops. It does not press the fishing key, click, move, or classify water. Future confirmed probing must classify points from game feedback such as castbar start, chat/system errors, item events, inventory deltas, or progression events. Coordinate-backed micro-step facing requires a reliable before/after player coordinate source; use `/autofish coords` as the direct addon-side cross-check and ChromaLink as the helper-side bridge when fresh.
 
 ## ChromaLink coordinate proof
 
 ChromaLink can be used as a **read-only** coordinate provider when its local bridge is fresh. AutoFish must not modify ChromaLink from this repo.
+
+Use the in-game addon probe as the direct source cross-check:
+
+```text
+/autofish coords
+```
+
+It prints the current player `coordX`, `coordY`, and `coordZ` values read from `Inspect.Unit.Detail`. Compare that visible addon output to the ChromaLink `player.position` values before trusting helper-side coordinate automation.
 
 ```powershell
 python tools\autofish-helper-py\autofish_helper.py signal-proof chromalink `
@@ -213,6 +221,7 @@ This stores before/after snapshots in AutoFish saved state and prints item quant
 Use these read-only commands in game before adding new addon-side signal assumptions:
 
 ```text
+/autofish coords
 /autofish api
 /autofish apicompact
 /autofish apis

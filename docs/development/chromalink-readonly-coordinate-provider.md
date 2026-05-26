@@ -27,6 +27,23 @@ Local source evidence:
 
 This confirms coordinates only. It does not prove that Rift exposes actor facing/yaw.
 
+## Direct AutoFish coordinate cross-check
+
+AutoFish now has its own in-addon read-only coordinate probe:
+
+```text
+/autofish coords
+```
+
+It refreshes the live addon snapshot and prints:
+
+```text
+coords x=<coordX> y=<coordY> z=<coordZ> playerUnit=<unit-id>
+source=Inspect.Unit.Lookup("player") -> Inspect.Unit.Detail(playerUnit).coordX/Y/Z
+```
+
+Use this as the screenshot-friendly addon-side cross-check for ChromaLink world-state coordinates. A mismatch should be treated as a provider/freshness/setup blocker until the live source timing is understood. This command still proves coordinates only; it does not expose native actor facing/yaw.
+
 ## Published read-only consumer surface
 
 Use ChromaLink's local HTTP bridge when it is running:

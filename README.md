@@ -26,6 +26,7 @@ Historical Rift fishing tools repeatedly used cursor-change detection, `/log`, p
 Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` before promoting any historical signal into runtime behavior. The current proof tools are:
 
 - `/autofish invproof before|after|diff` for native inventory/catch deltas, including raw slot-level add/remove/change diagnostics.
+- `/autofish coords` for a direct addon-side player `coordX/coordY/coordZ` readout from `Inspect.Unit.Detail`, useful as a ChromaLink/facing cross-check.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof reticle` for cursor/reticle/pixel crops.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan` for dry-run screen-space candidate probe planning without input.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof chromalink` for read-only ChromaLink world-state/player-coordinate freshness proof.
@@ -44,7 +45,7 @@ Focus must preserve the current Rift window size. AutoFish's Python helper and p
 
 Current reviewed proof result: `docs/live-validation/2026-05-25-historical-signal-proof-results.md`.
 
-Fishability probing plan: `docs/development/fishability-probe-plan.md`. This is the preferred direction over visual water detection: probe candidate points and classify them from game feedback. Coordinate-backed micro-step facing remains blocked until a reliable player coordinate source is proven.
+Fishability probing plan: `docs/development/fishability-probe-plan.md`. This is the preferred direction over visual water detection: probe candidate points and classify them from game feedback. Coordinate-backed micro-step facing requires a reliable player coordinate source. Use `/autofish coords` as the direct addon-side cross-check and ChromaLink as the read-only helper-side telemetry bridge when fresh.
 
 ChromaLink coordinate provider plan: `docs/development/chromalink-readonly-coordinate-provider.md`. AutoFish may consume ChromaLink as a read-only provider through its published local HTTP bridge, but must not modify ChromaLink from this repo. ChromaLink coordinates require fresh `/health` and fresh `player.position` world-state proof before use.
 
@@ -162,6 +163,10 @@ Confirmed live:
 - player, combat/secure, inventory/free-slot, pole, Track Fish, ability scan, and castbar signals
 - read-only API/event table discovery for inventory, chat, cursor/interaction, and candidate progression namespaces
 - low-confidence observation mapping when fishable-water/bait/cast state is unproven
+
+Implemented offline, pending live reload/proof:
+
+- `/autofish coords` direct coordinate probe prints player `coordX/coordY/coordZ` from `Inspect.Unit.Detail` for screenshot-friendly cross-checks against ChromaLink and facing-delta runs.
 
 Current blocker:
 

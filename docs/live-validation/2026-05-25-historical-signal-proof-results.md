@@ -250,6 +250,12 @@ Interpretation:
 
 ChromaLink is the correct read-only provider candidate for player coordinates because its addon reads `Inspect.Unit.Detail("player").coordX`, `coordY`, and `coordZ`. AutoFish must still fail closed until ChromaLink reports fresh `/health`, fresh world-state, `navigation.playerPositionAvailable=true`, and `player.position.fresh=true`. ChromaLink does not currently expose heading/facing/yaw, so any future facing estimate must be computed from fresh coordinate deltas and labeled as operational inference.
 
+Follow-up implemented on 2026-05-26, pending live reload/proof:
+
+- `/autofish coords` now prints the AutoFish addon's direct `Inspect.Unit.Detail` coordinate readout.
+- Use the visible in-game output as a cross-check against ChromaLink `player.position` before trusting helper-side coordinate automation.
+- This is still coordinate evidence only; it does not prove native actor facing/yaw.
+
 ## Facing-delta calibration follow-up
 
 Evidence:

@@ -523,6 +523,15 @@ local function buildPlayerSnapshot()
   }, playerUnit
 end
 
+local function formatCoordValue(value)
+  local numberValue = toNumber(value)
+  if numberValue == nil then
+    return "?"
+  end
+
+  return string.format("%.2f", numberValue)
+end
+
 local function buildCastbarSnapshot(playerUnit)
   local castbar = playerUnit and safeCall(Inspect.Unit.Castbar, playerUnit) or nil
   if type(castbar) ~= "table" then
@@ -1807,9 +1816,32 @@ function AutoFishLive.PrintTrace(argsText)
   end
 end
 
+function AutoFishLive.PrintCoords()
+  local snapshot = AutoFishLive.Refresh("slash.coords", true)
+  local player = snapshot.player or {}
+
+  if not player.available then
+    Console.Write("Player unit is not ready yet. Coordinates unavailable.", "#FFAA44")
+    return
+  end
+
+  local coord = player.coord or {}
+  Console.Write(
+    string.format(
+      "coords x=%s y=%s z=%s playerUnit=%s",
+      formatCoordValue(coord.x),
+      formatCoordValue(coord.y),
+      formatCoordValue(coord.z),
+      tostring(player.playerUnit or "?")),
+    "#00CC88")
+  Console.Write("source=Inspect.Unit.Lookup(\"player\") -> Inspect.Unit.Detail(playerUnit).coordX/Y/Z", "#CCCCCC")
+  Console.Write("usage=cross-check ChromaLink and facing-delta; not native actor-facing/yaw", "#FFAA44")
+end
+
 function AutoFishLive.PrintHelp()
   Console.Write("Commands:", "#FFFF88")
   Console.Write("  /autofish status    - show player, zone, secure state, and inventory summary", "#CCCCCC")
+  Console.Write("  /autofish coords    - show player coordX/coordY/coordZ from Inspect.Unit.Detail", "#CCCCCC")
   Console.Write("  /autofish bags      - inspect bag containers and used/free slot counts", "#CCCCCC")
   Console.Write("  /autofish inventory - inspect bait/lure-related inventory candidates", "#CCCCCC")
   Console.Write("  /autofish invproof  - before/after/diff proof for inventory catch deltas", "#CCCCCC")
@@ -1844,6 +1876,11 @@ function AutoFishLive.OnSlashCommand(handle, args)
 
   if command == "status" then
     AutoFishLive.PrintStatus()
+    return
+  end
+
+  if command == "coords" or command == "coord" or command == "position" or command == "pos" then
+    AutoFishLive.PrintCoords()
     return
   end
 

@@ -83,7 +83,12 @@ facing ~= normalize(position_after - position_before)
 
 Without a coordinate source, a forward step cannot produce a numeric facing vector. It can only provide visual/operator context.
 
-ChromaLink is the current read-only coordinate-provider candidate. Its addon-side source reads `Inspect.Unit.Detail("player").coordX`, `coordY`, and `coordZ`, and its desktop bridge can expose that as `player.position` through `/api/v1/riftreader/world-state` when the provider is fresh. See `docs/development/chromalink-readonly-coordinate-provider.md`.
+AutoFish has two coordinate evidence paths:
+
+- direct addon cross-check: `/autofish coords`, which prints `Inspect.Unit.Detail(playerUnit).coordX`, `coordY`, and `coordZ` in game,
+- helper-side bridge: ChromaLink, which can expose `player.position` through `/api/v1/riftreader/world-state` when the provider is fresh.
+
+See `docs/development/chromalink-readonly-coordinate-provider.md`.
 
 Do not treat ChromaLink reachability as coordinate truth. AutoFish must require fresh `/health`, fresh world-state, `navigation.playerPositionAvailable=true`, and `player.position.fresh=true` before using the coordinates for any fishability/facing proof.
 
@@ -92,17 +97,18 @@ The facing-delta calibration path is documented in `docs/development/facing-delt
 Therefore, coordinate-backed fan probing is blocked on all of the following:
 
 1. reliable current player coordinates,
-2. proof that the coordinates update after a tiny controlled movement,
-3. a safe movement calibration command with explicit operator confirmation,
-4. either a world-to-screen mapping or a separately calibrated screen-space mapping.
+2. proof that direct addon coordinates and helper-side coordinates agree closely enough for the run,
+3. proof that the coordinates update after a tiny controlled movement,
+4. a safe movement calibration command with explicit operator confirmation,
+5. either a world-to-screen mapping or a separately calibrated screen-space mapping.
 
 Until those are proven, AutoFish should use the screen-space fan planner plus game feedback classification.
 
 ## Safety boundary
 
-Micro-step facing calibration is not implemented yet and must not be implicit.
+Micro-step facing calibration exists as the guarded `signal-proof facing-delta` command, but it must not be implicit.
 
-If added later, it must require:
+It must require:
 
 - exact PID/HWND,
 - foreground target,
@@ -115,6 +121,7 @@ If added later, it must require:
 ## Current status
 
 - Screen-space fishability fan planning: implemented as dry-run evidence.
-- Coordinate-backed actor-facing calibration: design only, blocked on a reliable player coordinate source.
+- Direct addon coordinate probe: implemented, pending live reload/proof.
+- Coordinate-backed operational facing calibration: implemented as a guarded command, blocked until coordinate sources are fresh and cross-checked.
 - Visual water detection: not a primary path.
 - Reticle/pixel evidence: fallback-only.
