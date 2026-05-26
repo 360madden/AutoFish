@@ -68,9 +68,21 @@ python tools\autofish-helper-py\autofish_helper.py session-plan create `
   --output .autofish-live\session-plan-latest.json
 ```
 
-Do not reuse a session plan after Rift restarts, the window is resized, or the fishable coordinate changes.
+Do not reuse a session plan after Rift restarts, the window is resized, the fishable coordinate changes, or the plan is stale. The default session-plan age gate is 240 minutes; tighten it with `--max-plan-age-minutes <minutes>` if the live context is changing quickly.
 
 The default emergency stop file in a generated plan is `.autofish-live\STOP.txt`. Create it to abort before the next bounded helper action or during a wait period; remove it before a later supervised rerun.
+
+Before plan-backed live input, run the no-input gates:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan gates `
+  --path .autofish-live\session-plan-latest.json `
+  --require stop-file-clear `
+  --require plan-fresh `
+  --require target-current `
+  --require target-foreground `
+  --require client-readable
+```
 
 Print the next commands from the plan:
 
@@ -151,37 +163,41 @@ Decision:
 After a fishable point is calibrated, use the Python-native one-cast proof instead of the older PowerShell prototype script:
 
 ```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan gates `
+  --path .autofish-live\session-plan-latest.json `
+  --require ready-one-cast
+```
+
+```powershell
 python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
-  --pid <pid> `
-  --hwnd <hwnd> `
-  --x <fishable-client-x> `
-  --y <fishable-client-y> `
-  --key 8 `
+  --session-plan .autofish-live\session-plan-latest.json `
   --cast-wait-seconds 18 `
   --pull-clicks 1 `
   --confirm-input
 ```
 
-Dry-run first with `--dry-run`. Confirmed mode is one supervised cast attempt only: no movement and no loop. It refuses minimized Rift windows; restore/maximize Rift manually before live input. The default stop file is `.autofish-live\STOP.txt`; create it to abort before the next bounded action or during the wait.
+Dry-run first with `--dry-run` using the same `--session-plan`. Confirmed mode is one supervised cast attempt only: no movement and no loop. It refuses minimized Rift windows, stale session plans, stale target geometry, and non-foreground targets; restore/maximize Rift manually before live input. The default stop file is `.autofish-live\STOP.txt`; create it to abort before the next bounded action or during the wait.
 
 ### 2c. Supervised bounded session proof
 
 Only after a reviewed one-cast proof works at the current fishable coordinate, use a small bounded session:
 
 ```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan gates `
+  --path .autofish-live\session-plan-latest.json `
+  --require ready-bounded-session
+```
+
+```powershell
 python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session `
-  --pid <pid> `
-  --hwnd <hwnd> `
-  --x <fishable-client-x> `
-  --y <fishable-client-y> `
-  --key 8 `
+  --session-plan .autofish-live\session-plan-latest.json `
   --max-casts 3 `
   --cast-wait-seconds 18 `
   --pull-clicks 1 `
   --confirm-input
 ```
 
-Dry-run first with `--dry-run`. This remains supervised proof only: explicit cast cap, no movement, no minimized-window restore, and default stop-file interruption before the next action.
+Dry-run first with `--dry-run` using the same `--session-plan`. This remains supervised proof only: explicit cast cap, no movement, no minimized-window restore, stale-plan refusal, stale-target refusal, foreground/readability gates, and default stop-file interruption before the next action.
 
 Confirmed bounded sessions require a reviewed `oneCast` decision of `promote` or `fallback-only` in `.autofish-live\signal-proof-decisions.json`. Record that with `signal-proof decide --signal oneCast` after reviewing the one-cast manifest/screenshots. Bypass with `--allow-unreviewed-one-cast` only for an explicitly supervised experiment.
 
