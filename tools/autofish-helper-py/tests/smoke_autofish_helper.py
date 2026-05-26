@@ -1527,6 +1527,29 @@ def test_scoped_one_cast_gate(helper) -> None:
         assert gate["latestOneCastDecision"]["scopeTokens"] == [scope_token]
 
 
+def test_slash_default_proof_pack_parser(helper) -> None:
+    parser = helper.build_parser()
+    args = parser.parse_args(
+        [
+            "signal-proof",
+            "slash",
+            "--pid",
+            "1234",
+            "--hwnd",
+            "0x1234",
+            "--default-proof-pack",
+            "--dry-run",
+        ]
+    )
+    assert args.default_proof_pack
+    assert args.command is None
+    assert helper.validate_slash_command(
+        "/autofish proof",
+        allow_reload_key=False,
+        allow_non_autofish=False,
+    ) == "/autofish proof"
+
+
 def main() -> int:
     helper = load_helper()
     doc_validator = load_doc_validator()
@@ -1551,6 +1574,7 @@ def main() -> int:
     test_session_plan_from_fan_candidate(helper)
     test_session_plan_target_freshness_gate(helper)
     test_scoped_one_cast_gate(helper)
+    test_slash_default_proof_pack_parser(helper)
     print("AutoFish Python helper smoke checks passed.")
     return 0
 

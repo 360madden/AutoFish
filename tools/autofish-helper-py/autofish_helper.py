@@ -5020,8 +5020,10 @@ def run_signal_proof_slash(args: argparse.Namespace) -> int:
     commands = list(args.command or [])
     if args.default_api_probes:
         commands.extend(["/autofish api", "/autofish apis", "/autofish events"])
+    if args.default_proof_pack:
+        commands.append("/autofish proof")
     if not commands:
-        raise RuntimeError("Provide --command at least once, or use --default-api-probes.")
+        raise RuntimeError("Provide --command at least once, or use --default-api-probes or --default-proof-pack.")
     commands = [
         validate_slash_command(
             command,
@@ -5050,6 +5052,7 @@ def run_signal_proof_slash(args: argparse.Namespace) -> int:
             "hwnd": hwnd_hex(hwnd),
             "commands": commands,
             "defaultApiProbes": bool(args.default_api_probes),
+            "defaultProofPack": bool(args.default_proof_pack),
             "regions": args.region or [],
             "dryRun": bool(args.dry_run),
             "confirmInput": bool(args.confirm_input),
@@ -6972,6 +6975,7 @@ def build_parser() -> argparse.ArgumentParser:
     slash.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
     slash.add_argument("--command", action="append", help="Slash command to send; repeat for multiple commands")
     slash.add_argument("--default-api-probes", action="store_true", help="Send /autofish api, /autofish apis, and /autofish events")
+    slash.add_argument("--default-proof-pack", action="store_true", help="Send /autofish proof for the compact addon-side state pack")
     slash_mode = slash.add_mutually_exclusive_group(required=True)
     slash_mode.add_argument("--dry-run", action="store_true", help="Validate target and capture baseline only; send no input")
     slash_mode.add_argument("--confirm-input", action="store_true", help="Allow bounded slash-command input")

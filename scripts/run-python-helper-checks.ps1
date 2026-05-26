@@ -82,6 +82,7 @@ try {
     python tools/autofish-helper-py/autofish_helper.py signal-proof coordinate-crosscheck --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof facing-delta --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof facing-from-coords --help | Select-String -Pattern 'before-line' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof slash --help | Select-String -Pattern 'default-proof-pack' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof doctor --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof doctor --help | Select-String -Pattern 'decision-register' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof decide --help | Out-Null

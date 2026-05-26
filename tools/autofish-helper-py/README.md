@@ -487,9 +487,10 @@ Use these read-only commands in game before adding new addon-side signal assumpt
 /autofish apicompact
 /autofish apis
 /autofish events
+/autofish proof
 ```
 
-They list availability/table keys for inventory, chat, cursor/interaction, and candidate skill/currency/experience/profession/crafting namespaces. Use `/autofish apicompact` when the proof needs to fit in one screenshot. A discovered namespace is only a lead; promote it only after a live proof packet shows useful fishing evidence.
+They list availability/table keys for inventory, chat, cursor/interaction, and candidate skill/currency/experience/profession/crafting namespaces. Use `/autofish apicompact` when the API proof needs to fit in one screenshot. Use `/autofish proof` for the compact state pack that combines coordinates, inventory, castbar, observation, and focused API values. A discovered namespace is only a lead; promote it only after a live proof packet shows useful fishing evidence.
 
 To capture those slash-command results as local evidence, use the bounded slash proof harness. Dry-run first:
 
@@ -497,7 +498,7 @@ To capture those slash-command results as local evidence, use the bounded slash 
 python tools\autofish-helper-py\autofish_helper.py signal-proof slash `
   --pid <CURRENT_RIFT_PID> `
   --hwnd <CURRENT_RIFT_HWND> `
-  --command "/autofish apicompact" `
+  --default-proof-pack `
   --dry-run
 ```
 
@@ -507,11 +508,11 @@ Then, only after confirming exact PID/HWND and foreground target, run:
 python tools\autofish-helper-py\autofish_helper.py signal-proof slash `
   --pid <CURRENT_RIFT_PID> `
   --hwnd <CURRENT_RIFT_HWND> `
-  --command "/autofish apicompact" `
+  --default-proof-pack `
   --confirm-input
 ```
 
-This captures full-client BMP screenshots and writes a `manifest.json` under `.autofish-live\signal-proof-slash-*`. It sends no movement and no loop. By default it refuses non-`/autofish` commands and refuses command text containing `-` because that key triggers reloadui on this setup. Use `--default-api-probes` only when you intentionally want the verbose `/autofish api`, `/autofish apis`, and `/autofish events` sequence.
+This captures full-client BMP screenshots and writes a `manifest.json` under `.autofish-live\signal-proof-slash-*`. It sends no movement and no loop. By default it refuses non-`/autofish` commands and refuses command text containing `-` because that key triggers reloadui on this setup. Use `--default-proof-pack` for `/autofish proof`; use `--default-api-probes` only when you intentionally want the verbose `/autofish api`, `/autofish apis`, and `/autofish events` sequence.
 
 ## Proof summary / review buckets
 
