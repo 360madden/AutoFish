@@ -302,6 +302,9 @@ def validate_target(hwnd: int, expected_pid: int, *, require_foreground: bool) -
 
     client_width = int(rect.right - rect.left)
     client_height = int(rect.bottom - rect.top)
+    client_origin = POINT(0, 0)
+    client_origin_available = bool(user32.ClientToScreen(hwnd, ctypes.byref(client_origin)))
+    client_origin_error = None if client_origin_available else last_error_message("ClientToScreen")
     is_minimized = bool(user32.IsIconic(hwnd))
     below_readable_preference = (
         client_width < PREFERRED_READABLE_CLIENT_WIDTH
@@ -313,6 +316,10 @@ def validate_target(hwnd: int, expected_pid: int, *, require_foreground: bool) -
         "ownerProcessId": int(owner_pid.value),
         "clientWidth": client_width,
         "clientHeight": client_height,
+        "clientScreenX": int(client_origin.x) if client_origin_available else None,
+        "clientScreenY": int(client_origin.y) if client_origin_available else None,
+        "clientOriginAvailable": client_origin_available,
+        "clientOriginError": client_origin_error,
         "isMinimized": is_minimized,
         "foregroundWindow": hwnd_hex(foreground),
         "foregroundMatches": foreground_matches,
@@ -341,6 +348,20 @@ def client_to_screen(hwnd: int, x: int, y: int) -> tuple[int, int]:
     if not user32.ClientToScreen(hwnd, ctypes.byref(point)):
         raise RuntimeError(last_error_message("ClientToScreen"))
     return int(point.x), int(point.y)
+
+
+def validated_client_to_screen(
+    hwnd: int,
+    expected_pid: int,
+    x: int,
+    y: int,
+    *,
+    require_foreground: bool,
+) -> tuple[dict[str, Any], int, int]:
+    target = validate_target(hwnd, expected_pid, require_foreground=require_foreground)
+    assert_client_point(target, x, y)
+    screen_x, screen_y = client_to_screen(hwnd, x, y)
+    return target, screen_x, screen_y
 
 
 def focus_target(hwnd: int) -> None:
@@ -1841,8 +1862,7 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
         capture("baseline")
 
         if args.confirm_input:
-            screen_x, screen_y = client_to_screen(hwnd, args.x, args.y)
-            validate_target(hwnd, args.pid, require_foreground=True)
+            _target, screen_x, screen_y = validated_client_to_screen(hwnd, args.pid, args.x, args.y, require_foreground=True)
             move_cursor_to(screen_x, screen_y)
             time.sleep(args.post_hover_delay_ms / 1000.0)
             manifest["actions"].append({"name": "move-cursor", "screenX": screen_x, "screenY": screen_y})
@@ -1857,7 +1877,7 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
             if args.skip_click:
                 manifest["actions"].append({"name": "skip-click", "reason": "--skip-click"})
             else:
-                validate_target(hwnd, args.pid, require_foreground=True)
+                _target, screen_x, screen_y = validated_client_to_screen(hwnd, args.pid, args.x, args.y, require_foreground=True)
                 move_cursor_to(screen_x, screen_y)
                 time.sleep(0.05)
                 left_click()
@@ -2006,6 +2026,11 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
                 raise RuntimeError(str(target_gate.get("reason") or "Session plan target freshness gate failed."))
             return current
 
+        def current_screen_point(*, require_foreground: bool) -> tuple[int, int]:
+            current = validate_current_target(require_foreground=require_foreground)
+            assert_client_point(current, args.x, args.y)
+            return client_to_screen(hwnd, args.x, args.y)
+
         if args.confirm_input:
             focus_target(hwnd)
         target = validate_current_target(require_foreground=args.confirm_input)
@@ -2015,6 +2040,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
         manifest["target"] = target
 
         def capture(label: str, extra: dict[str, Any] | None = None) -> None:
+            validate_current_target(require_foreground=args.confirm_input)
             path = output_root / f"{label}.bmp"
             capture_info = capture_client_crop(hwnd, args.pid, args.x, args.y, args.crop_size, path)
             capture_info["label"] = label
@@ -2052,8 +2078,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
             }
         else:
             assert_stop_file_absent(args.stop_file)
-            validate_current_target(require_foreground=True)
-            screen_x, screen_y = client_to_screen(hwnd, args.x, args.y)
+            screen_x, screen_y = current_screen_point(require_foreground=True)
             move_cursor_to(screen_x, screen_y)
             time.sleep(args.post_hover_delay_ms / 1000.0)
             manifest["actions"].append({"name": "move-cursor", "screenX": screen_x, "screenY": screen_y})
@@ -2070,7 +2095,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
                 manifest["actions"].append({"name": "skip-confirm-click", "reason": "--skip-confirm-click"})
             else:
                 assert_stop_file_absent(args.stop_file)
-                validate_current_target(require_foreground=True)
+                screen_x, screen_y = current_screen_point(require_foreground=True)
                 move_cursor_to(screen_x, screen_y)
                 time.sleep(0.05)
                 left_click()
@@ -2083,7 +2108,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
 
             for pull_index in range(1, int(args.pull_clicks) + 1):
                 assert_stop_file_absent(args.stop_file)
-                validate_current_target(require_foreground=True)
+                screen_x, screen_y = current_screen_point(require_foreground=True)
                 move_cursor_to(screen_x, screen_y)
                 time.sleep(0.05)
                 left_click()
@@ -2216,6 +2241,11 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                 raise RuntimeError(str(target_gate.get("reason") or "Session plan target freshness gate failed."))
             return current
 
+        def current_screen_point(*, require_foreground: bool) -> tuple[int, int]:
+            current = validate_current_target(require_foreground=require_foreground)
+            assert_client_point(current, args.x, args.y)
+            return client_to_screen(hwnd, args.x, args.y)
+
         if args.confirm_input:
             focus_target(hwnd)
         target = validate_current_target(require_foreground=args.confirm_input)
@@ -2225,6 +2255,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
         manifest["target"] = target
 
         def capture(label: str, extra: dict[str, Any] | None = None) -> None:
+            validate_current_target(require_foreground=args.confirm_input)
             path = output_root / f"{label}.bmp"
             capture_info = capture_client_crop(hwnd, args.pid, args.x, args.y, args.crop_size, path)
             capture_info["label"] = label
@@ -2257,7 +2288,6 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                 "castCount": int(args.max_casts),
             }
         else:
-            screen_x, screen_y = client_to_screen(hwnd, args.x, args.y)
             for cast_number in range(1, int(args.max_casts) + 1):
                 assert_stop_file_absent(args.stop_file)
                 cast: dict[str, Any] = {
@@ -2267,7 +2297,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                     "completed": False,
                 }
 
-                validate_current_target(require_foreground=True)
+                screen_x, screen_y = current_screen_point(require_foreground=True)
                 move_cursor_to(screen_x, screen_y)
                 time.sleep(args.post_hover_delay_ms / 1000.0)
                 cast["actions"].append({"name": "move-cursor", "screenX": screen_x, "screenY": screen_y})
@@ -2286,7 +2316,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                     cast["actions"].append({"name": "skip-confirm-click", "reason": "--skip-confirm-click"})
                 else:
                     assert_stop_file_absent(args.stop_file)
-                    validate_current_target(require_foreground=True)
+                    screen_x, screen_y = current_screen_point(require_foreground=True)
                     move_cursor_to(screen_x, screen_y)
                     time.sleep(0.05)
                     left_click()
@@ -2299,7 +2329,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
 
                 for pull_index in range(1, int(args.pull_clicks) + 1):
                     assert_stop_file_absent(args.stop_file)
-                    validate_current_target(require_foreground=True)
+                    screen_x, screen_y = current_screen_point(require_foreground=True)
                     move_cursor_to(screen_x, screen_y)
                     time.sleep(0.05)
                     left_click()

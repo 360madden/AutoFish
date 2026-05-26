@@ -1,7 +1,7 @@
 # AutoFish handoff - Python proof lane toward supervised fishing
 
 Date: 2026-05-26 07:57 -04:00
-Updated: 2026-05-26 after scoped decision/gate and target-freshness hardening
+Updated: 2026-05-26 after scoped decision/gate, target-freshness, and fresh screen-coordinate hardening
 Repo: `C:\RIFT MODDING\AutoFish`
 Branch: `main`
 Remote: `https://github.com/360madden/AutoFish`
@@ -105,6 +105,8 @@ Use `--require target-current` when a script should fail closed unless the curre
 ### Target-freshness gate
 
 Session plans created with `--validate-target`, or from a fishability-fan manifest that recorded live target geometry, now carry a target client-size snapshot. `session-plan gates`, plan-backed `signal-proof one-cast`, and plan-backed `signal-proof bounded-session` compare that stored size with the current target before allowing live input. If the Rift window was resized, restored to a different size, minimized to `0x0`, or otherwise reports a different client rect, recreate the plan and recalibrate X/Y.
+
+The helper also records the current client origin as `clientScreenX/clientScreenY` in target snapshots and recomputes client-to-screen coordinates immediately before each cursor move/click. This prevents reusing stale screen coordinates if the same-size Rift window moves between bounded actions.
 
 ### Fan-derived one-cast gate
 

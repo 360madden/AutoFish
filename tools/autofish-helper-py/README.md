@@ -90,7 +90,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan create `
   --output .autofish-live\session-plan-latest.json
 ```
 
-Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, or the fishable coordinate changes. When a plan has `targetValidation.clientWidth/clientHeight` from `--validate-target` or a fishability-fan manifest, `session-plan gates`, `one-cast`, and `bounded-session` now compare that size with the current Rift target before allowing plan-backed live input.
+Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, or the fishable coordinate changes. When a plan has `targetValidation.clientWidth/clientHeight` from `--validate-target` or a fishability-fan manifest, `session-plan gates`, `one-cast`, and `bounded-session` now compare that size with the current Rift target before allowing plan-backed live input. Live-input commands also recompute client-to-screen coordinates immediately before each cursor move/click, so a same-size window move does not reuse stale screen coordinates.
 
 By default, a session plan includes `.autofish-live\STOP.txt` as the emergency stop file. Create that file to stop before the next bounded action or during a wait period; delete it before a later supervised rerun.
 

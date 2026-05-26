@@ -237,7 +237,14 @@ def test_session_plan_from_fan_candidate(helper) -> None:
             "schema": "autofish.signalProof.fishabilityFan.v1",
             "generatedAtUtc": "2026-05-26T00:00:00+00:00",
             "request": {"pid": 1234, "hwnd": "0x1234", "key": "8"},
-            "target": {"hwnd": "0x1234", "ownerProcessId": 1234, "clientWidth": 1280, "clientHeight": 720},
+            "target": {
+                "hwnd": "0x1234",
+                "ownerProcessId": 1234,
+                "clientWidth": 1280,
+                "clientHeight": 720,
+                "clientScreenX": 40,
+                "clientScreenY": 80,
+            },
             "effectiveClient": {"width": 1280, "height": 720, "source": "live-target"},
             "candidates": [
                 {
@@ -277,6 +284,8 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert plan["safety"]["requiresReviewedFishableCandidateBeforeConfirmInput"]
         assert plan["targetValidation"]["clientWidth"] == 1280
         assert plan["targetValidation"]["clientHeight"] == 720
+        assert plan["targetValidation"]["clientScreenX"] == 40
+        assert plan["targetValidation"]["clientScreenY"] == 80
         assert plan["targetValidation"]["clientSizeSource"] == "live-target"
         stale_target_gate = helper.check_session_plan_target_freshness(
             {"plan": plan},
