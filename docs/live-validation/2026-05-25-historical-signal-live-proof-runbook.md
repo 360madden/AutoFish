@@ -140,6 +140,26 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
 
 Dry-run first with `--dry-run`. Confirmed mode is one supervised cast attempt only: no movement and no loop. It refuses minimized Rift windows; restore/maximize Rift manually before live input.
 
+### 2c. Supervised bounded session proof
+
+Only after a reviewed one-cast proof works at the current fishable coordinate, use a small bounded session:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session `
+  --pid <pid> `
+  --hwnd <hwnd> `
+  --x <fishable-client-x> `
+  --y <fishable-client-y> `
+  --key 8 `
+  --max-casts 3 `
+  --cast-wait-seconds 18 `
+  --pull-clicks 1 `
+  --stop-file .autofish-live\STOP.txt `
+  --confirm-input
+```
+
+Dry-run first with `--dry-run`. This remains supervised proof only: explicit cast cap, no movement, no minimized-window restore, and stop-file interruption before the next action.
+
 ### 3. Current log proof
 
 Only test logs as read-only evidence:

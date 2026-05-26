@@ -190,6 +190,7 @@ Large-window follow-up:
 - The helper color analyzer was tightened after that finding. New manifests include `legacySuggestedReticleColor`, `suggestionReason`, and `manualReviewRequired`. Validation samples now classify a known yellow point as `yellow`, a red/orange invalid far-left point as `red` even when legacy counts say `blueCyan`, and a background-contaminated far-center sample as `unknown` with manual review required.
 - The proof summarizer now reports legacy colors, color reasons, and manual-review-required captures. Manual-review counts are scoped to reticle-phase captures (`after-key`, `after-click`, and watch frames) so baseline or after-cancel background frames do not wrongly force a proof run into manual review.
 - Follow-up implemented on 2026-05-26, pending live proof: `signal-proof one-cast` provides a Python-native bounded cast/click/wait/pull proof so the older PowerShell prototype script is no longer the preferred path for one-cast evidence.
+- Follow-up implemented on 2026-05-26, pending live proof: `signal-proof bounded-session` can repeat the reviewed one-cast sequence under an explicit cast cap and stop-file guard. It remains supervised proof only until one-cast and inventory/loot feedback are promoted.
 
 Reviewed status:
 

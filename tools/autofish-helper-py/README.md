@@ -99,6 +99,41 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
 
 The command performs at most one cast attempt. Confirmed mode can move the cursor, press the fishing key once, left-click the calibrated cast point, wait, and perform the configured bounded pull/loot clicks. It sends no movement and no loop. If `--stop-file <path>` exists before or during the wait, the command aborts before the next action. Live-input mode refuses minimized Rift windows so it does not restore the client to a tiny saved size.
 
+## Supervised bounded session proof
+
+Use `bounded-session` only after the current coordinate has a reviewed one-cast proof. It repeats the same fixed-timing sequence with an explicit cast cap and stop file support. This is still a supervised proof command, not an unattended runtime loop.
+
+Dry-run:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session `
+  --pid <CURRENT_RIFT_PID> `
+  --hwnd <CURRENT_RIFT_HWND> `
+  --x <FISHABLE_CLIENT_X> `
+  --y <FISHABLE_CLIENT_Y> `
+  --key 8 `
+  --max-casts 3 `
+  --dry-run
+```
+
+Confirmed supervised proof:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session `
+  --pid <CURRENT_RIFT_PID> `
+  --hwnd <CURRENT_RIFT_HWND> `
+  --x <FISHABLE_CLIENT_X> `
+  --y <FISHABLE_CLIENT_Y> `
+  --key 8 `
+  --max-casts 3 `
+  --cast-wait-seconds 18 `
+  --pull-clicks 1 `
+  --stop-file .autofish-live\STOP.txt `
+  --confirm-input
+```
+
+Confirmed mode refuses minimized Rift windows, sends no movement, and stops before the next action if the stop file exists. Use `--capture-each-cast` when visual proof for each phase is more important than minimizing captures.
+
 ## Fishability fan planning
 
 Prefer proving **fishability** over visually detecting water. The helper can plan a screen-space fan of candidate points without sending input:

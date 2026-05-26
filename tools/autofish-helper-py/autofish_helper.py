@@ -67,6 +67,7 @@ SIGNAL_DECISIONS = ("promote", "fallback-only", "retire", "needs-more-evidence")
 SIGNAL_NAMES = (
     "reticle",
     "oneCast",
+    "boundedSession",
     "fishabilityFan",
     "chromalinkWorldState",
     "coordinateCrosscheck",
@@ -1240,6 +1241,201 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
                 "completed": True,
                 "liveInputSent": True,
                 "actionCount": len(manifest["actions"]),
+                "captureCount": len(manifest["captures"]),
+            }
+
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": True, "outputRoot": str(output_root), "manifest": str(output_root / "manifest.json"), "classification": manifest["result"]["classification"]}, indent=2))
+        return 0
+    except Exception as exc:
+        manifest["error"] = str(exc)
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+
+
+def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
+    hwnd = parse_hwnd(args.hwnd)
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-bounded-session-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    if args.key == "-" and args.confirm_input and not args.allow_reload_key:
+        raise RuntimeError("Refusing to send '-' because it triggers reloadui on this setup. Use --allow-reload-key only intentionally.")
+    if args.max_casts < 1 or args.max_casts > args.max_allowed_casts:
+        raise RuntimeError(f"--max-casts must be between 1 and --max-allowed-casts ({args.max_allowed_casts}).")
+    if args.max_allowed_casts < 1 or args.max_allowed_casts > 50:
+        raise RuntimeError("--max-allowed-casts must be between 1 and 50.")
+    if args.pull_clicks < 0 or args.pull_clicks > 5:
+        raise RuntimeError("--pull-clicks must be between 0 and 5.")
+    if args.cast_wait_seconds < 0 or args.cast_wait_seconds > 120:
+        raise RuntimeError("--cast-wait-seconds must be between 0 and 120.")
+
+    mode = "confirm-input" if args.confirm_input else "dry-run"
+    per_cast_clicks = (0 if args.skip_confirm_click else 1) + int(args.pull_clicks)
+    manifest: dict[str, Any] = {
+        "schema": "autofish.signalProof.boundedSession.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "mode": mode,
+        "safety": {
+            "sendsMovement": False,
+            "sendsLoop": bool(args.confirm_input and args.max_casts > 1),
+            "requiresExactPidHwnd": True,
+            "requiresForegroundForInput": True,
+            "doesNotRestoreMinimizedWindow": True,
+            "requiresPriorOneCastPromotion": True,
+            "requiresSupervision": True,
+            "sendsFishingKeyCount": int(args.max_casts) if args.confirm_input else 0,
+            "maxCasts": int(args.max_casts),
+            "maxAllowedCasts": int(args.max_allowed_casts),
+            "maxClickCount": int(args.max_casts) * per_cast_clicks if args.confirm_input else 0,
+            "blocksReloadKeyByDefault": True,
+            "stopFile": args.stop_file,
+        },
+        "request": {
+            "pid": args.pid,
+            "hwnd": hwnd_hex(hwnd),
+            "clientX": args.x,
+            "clientY": args.y,
+            "key": args.key,
+            "maxCasts": args.max_casts,
+            "cropSize": args.crop_size,
+            "keyHoldMs": args.key_hold_ms,
+            "postHoverDelayMs": args.post_hover_delay_ms,
+            "postKeyDelayMs": args.post_key_delay_ms,
+            "postClickDelayMs": args.post_click_delay_ms,
+            "castWaitSeconds": args.cast_wait_seconds,
+            "pullClicks": args.pull_clicks,
+            "postPullDelayMs": args.post_pull_delay_ms,
+            "interCastDelayMs": args.inter_cast_delay_ms,
+            "skipConfirmClick": bool(args.skip_confirm_click),
+            "captureEachCast": bool(args.capture_each_cast),
+            "dryRun": bool(args.dry_run),
+            "confirmInput": bool(args.confirm_input),
+        },
+        "target": None,
+        "captures": [],
+        "casts": [],
+        "result": {
+            "classification": "unproven",
+            "completed": False,
+        },
+        "decision": {
+            "classification": "evidence-only",
+            "notes": [
+                "This is a supervised bounded session proof, not an unattended runtime loop.",
+                "Use only after one-cast proof has been reviewed for the current fishable coordinate.",
+                "Success still requires review of game feedback such as castbar, chat, inventory, or visible loot.",
+            ],
+        },
+    }
+
+    try:
+        if args.confirm_input:
+            focus_target(hwnd)
+        target = validate_target(hwnd, args.pid, require_foreground=args.confirm_input)
+        assert_client_point(target, args.x, args.y)
+        if target.get("isMinimized") and args.confirm_input:
+            raise RuntimeError("Target is minimized; restore/maximize Rift manually before live bounded-session proof.")
+        manifest["target"] = target
+
+        def capture(label: str, extra: dict[str, Any] | None = None) -> None:
+            path = output_root / f"{label}.bmp"
+            capture_info = capture_client_crop(hwnd, args.pid, args.x, args.y, args.crop_size, path)
+            capture_info["label"] = label
+            capture_info["capturedAtUtc"] = datetime.now(timezone.utc).isoformat()
+            if extra:
+                capture_info.update(extra)
+            manifest["captures"].append(capture_info)
+            write_manifest(output_root, manifest)
+
+        capture("baseline")
+
+        if args.dry_run:
+            manifest["casts"].append(
+                {
+                    "castNumber": 1,
+                    "name": "dry-run-plan",
+                    "wouldRepeatCasts": int(args.max_casts),
+                    "wouldMoveCursor": True,
+                    "wouldPressKey": args.key,
+                    "wouldConfirmClick": not args.skip_confirm_click,
+                    "wouldWaitSecondsPerCast": args.cast_wait_seconds,
+                    "wouldPullClicksPerCast": args.pull_clicks,
+                    "wouldCaptureEachCast": bool(args.capture_each_cast),
+                }
+            )
+            manifest["result"] = {
+                "classification": "dry-run-ready",
+                "completed": True,
+                "liveInputSent": False,
+                "castCount": int(args.max_casts),
+            }
+        else:
+            screen_x, screen_y = client_to_screen(hwnd, args.x, args.y)
+            for cast_number in range(1, int(args.max_casts) + 1):
+                assert_stop_file_absent(args.stop_file)
+                cast: dict[str, Any] = {
+                    "castNumber": cast_number,
+                    "startedAtUtc": datetime.now(timezone.utc).isoformat(),
+                    "actions": [],
+                    "completed": False,
+                }
+
+                validate_target(hwnd, args.pid, require_foreground=True)
+                move_cursor_to(screen_x, screen_y)
+                time.sleep(args.post_hover_delay_ms / 1000.0)
+                cast["actions"].append({"name": "move-cursor", "screenX": screen_x, "screenY": screen_y})
+                if args.capture_each_cast:
+                    capture(f"cast-{cast_number:03d}-after-hover", {"castNumber": cast_number})
+
+                assert_stop_file_absent(args.stop_file)
+                validate_target(hwnd, args.pid, require_foreground=True)
+                key_info = press_key_once(args.key, args.key_hold_ms)
+                cast["actions"].append({"name": "press-fishing-key", **key_info})
+                time.sleep(args.post_key_delay_ms / 1000.0)
+                if args.capture_each_cast:
+                    capture(f"cast-{cast_number:03d}-after-key", {"castNumber": cast_number})
+
+                if args.skip_confirm_click:
+                    cast["actions"].append({"name": "skip-confirm-click", "reason": "--skip-confirm-click"})
+                else:
+                    assert_stop_file_absent(args.stop_file)
+                    validate_target(hwnd, args.pid, require_foreground=True)
+                    move_cursor_to(screen_x, screen_y)
+                    time.sleep(0.05)
+                    left_click()
+                    cast["actions"].append({"name": "confirm-cast-click", "screenX": screen_x, "screenY": screen_y})
+                    time.sleep(args.post_click_delay_ms / 1000.0)
+                    if args.capture_each_cast:
+                        capture(f"cast-{cast_number:03d}-after-confirm-click", {"castNumber": cast_number})
+
+                wait_seconds_with_stop(float(args.cast_wait_seconds), args.stop_file)
+
+                for pull_index in range(1, int(args.pull_clicks) + 1):
+                    assert_stop_file_absent(args.stop_file)
+                    validate_target(hwnd, args.pid, require_foreground=True)
+                    move_cursor_to(screen_x, screen_y)
+                    time.sleep(0.05)
+                    left_click()
+                    cast["actions"].append(
+                        {"name": f"pull-or-loot-click-{pull_index:03d}", "screenX": screen_x, "screenY": screen_y}
+                    )
+                    time.sleep(args.post_pull_delay_ms / 1000.0)
+
+                capture(f"cast-{cast_number:03d}-complete", {"castNumber": cast_number})
+                cast["completed"] = True
+                cast["completedAtUtc"] = datetime.now(timezone.utc).isoformat()
+                manifest["casts"].append(cast)
+                write_manifest(output_root, manifest)
+
+                if cast_number < int(args.max_casts) and args.inter_cast_delay_ms > 0:
+                    wait_seconds_with_stop(args.inter_cast_delay_ms / 1000.0, args.stop_file)
+
+            manifest["result"] = {
+                "classification": "bounded-session-evidence",
+                "completed": True,
+                "liveInputSent": True,
+                "castCount": len(manifest["casts"]),
                 "captureCount": len(manifest["captures"]),
             }
 
@@ -2577,6 +2773,12 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
         if summary.get("completed"):
             return "ready-for-bounded-live-proof"
         return "needs-rerun"
+    if signal == "boundedSession":
+        if summary.get("completed") and summary.get("liveInputSent"):
+            return "manual-review-bounded-session-feedback"
+        if summary.get("completed"):
+            return "ready-after-one-cast-review"
+        return "needs-rerun"
     if signal == "fishabilityFan":
         if summary.get("candidateCount", 0) > 0:
             return "planning-only-needs-game-feedback"
@@ -2713,6 +2915,46 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                     if isinstance(action, dict) and action.get("name")
                 ],
                 "clickCount": safety.get("clickCount"),
+                "pullClicks": request.get("pullClicks"),
+                "castWaitSeconds": request.get("castWaitSeconds"),
+                "target": manifest.get("target"),
+            }
+        )
+    elif signal == "boundedSession":
+        captures = manifest.get("captures") if isinstance(manifest.get("captures"), list) else []
+        casts = manifest.get("casts") if isinstance(manifest.get("casts"), list) else []
+        request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
+        result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
+        safety = manifest.get("safety") if isinstance(manifest.get("safety"), dict) else {}
+        completed_casts = [
+            cast
+            for cast in casts
+            if isinstance(cast, dict) and cast.get("completed")
+        ]
+        action_names: list[str] = []
+        for cast in casts:
+            if not isinstance(cast, dict):
+                continue
+            for action in cast.get("actions", []):
+                if isinstance(action, dict) and action.get("name"):
+                    action_names.append(str(action.get("name")))
+        summary.update(
+            {
+                "classification": result.get("classification"),
+                "completed": bool(result.get("completed")),
+                "liveInputSent": bool(result.get("liveInputSent")),
+                "castCount": len(casts),
+                "completedCastCount": len(completed_casts),
+                "maxCasts": request.get("maxCasts"),
+                "captureCount": len(captures),
+                "captureLabels": [
+                    capture.get("label")
+                    for capture in captures
+                    if isinstance(capture, dict) and capture.get("label")
+                ],
+                "actionCount": len(action_names),
+                "actionNames": sorted(set(action_names)),
+                "maxClickCount": safety.get("maxClickCount"),
                 "pullClicks": request.get("pullClicks"),
                 "castWaitSeconds": request.get("castWaitSeconds"),
                 "target": manifest.get("target"),
@@ -2895,6 +3137,13 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- actions: {summary.get('actionCount', 0)} ({', '.join(str(name) for name in summary.get('actionNames', [])) or '-'})")
             lines.append(f"- captures: {summary.get('captureCount', 0)} ({', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'})")
             lines.append(f"- click count: {summary.get('clickCount')}; pull clicks: {summary.get('pullClicks')}; wait seconds: {summary.get('castWaitSeconds')}")
+        elif summary["signal"] == "boundedSession":
+            lines.append(f"- classification: {summary.get('classification')}")
+            lines.append(f"- completed: {summary.get('completed')}; live input sent: {summary.get('liveInputSent')}")
+            lines.append(f"- casts: {summary.get('completedCastCount', 0)}/{summary.get('maxCasts')}")
+            lines.append(f"- actions: {summary.get('actionCount', 0)} ({', '.join(str(name) for name in summary.get('actionNames', [])) or '-'})")
+            lines.append(f"- captures: {summary.get('captureCount', 0)} ({', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'})")
+            lines.append(f"- max clicks: {summary.get('maxClickCount')}; pull clicks: {summary.get('pullClicks')}; wait seconds: {summary.get('castWaitSeconds')}")
         elif summary["signal"] == "fishabilityFan":
             lines.append(f"- candidates: {summary.get('candidateCount', 0)}; in bounds: {summary.get('inBoundsCandidateCount', 0)}")
             lines.append(f"- captures: {summary.get('captureCount', 0)}")
@@ -3096,6 +3345,33 @@ def build_parser() -> argparse.ArgumentParser:
     one_cast.add_argument("--stop-file", help="If this file exists before/during the run, abort before the next action")
     one_cast.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-one-cast-*.")
     one_cast.set_defaults(func=run_signal_proof_one_cast)
+
+    bounded_session = signal_sub.add_parser("bounded-session", help="Run a supervised bounded multi-cast proof after one-cast review")
+    bounded_session.add_argument("--pid", type=int, required=True, help="Expected Rift process ID")
+    bounded_session.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
+    bounded_session.add_argument("--x", type=int, required=True, help="Client X coordinate of calibrated fishable point")
+    bounded_session.add_argument("--y", type=int, required=True, help="Client Y coordinate of calibrated fishable point")
+    bounded_session.add_argument("--key", default="8", help="Fishing key to press during --confirm-input; default: 8")
+    bounded_session_mode = bounded_session.add_mutually_exclusive_group(required=True)
+    bounded_session_mode.add_argument("--dry-run", action="store_true", help="Validate and capture baseline only; send no input")
+    bounded_session_mode.add_argument("--confirm-input", action="store_true", help="Allow a supervised bounded session")
+    bounded_session.add_argument("--allow-reload-key", action="store_true", help="Allow '-' key despite local reloadui binding")
+    bounded_session.add_argument("--skip-confirm-click", action="store_true", help="Press the fishing key but do not left-click the cast point")
+    bounded_session.add_argument("--max-casts", type=int, default=3, help="Number of cast attempts in this bounded session; default: 3")
+    bounded_session.add_argument("--max-allowed-casts", type=int, default=10, help="Safety cap for --max-casts; default: 10")
+    bounded_session.add_argument("--pull-clicks", type=int, default=1, help="Number of pull/loot clicks after each wait; default: 1")
+    bounded_session.add_argument("--cast-wait-seconds", type=float, default=18.0, help="Wait after each cast before pull/loot clicks; default: 18")
+    bounded_session.add_argument("--crop-size", type=int, default=220, help="Square crop size around client point; default: 220")
+    bounded_session.add_argument("--key-hold-ms", type=int, default=80, help="Key hold duration; default: 80")
+    bounded_session.add_argument("--post-hover-delay-ms", type=int, default=150, help="Delay after cursor move before optional capture")
+    bounded_session.add_argument("--post-key-delay-ms", type=int, default=350, help="Delay after keypress before optional capture")
+    bounded_session.add_argument("--post-click-delay-ms", type=int, default=800, help="Delay after confirm click before optional capture")
+    bounded_session.add_argument("--post-pull-delay-ms", type=int, default=1200, help="Delay after each pull/loot click before completion capture")
+    bounded_session.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Delay between cast attempts; default: 800")
+    bounded_session.add_argument("--capture-each-cast", action="store_true", help="Capture after hover/key/confirm in addition to each cast completion")
+    bounded_session.add_argument("--stop-file", help="If this file exists before/during the run, abort before the next action")
+    bounded_session.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-bounded-session-*.")
+    bounded_session.set_defaults(func=run_signal_proof_bounded_session)
 
     fan = signal_sub.add_parser("fishability-fan", help="Dry-run a screen-space fan of candidate fishing probe points without input")
     fan.add_argument("--pid", type=int, required=True, help="Expected Rift process ID")

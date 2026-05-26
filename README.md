@@ -29,6 +29,7 @@ Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` be
 - `/autofish coords` for a direct addon-side player `coordX/coordY/coordZ` readout from `Inspect.Unit.Detail`, useful as a ChromaLink/facing cross-check.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof reticle` for cursor/reticle/pixel crops.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast` for one bounded Python-native cast/click/wait/pull proof at a calibrated fishable point.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session` for a supervised bounded multi-cast proof after one-cast evidence is reviewed.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan` for dry-run screen-space candidate probe planning without input.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof chromalink` for read-only ChromaLink world-state/player-coordinate freshness proof.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof coordinate-crosscheck` for read-only comparison of manual `/autofish coords` output against fresh ChromaLink `player.position`.
@@ -97,6 +98,7 @@ Owns:
 - cursor hover/move/click and keypress orchestration,
 - bounded prototype commands such as hover, press `8`, left-click, and capture,
 - one-cast proof commands that click a calibrated point, press the fishing key, wait, and perform a bounded pull/loot click,
+- supervised bounded session proofs that repeat the proven one-cast sequence with an explicit cast cap and stop file,
 - future bite/pull/loot timing and visual detection.
 
 The helper runs on the same local PC as the Rift game window. It supervises and automates bounded desktop interactions; it should not replace the addon's local safety logic.
