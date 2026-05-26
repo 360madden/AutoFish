@@ -1126,6 +1126,45 @@ def run_session_plan_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_session_plan_gates(args: argparse.Namespace) -> int:
+    loaded = load_session_plan(args.path)
+    assert loaded is not None
+    plan = loaded["plan"]
+    one_cast_gate_args = argparse.Namespace(
+        allow_unreviewed_one_cast=False,
+        decision_register=args.decision_register,
+    )
+    fishability_gate = check_fan_candidate_review_gate(
+        loaded,
+        args.decision_register,
+        allow_unreviewed=False,
+    )
+    one_cast_gate = check_one_cast_review_gate(one_cast_gate_args, loaded)
+    report = {
+        "schema": "autofish.sessionPlan.reviewGates.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "path": loaded["path"],
+        "review": plan.get("review") if isinstance(plan.get("review"), dict) else None,
+        "source": plan.get("source") if isinstance(plan.get("source"), dict) else None,
+        "decisionRegister": args.decision_register,
+        "gates": {
+            "fishabilityCandidate": fishability_gate,
+            "oneCast": one_cast_gate,
+        },
+        "readiness": {
+            "confirmedOneCast": bool(fishability_gate.get("passed")),
+            "confirmedBoundedSession": bool(one_cast_gate.get("passed")),
+        },
+        "notes": [
+            "This command sends no game input.",
+            "confirmedOneCast covers fan-derived candidate review only; one-cast still requires exact PID/HWND and --confirm-input.",
+            "confirmedBoundedSession requires a scoped reviewed oneCast decision.",
+        ],
+    }
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def quote_ps(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
@@ -1172,6 +1211,12 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         "",
         "```powershell",
         f"{helper} session-plan show --path {plan_arg}",
+        "```",
+        "",
+        "Check scoped review gates:",
+        "",
+        "```powershell",
+        f"{helper} session-plan gates --path {plan_arg}",
         "```",
         "",
     ])
@@ -4205,6 +4250,10 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_show = session_plan_sub.add_parser("show", help="Print a session plan JSON file")
     session_plan_show.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
     session_plan_show.set_defaults(func=run_session_plan_show)
+    session_plan_gates = session_plan_sub.add_parser("gates", help="Print scoped review gate status for a session plan")
+    session_plan_gates.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
+    session_plan_gates.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register path")
+    session_plan_gates.set_defaults(func=run_session_plan_gates)
     session_plan_runbook = session_plan_sub.add_parser("runbook", help="Print next live-proof commands from a session plan")
     session_plan_runbook.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
     session_plan_runbook.add_argument("--proof-root", default=".autofish-live", help="Proof root to use in suggested decision command")

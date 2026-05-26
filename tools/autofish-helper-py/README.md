@@ -221,6 +221,13 @@ python tools\autofish-helper-py\autofish_helper.py session-plan runbook `
   --path .autofish-live\session-plan-latest.json
 ```
 
+At any point, print the current scoped gate status without sending input:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan gates `
+  --path .autofish-live\session-plan-latest.json
+```
+
 The created plan still marks the fan candidate as planning-only source evidence; confirmed one-cast input from that plan requires a reviewed `fishabilityCandidate` decision with the plan's review scope token unless intentionally bypassed with `--allow-unreviewed-fan-candidate`. Run the generated session-plan dry-run before any confirmed one-cast proof.
 
 ## ChromaLink coordinate proof

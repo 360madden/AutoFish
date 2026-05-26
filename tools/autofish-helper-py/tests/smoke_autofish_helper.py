@@ -328,7 +328,20 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         markdown = helper.render_session_plan_runbook(str(plan_path), ".autofish-live")
         assert "--signal fishabilityCandidate" in markdown
         assert f"--scope-token '{scope_token}'" in markdown
+        assert "session-plan gates" in markdown
         assert "Fan-derived plans also require" in markdown
+
+        with contextlib.redirect_stdout(io.StringIO()) as gate_output:
+            assert (
+                helper.run_session_plan_gates(
+                    argparse.Namespace(path=str(plan_path), decision_register=str(decision_register))
+                )
+                == 0
+            )
+        gate_report = json.loads(gate_output.getvalue())
+        assert gate_report["schema"] == "autofish.sessionPlan.reviewGates.v1"
+        assert gate_report["readiness"]["confirmedOneCast"]
+        assert not gate_report["readiness"]["confirmedBoundedSession"]
 
 
 def test_scoped_one_cast_gate(helper) -> None:
