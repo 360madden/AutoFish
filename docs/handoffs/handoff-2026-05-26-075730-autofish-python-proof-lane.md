@@ -1,6 +1,7 @@
 # AutoFish handoff - Python proof lane toward supervised fishing
 
 Date: 2026-05-26 07:57 -04:00
+Updated: 2026-05-26 after scoped decision/gate hardening
 Repo: `C:\RIFT MODDING\AutoFish`
 Branch: `main`
 Remote: `https://github.com/360madden/AutoFish`
@@ -13,16 +14,18 @@ The current implementation is not an unattended fishing loop yet. It is now a st
 
 1. plan a fishability fan,
 2. review one candidate reticle/game-feedback proof,
-3. record a `fishabilityCandidate` decision,
-4. create a session plan directly from that fan candidate,
+3. create a session plan directly from that fan candidate,
+4. record a scoped `fishabilityCandidate` decision using the plan review token,
 5. dry-run one-cast,
 6. run one supervised one-cast proof,
-7. record a `oneCast` decision,
+7. record a scoped `oneCast` decision using the same plan review token,
 8. dry-run bounded session,
 9. run a small supervised bounded session with stop-file interruption.
 
 ## Latest pushed commits in this lane
 
+- `03b6e19` - Add session plan gate status
+- `466f92b` - Scope reviewed proof decisions to session plans
 - `ba96541` - Run Python helper checks in CI
 - `cc57c09` - Gate fan-derived one-cast plans
 - `62bf289` - Create session plans from fan candidates
@@ -60,8 +63,9 @@ For each candidate:
 1. run candidate reticle dry-run,
 2. run supervised `--skip-click --cancel-after-key` reticle proof,
 3. review the manifest/screenshots,
-4. record `fishabilityCandidate`,
-5. create a session plan from the fan candidate.
+4. create a session plan from the fan candidate,
+5. print `session-plan runbook`,
+6. record scoped `fishabilityCandidate` with the plan review token.
 
 Example:
 
@@ -69,17 +73,28 @@ Example:
 python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan-runbook `
   --manifest .autofish-live\<fishability-fan-proof>\manifest.json
 
-python tools\autofish-helper-py\autofish_helper.py signal-proof decide `
-  --signal fishabilityCandidate `
-  --decision fallback-only `
-  --reason "Reviewed fan candidate as fishable enough for one supervised one-cast proof." `
-  --evidence .autofish-live\<candidate-reticle-proof>\manifest.json
-
 python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
   --manifest .autofish-live\<fishability-fan-proof>\manifest.json `
   --candidate-index <index> `
   --profile starter-pond `
   --output .autofish-live\session-plan-latest.json
+
+python tools\autofish-helper-py\autofish_helper.py session-plan runbook `
+  --path .autofish-live\session-plan-latest.json
+
+python tools\autofish-helper-py\autofish_helper.py session-plan gates `
+  --path .autofish-live\session-plan-latest.json
+```
+
+### Scoped review gates
+
+Each new session plan now has a deterministic review scope token (`review.scopeToken`) derived from the target PID/HWND, client coordinate, profile/defaults, and fan source when present. Reviewed `fishabilityCandidate` and `oneCast` decisions should be recorded with `--scope-token <token>` from the session-plan runbook. This prevents stale decisions for older coordinates or windows from unlocking new live input.
+
+Use this no-input gate check at any time:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan gates `
+  --path .autofish-live\session-plan-latest.json
 ```
 
 ### Fan-derived one-cast gate
