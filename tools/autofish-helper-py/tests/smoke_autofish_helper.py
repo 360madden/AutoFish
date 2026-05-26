@@ -597,10 +597,19 @@ def test_signal_proof_doctor_report(helper) -> None:
         assert report["summary"]["manifestCount"] == 1
         assert report["summary"]["invalidManifestCount"] == 1
         assert report["summary"]["weakDecisionEvidenceCount"] == 1
+        assert report["invalidManifests"][0]["manifestPath"] == str(invalid_manifest_path)
+        assert "reviewGates is required for oneCast manifests" in report["invalidManifests"][0]["errors"]
+        assert report["weakDecisionEvidence"][0]["status"] == "missing"
+        assert report["weakDecisionEvidence"][0]["path"] == "missing/manifest.json"
         assert report["nextActions"]
+        assert str(invalid_manifest_path) in report["nextActions"][0]
         markdown = helper.render_signal_proof_doctor_markdown(report)
         assert "AutoFish Signal Proof Doctor" in markdown
         assert "invalid manifests: 1" in markdown
+        assert "## Invalid manifests" in markdown
+        assert "reviewGates is required for oneCast manifests" in markdown
+        assert "## Weak decision evidence" in markdown
+        assert "missing/manifest.json" in markdown
 
         output_root = Path(tmp) / "doctor-out"
         with contextlib.redirect_stdout(io.StringIO()) as doctor_output:

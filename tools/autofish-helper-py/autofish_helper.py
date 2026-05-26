@@ -6157,7 +6157,18 @@ def build_signal_proof_doctor_report(proof_root: str, decision_register: str) ->
     proof_path = Path(proof_root)
     summary_report = build_signal_proof_summary_report(proof_path)
     summaries = summary_report["summaries"]
-    invalid_manifest_count = len([summary for summary in summaries if not summary.get("manifestShapeValid", True)])
+    invalid_manifests = [
+        {
+            "manifestPath": summary.get("manifestPath"),
+            "signal": summary.get("signal"),
+            "schema": summary.get("schema"),
+            "errors": summary.get("manifestValidationErrors") or [],
+            "suggestedReview": summary.get("suggestedReview"),
+        }
+        for summary in summaries
+        if not summary.get("manifestShapeValid", True)
+    ]
+    invalid_manifest_count = len(invalid_manifests)
     errored_manifest_count = len([summary for summary in summaries if summary.get("hasError")])
     failed_gate_manifest_count = len([summary for summary in summaries if summary.get("failedReviewGateNames")])
     red_reticle_block_count = sum(int(summary.get("redReticleClickGuardFailedCount") or 0) for summary in summaries)
@@ -6176,19 +6187,22 @@ def build_signal_proof_doctor_report(proof_root: str, decision_register: str) ->
         if isinstance(entry, dict):
             decision_evidence.extend(decision_evidence_validation(entry))
     weak_evidence_statuses = {"missing", "invalid-json", "invalid-root"}
-    weak_decision_evidence_count = len(
-        [
-            item
-            for item in decision_evidence
-            if item.get("status") in weak_evidence_statuses or item.get("manifestShapeValid") is False
-        ]
-    )
+    weak_decision_evidence = [
+        item
+        for item in decision_evidence
+        if item.get("status") in weak_evidence_statuses or item.get("manifestShapeValid") is False
+    ]
+    weak_decision_evidence_count = len(weak_decision_evidence)
 
     next_actions: list[str] = []
     if summary_report["manifestCount"] == 0:
         next_actions.append("Run a no-input proof command first, such as signal-proof reticle --dry-run or target/session-plan gates.")
     if invalid_manifest_count:
-        next_actions.append("Rerun or repair invalid proof manifests before recording promote/fallback decisions.")
+        first_invalid = invalid_manifests[0]
+        first_error = "; ".join(str(error) for error in first_invalid.get("errors") or []) or "shape validation failed"
+        next_actions.append(
+            f"Rerun or repair invalid proof manifest {first_invalid.get('manifestPath')}: {first_error}."
+        )
     if red_reticle_block_count:
         next_actions.append("Review red-reticle blocked casts; recalibrate the fishable point before another confirmed click.")
     if failed_gate_manifest_count:
@@ -6218,7 +6232,9 @@ def build_signal_proof_doctor_report(proof_root: str, decision_register: str) ->
         "bySignal": summary_report["bySignal"],
         "latestBySignal": latest_by_signal,
         "decisionLatestBySignal": register.get("latestBySignal") if isinstance(register.get("latestBySignal"), dict) else {},
+        "invalidManifests": invalid_manifests,
         "decisionEvidence": decision_evidence,
+        "weakDecisionEvidence": weak_decision_evidence,
         "nextActions": next_actions,
         "notes": [
             "Doctor is read-only and sends no game input.",
@@ -6258,6 +6274,26 @@ def render_signal_proof_doctor_markdown(report: dict[str, Any]) -> str:
         lines.append(f"| {signal} | {latest.get('suggestedReview')} | `{latest.get('manifestPath')}` |")
     if not latest_by_signal:
         lines.append("| - | - | - |")
+
+    invalid_manifests = report.get("invalidManifests") if isinstance(report.get("invalidManifests"), list) else []
+    if invalid_manifests:
+        lines.extend(["", "## Invalid manifests", "", "| Manifest | Signal | Errors |", "|---|---|---|"])
+        for item in invalid_manifests:
+            if not isinstance(item, dict):
+                continue
+            errors = "; ".join(str(error) for error in item.get("errors") or [])
+            lines.append(f"| `{item.get('manifestPath')}` | {item.get('signal')} | {errors or '-'} |")
+
+    weak_evidence = report.get("weakDecisionEvidence") if isinstance(report.get("weakDecisionEvidence"), list) else []
+    if weak_evidence:
+        lines.extend(["", "## Weak decision evidence", "", "| Evidence | Status | Signal | Errors |", "|---|---|---|---|"])
+        for item in weak_evidence:
+            if not isinstance(item, dict):
+                continue
+            errors = "; ".join(str(error) for error in item.get("manifestValidationErrors") or [])
+            lines.append(
+                f"| `{item.get('path')}` | {item.get('status')} | {item.get('signal') or '-'} | {errors or item.get('error') or '-'} |"
+            )
 
     lines.extend(["", "## Next actions", ""])
     for index, action in enumerate(report.get("nextActions") or [], start=1):
