@@ -49,6 +49,13 @@ Each in-bounds candidate includes suggested reticle commands:
 
 The skip-click/cancel command sends one cursor move and one fishing-key press, captures the reticle for a short watch window, presses Escape, and sends no left click.
 
+To print the candidate commands as an ordered runbook:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan-runbook `
+  --manifest .autofish-live\<fishability-fan-proof>\manifest.json
+```
+
 If the Rift window is minimized, Windows can report a `0x0` client rect. Do not force a restore just to plan geometry. Use the last verified client size and disable crops:
 
 ```powershell

@@ -188,6 +188,46 @@ def test_fishability_fan_suggested_commands(helper) -> None:
     assert "--y 50" in commands["reticleDryRun"]
 
 
+def test_fishability_fan_runbook_render(helper) -> None:
+    with tempfile.TemporaryDirectory(prefix="autofish-helper-fan-runbook-") as tmp:
+        manifest_path = Path(tmp) / "manifest.json"
+        manifest = {
+            "schema": "autofish.signalProof.fishabilityFan.v1",
+            "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+            "request": {
+                "pid": 1234,
+                "originX": 100,
+                "originY": 100,
+                "forwardX": 100,
+                "forwardY": 0,
+            },
+            "target": {"hwnd": "0x1234"},
+            "candidates": [
+                {
+                    "index": 0,
+                    "name": "d50_l0",
+                    "clientX": 100,
+                    "clientY": 50,
+                    "inBounds": True,
+                    "suggestedCommands": helper.build_reticle_candidate_commands(
+                        pid=1234,
+                        hwnd=0x1234,
+                        x=100,
+                        y=50,
+                        key="8",
+                        watch_seconds=2.0,
+                    ),
+                }
+            ],
+        }
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        markdown = helper.render_fishability_fan_runbook(str(manifest_path))
+        assert "Candidate 0" in markdown
+        assert "reticle --pid 1234" in markdown
+        assert "--skip-click --cancel-after-key" in markdown
+        assert "they send no left click and no movement" in markdown
+
+
 def main() -> int:
     helper = load_helper()
     test_profile_defaults(helper)
@@ -195,6 +235,7 @@ def main() -> int:
     test_runbook_render(helper)
     test_direct_live_command_stop_file_defaults(helper)
     test_fishability_fan_suggested_commands(helper)
+    test_fishability_fan_runbook_render(helper)
     print("AutoFish Python helper smoke checks passed.")
     return 0
 

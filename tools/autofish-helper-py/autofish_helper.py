@@ -1909,6 +1909,100 @@ def build_reticle_candidate_commands(
     }
 
 
+def render_fishability_fan_runbook(manifest_path: str) -> str:
+    path = Path(manifest_path)
+    manifest = load_json_object(path)
+    schema = str(manifest.get("schema") or "")
+    if schema != "autofish.signalProof.fishabilityFan.v1":
+        raise RuntimeError(f"Unsupported fishability fan manifest schema in {path}: {schema or '<missing>'}")
+
+    request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
+    target = manifest.get("target") if isinstance(manifest.get("target"), dict) else {}
+    candidates = manifest.get("candidates") if isinstance(manifest.get("candidates"), list) else []
+    lines = [
+        "# AutoFish Fishability Fan Runbook",
+        "",
+        f"- manifest: `{path}`",
+        f"- generated: `{manifest.get('generatedAtUtc', '-')}`",
+        f"- target PID/HWND: `{request.get('pid', '-')}` / `{target.get('hwnd', request.get('hwnd', '-'))}`",
+        f"- fan origin: `({request.get('originX', '-')},{request.get('originY', '-')})`",
+        f"- forward point: `({request.get('forwardX', '-')},{request.get('forwardY', '-')})`",
+        "",
+        "Safety notes:",
+        "",
+        "- Run candidate commands strictly one candidate at a time.",
+        "- Run each candidate dry-run before any confirmed skip-click/cancel proof.",
+        "- Confirmed skip-click/cancel commands send one cursor move, one fishing keypress, short captures, and Escape; they send no left click and no movement.",
+        "- Stop if PID/HWND, foreground, window size, character position, or fishable context changed.",
+        "",
+    ]
+
+    if not candidates:
+        lines.append("No candidates were found in this manifest.")
+        return "\n".join(lines).rstrip() + "\n"
+
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        index = candidate.get("index", "?")
+        name = candidate.get("name", "candidate")
+        x = candidate.get("clientX", "?")
+        y = candidate.get("clientY", "?")
+        in_bounds = bool(candidate.get("inBounds"))
+        lines.extend(
+            [
+                f"## Candidate {index}: {name}",
+                "",
+                f"- client point: `({x},{y})`",
+                f"- in bounds: `{str(in_bounds).lower()}`",
+            ]
+        )
+        commands = candidate.get("suggestedCommands") if isinstance(candidate.get("suggestedCommands"), dict) else {}
+        if not in_bounds:
+            lines.extend(["", "Skipped: candidate is outside the effective client bounds.", ""])
+            continue
+        dry_run = commands.get("reticleDryRun")
+        skip_click = commands.get("reticleSkipClickCancel")
+        if not dry_run or not skip_click:
+            lines.extend(["", "Blocked: this candidate has no suggested reticle commands in the manifest.", ""])
+            continue
+        lines.extend(
+            [
+                "",
+                "Dry-run:",
+                "",
+                "```powershell",
+                str(dry_run),
+                "```",
+                "",
+                "Supervised skip-click/cancel proof:",
+                "",
+                "```powershell",
+                str(skip_click),
+                "```",
+                "",
+            ]
+        )
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def run_signal_proof_fishability_fan_runbook(args: argparse.Namespace) -> int:
+    try:
+        markdown = render_fishability_fan_runbook(args.manifest)
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(markdown, encoding="utf-8")
+            print(json.dumps({"ok": True, "path": str(output_path)}, indent=2))
+        else:
+            print(markdown, end="")
+        return 0
+    except Exception as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+
+
 def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
     hwnd = parse_hwnd(args.hwnd)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-fishability-fan-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -3853,6 +3947,11 @@ def build_parser() -> argparse.ArgumentParser:
     fan.add_argument("--dry-run", action="store_true", required=True, help="Required; fan planning sends no input")
     fan.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-fishability-fan-*.")
     fan.set_defaults(func=run_signal_proof_fishability_fan)
+
+    fan_runbook = signal_sub.add_parser("fishability-fan-runbook", help="Print per-candidate reticle commands from a fishability-fan manifest")
+    fan_runbook.add_argument("--manifest", required=True, help="Path to a fishability-fan manifest.json")
+    fan_runbook.add_argument("--output", help="Optional markdown output path")
+    fan_runbook.set_defaults(func=run_signal_proof_fishability_fan_runbook)
 
     chromalink = signal_sub.add_parser("chromalink", help="Read-only ChromaLink world-state/player-coordinate freshness proof")
     chromalink.add_argument("--base-url", default=DEFAULT_CHROMALINK_BASE_URL, help=f"ChromaLink HTTP bridge base URL; default: {DEFAULT_CHROMALINK_BASE_URL}")
