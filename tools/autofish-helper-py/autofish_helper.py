@@ -974,6 +974,96 @@ def get_session_plan_review_token(session_plan_info: dict[str, Any] | None) -> s
     return str(token) if token else None
 
 
+def positive_int_or_none(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def session_plan_expected_client_size(session_plan_info: dict[str, Any] | None) -> dict[str, Any] | None:
+    plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
+    if not isinstance(plan, dict):
+        return None
+
+    target_validation = plan.get("targetValidation") if isinstance(plan.get("targetValidation"), dict) else None
+    if not target_validation:
+        return None
+
+    width = positive_int_or_none(target_validation.get("clientWidth"))
+    height = positive_int_or_none(target_validation.get("clientHeight"))
+    if width is None or height is None:
+        return None
+
+    return {
+        "width": width,
+        "height": height,
+        "source": target_validation.get("clientSizeSource") or "targetValidation",
+        "targetValidation": target_validation,
+    }
+
+
+def check_session_plan_target_freshness(
+    session_plan_info: dict[str, Any] | None,
+    current_target: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    expected = session_plan_expected_client_size(session_plan_info)
+    if expected is None:
+        return {
+            "required": False,
+            "passed": True,
+            "reason": "Session plan has no recorded positive target client size.",
+        }
+
+    gate: dict[str, Any] = {
+        "required": True,
+        "passed": False,
+        "expectedClientWidth": expected["width"],
+        "expectedClientHeight": expected["height"],
+        "expectedClientSizeSource": expected["source"],
+    }
+
+    if current_target is None:
+        plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
+        target = plan.get("target") if isinstance(plan, dict) and isinstance(plan.get("target"), dict) else {}
+        pid = target.get("pid")
+        hwnd_text = target.get("hwnd")
+        if pid is None or not hwnd_text:
+            gate["reason"] = "Session plan cannot be target-freshness checked because target.pid or target.hwnd is missing."
+            return gate
+        try:
+            current_target = validate_target(parse_hwnd(str(hwnd_text)), int(pid), require_foreground=False)
+        except Exception as exc:
+            gate["reason"] = f"Current target validation failed: {exc}"
+            return gate
+
+    current_width = positive_int_or_none(current_target.get("clientWidth"))
+    current_height = positive_int_or_none(current_target.get("clientHeight"))
+    gate.update(
+        {
+            "currentClientWidth": current_width,
+            "currentClientHeight": current_height,
+            "currentTarget": current_target,
+        }
+    )
+    if current_width is None or current_height is None:
+        minimized_note = " Target appears minimized." if current_target.get("isMinimized") else ""
+        gate["reason"] = f"Current target client size is unavailable.{minimized_note}"
+        return gate
+
+    gate["passed"] = current_width == expected["width"] and current_height == expected["height"]
+    if gate["passed"]:
+        gate["reason"] = "Current target client size matches the session plan."
+    else:
+        gate["reason"] = (
+            "Session plan target size is stale: expected "
+            f"{expected['width']}x{expected['height']} but current target is {current_width}x{current_height}. "
+            "Recreate the session plan and recalibrate the fishable client coordinate after window resize."
+        )
+    return gate
+
+
 def build_session_plan(args: argparse.Namespace) -> dict[str, Any]:
     stop_file = args.stop_file or DEFAULT_STOP_FILE
     defaults: dict[str, Any] = {
@@ -1047,6 +1137,22 @@ def select_fan_candidate(manifest: dict[str, Any], *, candidate_index: int | Non
     raise RuntimeError(f"Fishability fan manifest has no candidate with {selector}.")
 
 
+def target_validation_from_fan_manifest(manifest: dict[str, Any]) -> dict[str, Any] | None:
+    target = manifest.get("target") if isinstance(manifest.get("target"), dict) else None
+    if not target:
+        return None
+
+    snapshot = dict(target)
+    effective_client = manifest.get("effectiveClient") if isinstance(manifest.get("effectiveClient"), dict) else {}
+    width = positive_int_or_none(effective_client.get("width")) or positive_int_or_none(snapshot.get("clientWidth"))
+    height = positive_int_or_none(effective_client.get("height")) or positive_int_or_none(snapshot.get("clientHeight"))
+    if width is not None and height is not None:
+        snapshot["clientWidth"] = width
+        snapshot["clientHeight"] = height
+        snapshot["clientSizeSource"] = effective_client.get("source") or snapshot.get("clientSizeSource") or "fan-manifest-target"
+    return snapshot
+
+
 def build_session_plan_from_fan(args: argparse.Namespace) -> dict[str, Any]:
     manifest_path = Path(args.manifest)
     manifest = load_json_object(manifest_path)
@@ -1094,6 +1200,8 @@ def build_session_plan_from_fan(args: argparse.Namespace) -> dict[str, Any]:
         "classification": candidate.get("plannedClassification"),
         "requiresReticleOrGameFeedbackReview": True,
     }
+    if plan.get("targetValidation") is None:
+        plan["targetValidation"] = target_validation_from_fan_manifest(manifest)
     plan["safety"]["sourceCandidateIsPlanningOnly"] = True
     plan["safety"]["requiresReviewedFishableCandidateBeforeConfirmInput"] = True
     attach_session_review_scope(plan)
@@ -1140,6 +1248,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         allow_unreviewed=False,
     )
     one_cast_gate = check_one_cast_review_gate(one_cast_gate_args, loaded)
+    target_gate = check_session_plan_target_freshness(loaded)
     report = {
         "schema": "autofish.sessionPlan.reviewGates.v1",
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
@@ -1148,22 +1257,26 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         "source": plan.get("source") if isinstance(plan.get("source"), dict) else None,
         "decisionRegister": args.decision_register,
         "gates": {
+            "targetCurrent": target_gate,
             "fishabilityCandidate": fishability_gate,
             "oneCast": one_cast_gate,
         },
         "readiness": {
+            "targetCurrent": bool(target_gate.get("passed")),
             "confirmedOneCast": bool(fishability_gate.get("passed")),
             "confirmedBoundedSession": bool(one_cast_gate.get("passed")),
         },
         "requiredReadiness": args.require or [],
         "notes": [
             "This command sends no game input.",
+            "targetCurrent compares the current Rift client size with the session plan targetValidation when a size was recorded.",
             "confirmedOneCast covers fan-derived candidate review only; one-cast still requires exact PID/HWND and --confirm-input.",
             "confirmedBoundedSession requires a scoped reviewed oneCast decision.",
         ],
     }
     print(json.dumps(report, indent=2))
     readiness_name_by_flag = {
+        "target-current": "targetCurrent",
         "confirmed-one-cast": "confirmedOneCast",
         "confirmed-bounded-session": "confirmedBoundedSession",
     }
@@ -1225,6 +1338,12 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         "",
         "```powershell",
         f"{helper} session-plan gates --path {plan_arg}",
+        "```",
+        "",
+        "Fail closed if the current target client size no longer matches the plan:",
+        "",
+        "```powershell",
+        f"{helper} session-plan gates --path {plan_arg} --require target-current",
         "```",
         "",
     ])
@@ -1877,9 +1996,18 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
             raise RuntimeError(
                 str(manifest["reviewGates"]["fishabilityCandidate"].get("reason") or "Fishability candidate review gate failed.")
             )
+
+        def validate_current_target(*, require_foreground: bool) -> dict[str, Any]:
+            current = validate_target(hwnd, args.pid, require_foreground=require_foreground)
+            target_gate = check_session_plan_target_freshness(plan_defaults["sessionPlan"], current)
+            manifest["reviewGates"]["targetCurrent"] = target_gate
+            if not target_gate.get("passed"):
+                raise RuntimeError(str(target_gate.get("reason") or "Session plan target freshness gate failed."))
+            return current
+
         if args.confirm_input:
             focus_target(hwnd)
-        target = validate_target(hwnd, args.pid, require_foreground=args.confirm_input)
+        target = validate_current_target(require_foreground=args.confirm_input)
         assert_client_point(target, args.x, args.y)
         if target.get("isMinimized") and args.confirm_input:
             raise RuntimeError("Target is minimized; restore/maximize Rift manually before live one-cast proof.")
@@ -1923,7 +2051,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
             }
         else:
             assert_stop_file_absent(args.stop_file)
-            validate_target(hwnd, args.pid, require_foreground=True)
+            validate_current_target(require_foreground=True)
             screen_x, screen_y = client_to_screen(hwnd, args.x, args.y)
             move_cursor_to(screen_x, screen_y)
             time.sleep(args.post_hover_delay_ms / 1000.0)
@@ -1931,7 +2059,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
             capture("after-hover")
 
             assert_stop_file_absent(args.stop_file)
-            validate_target(hwnd, args.pid, require_foreground=True)
+            validate_current_target(require_foreground=True)
             key_info = press_key_once(args.key, args.key_hold_ms)
             manifest["actions"].append({"name": "press-fishing-key", **key_info})
             time.sleep(args.post_key_delay_ms / 1000.0)
@@ -1941,7 +2069,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
                 manifest["actions"].append({"name": "skip-confirm-click", "reason": "--skip-confirm-click"})
             else:
                 assert_stop_file_absent(args.stop_file)
-                validate_target(hwnd, args.pid, require_foreground=True)
+                validate_current_target(require_foreground=True)
                 move_cursor_to(screen_x, screen_y)
                 time.sleep(0.05)
                 left_click()
@@ -1954,7 +2082,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
 
             for pull_index in range(1, int(args.pull_clicks) + 1):
                 assert_stop_file_absent(args.stop_file)
-                validate_target(hwnd, args.pid, require_foreground=True)
+                validate_current_target(require_foreground=True)
                 move_cursor_to(screen_x, screen_y)
                 time.sleep(0.05)
                 left_click()
@@ -2048,6 +2176,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
         "profile": runtime_defaults["profile"],
         "appliedDefaults": runtime_defaults["appliedDefaults"],
         "reviewGate": None,
+        "targetGate": None,
         "target": None,
         "captures": [],
         "casts": [],
@@ -2077,9 +2206,18 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
         )
         if args.confirm_input and not manifest["reviewGate"].get("passed"):
             raise RuntimeError(str(manifest["reviewGate"].get("reason") or "One-cast review gate failed."))
+
+        def validate_current_target(*, require_foreground: bool) -> dict[str, Any]:
+            current = validate_target(hwnd, args.pid, require_foreground=require_foreground)
+            target_gate = check_session_plan_target_freshness(plan_defaults["sessionPlan"], current)
+            manifest["targetGate"] = target_gate
+            if not target_gate.get("passed"):
+                raise RuntimeError(str(target_gate.get("reason") or "Session plan target freshness gate failed."))
+            return current
+
         if args.confirm_input:
             focus_target(hwnd)
-        target = validate_target(hwnd, args.pid, require_foreground=args.confirm_input)
+        target = validate_current_target(require_foreground=args.confirm_input)
         assert_client_point(target, args.x, args.y)
         if target.get("isMinimized") and args.confirm_input:
             raise RuntimeError("Target is minimized; restore/maximize Rift manually before live bounded-session proof.")
@@ -2128,7 +2266,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                     "completed": False,
                 }
 
-                validate_target(hwnd, args.pid, require_foreground=True)
+                validate_current_target(require_foreground=True)
                 move_cursor_to(screen_x, screen_y)
                 time.sleep(args.post_hover_delay_ms / 1000.0)
                 cast["actions"].append({"name": "move-cursor", "screenX": screen_x, "screenY": screen_y})
@@ -2136,7 +2274,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                     capture(f"cast-{cast_number:03d}-after-hover", {"castNumber": cast_number})
 
                 assert_stop_file_absent(args.stop_file)
-                validate_target(hwnd, args.pid, require_foreground=True)
+                validate_current_target(require_foreground=True)
                 key_info = press_key_once(args.key, args.key_hold_ms)
                 cast["actions"].append({"name": "press-fishing-key", **key_info})
                 time.sleep(args.post_key_delay_ms / 1000.0)
@@ -2147,7 +2285,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                     cast["actions"].append({"name": "skip-confirm-click", "reason": "--skip-confirm-click"})
                 else:
                     assert_stop_file_absent(args.stop_file)
-                    validate_target(hwnd, args.pid, require_foreground=True)
+                    validate_current_target(require_foreground=True)
                     move_cursor_to(screen_x, screen_y)
                     time.sleep(0.05)
                     left_click()
@@ -2160,7 +2298,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
 
                 for pull_index in range(1, int(args.pull_clicks) + 1):
                     assert_stop_file_absent(args.stop_file)
-                    validate_target(hwnd, args.pid, require_foreground=True)
+                    validate_current_target(require_foreground=True)
                     move_cursor_to(screen_x, screen_y)
                     time.sleep(0.05)
                     left_click()
@@ -4305,7 +4443,7 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_gates.add_argument(
         "--require",
         action="append",
-        choices=("confirmed-one-cast", "confirmed-bounded-session"),
+        choices=("target-current", "confirmed-one-cast", "confirmed-bounded-session"),
         help="Return a failing exit code unless this readiness gate is true; repeatable",
     )
     session_plan_gates.set_defaults(func=run_session_plan_gates)

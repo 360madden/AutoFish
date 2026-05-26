@@ -237,6 +237,8 @@ def test_session_plan_from_fan_candidate(helper) -> None:
             "schema": "autofish.signalProof.fishabilityFan.v1",
             "generatedAtUtc": "2026-05-26T00:00:00+00:00",
             "request": {"pid": 1234, "hwnd": "0x1234", "key": "8"},
+            "target": {"hwnd": "0x1234", "ownerProcessId": 1234, "clientWidth": 1280, "clientHeight": 720},
+            "effectiveClient": {"width": 1280, "height": 720, "source": "live-target"},
             "candidates": [
                 {
                     "index": 0,
@@ -273,6 +275,16 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert plan["profile"]["id"] == "starter-pond"
         assert plan["source"]["type"] == "fishabilityFanCandidate"
         assert plan["safety"]["requiresReviewedFishableCandidateBeforeConfirmInput"]
+        assert plan["targetValidation"]["clientWidth"] == 1280
+        assert plan["targetValidation"]["clientHeight"] == 720
+        assert plan["targetValidation"]["clientSizeSource"] == "live-target"
+        stale_target_gate = helper.check_session_plan_target_freshness(
+            {"plan": plan},
+            {"clientWidth": 640, "clientHeight": 360, "isMinimized": False},
+        )
+        assert stale_target_gate["required"]
+        assert not stale_target_gate["passed"]
+        assert "stale" in stale_target_gate["reason"]
         scope_token = plan["review"]["scopeToken"]
         assert scope_token.startswith("afscope-")
         gate = helper.check_fan_candidate_review_gate(
@@ -389,6 +401,33 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert decide_result["entry"]["sessionPlanScopes"][0]["path"] == str(plan_path)
 
 
+def test_session_plan_target_freshness_gate(helper) -> None:
+    plan = {
+        "schema": "autofish.sessionPlan.v1",
+        "target": {"pid": 1234, "hwnd": "0x1234"},
+        "targetValidation": {"clientWidth": 1280, "clientHeight": 720, "clientSizeSource": "live-target"},
+    }
+    matching_gate = helper.check_session_plan_target_freshness(
+        {"plan": plan},
+        {"clientWidth": 1280, "clientHeight": 720, "isMinimized": False},
+    )
+    assert matching_gate["required"]
+    assert matching_gate["passed"]
+
+    stale_gate = helper.check_session_plan_target_freshness(
+        {"plan": plan},
+        {"clientWidth": 1024, "clientHeight": 768, "isMinimized": False},
+    )
+    assert stale_gate["required"]
+    assert not stale_gate["passed"]
+    assert stale_gate["expectedClientWidth"] == 1280
+    assert stale_gate["currentClientHeight"] == 768
+
+    unrecorded_gate = helper.check_session_plan_target_freshness({"plan": {"schema": "autofish.sessionPlan.v1"}})
+    assert not unrecorded_gate["required"]
+    assert unrecorded_gate["passed"]
+
+
 def test_scoped_one_cast_gate(helper) -> None:
     with tempfile.TemporaryDirectory(prefix="autofish-helper-onecast-gate-") as tmp:
         args = argparse.Namespace(
@@ -448,6 +487,7 @@ def main() -> int:
     test_fishability_fan_suggested_commands(helper)
     test_fishability_fan_runbook_render(helper)
     test_session_plan_from_fan_candidate(helper)
+    test_session_plan_target_freshness_gate(helper)
     test_scoped_one_cast_gate(helper)
     print("AutoFish Python helper smoke checks passed.")
     return 0

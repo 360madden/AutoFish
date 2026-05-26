@@ -1,7 +1,7 @@
 # AutoFish handoff - Python proof lane toward supervised fishing
 
 Date: 2026-05-26 07:57 -04:00
-Updated: 2026-05-26 after scoped decision/gate hardening
+Updated: 2026-05-26 after scoped decision/gate and target-freshness hardening
 Repo: `C:\RIFT MODDING\AutoFish`
 Branch: `main`
 Remote: `https://github.com/360madden/AutoFish`
@@ -24,6 +24,9 @@ The current implementation is not an unattended fishing loop yet. It is now a st
 
 ## Latest pushed commits in this lane
 
+- `b9fac9a` - Allow fail-fast session gate checks
+- `29e5223` - Attach decisions to session plans
+- `bc846e6` - Refresh Python proof lane handoff
 - `03b6e19` - Add session plan gate status
 - `466f92b` - Scope reviewed proof decisions to session plans
 - `ba96541` - Run Python helper checks in CI
@@ -96,6 +99,12 @@ Use this no-input gate check at any time:
 python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
+
+Use `--require target-current` when a script should fail closed unless the current Rift client size still matches the session plan's recorded `targetValidation.clientWidth/clientHeight`.
+
+### Target-freshness gate
+
+Session plans created with `--validate-target`, or from a fishability-fan manifest that recorded live target geometry, now carry a target client-size snapshot. `session-plan gates`, plan-backed `signal-proof one-cast`, and plan-backed `signal-proof bounded-session` compare that stored size with the current target before allowing live input. If the Rift window was resized, restored to a different size, minimized to `0x0`, or otherwise reports a different client rect, recreate the plan and recalibrate X/Y.
 
 ### Fan-derived one-cast gate
 

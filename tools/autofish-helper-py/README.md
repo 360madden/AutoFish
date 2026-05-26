@@ -90,7 +90,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan create `
   --output .autofish-live\session-plan-latest.json
 ```
 
-Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, or the fishable coordinate changes.
+Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, or the fishable coordinate changes. When a plan has `targetValidation.clientWidth/clientHeight` from `--validate-target` or a fishability-fan manifest, `session-plan gates`, `one-cast`, and `bounded-session` now compare that size with the current Rift target before allowing plan-backed live input.
 
 By default, a session plan includes `.autofish-live\STOP.txt` as the emergency stop file. Create that file to stop before the next bounded action or during a wait period; delete it before a later supervised rerun.
 
@@ -229,7 +229,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
 
-Add `--require confirmed-one-cast` or `--require confirmed-bounded-session` when a script should fail closed unless that gate is ready.
+Add `--require target-current`, `--require confirmed-one-cast`, or `--require confirmed-bounded-session` when a script should fail closed unless that gate is ready.
 
 The created plan still marks the fan candidate as planning-only source evidence; confirmed one-cast input from that plan requires a reviewed `fishabilityCandidate` decision attached to that same session plan unless intentionally bypassed with `--allow-unreviewed-fan-candidate`. Run the generated session-plan dry-run before any confirmed one-cast proof.
 
