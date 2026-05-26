@@ -37,6 +37,19 @@ def assert_helper_commands_valid(doc_validator, label: str, markdown: str) -> No
     assert not failures, "\n".join(failures)
 
 
+def test_doc_command_validator_surface(helper, doc_validator) -> None:
+    surface = doc_validator.build_command_surface(helper)
+    assert "target-snapshot" in surface
+    assert "session-plan" in surface
+    assert "signal-proof" in surface
+    assert "checklist" in surface["session-plan"]
+    assert "stop-file" in surface["session-plan"]
+    assert "clear" in surface["session-plan"]["stop-file"]
+    assert "one-cast" in surface["signal-proof"]
+    assert "bounded-session" in surface["signal-proof"]
+    assert "facing-delta" in surface["signal-proof"]
+
+
 def test_profile_defaults(helper) -> None:
     args = argparse.Namespace(
         profile="starter-pond",
@@ -806,6 +819,7 @@ def test_scoped_one_cast_gate(helper) -> None:
 def main() -> int:
     helper = load_helper()
     doc_validator = load_doc_validator()
+    test_doc_command_validator_surface(helper, doc_validator)
     test_profile_defaults(helper)
     test_session_plan_defaults(helper)
     test_runbook_render(helper, doc_validator)
