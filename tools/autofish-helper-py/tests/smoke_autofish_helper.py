@@ -334,7 +334,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         with contextlib.redirect_stdout(io.StringIO()) as gate_output:
             assert (
                 helper.run_session_plan_gates(
-                    argparse.Namespace(path=str(plan_path), decision_register=str(decision_register))
+                    argparse.Namespace(path=str(plan_path), decision_register=str(decision_register), require=None)
                 )
                 == 0
             )
@@ -342,6 +342,28 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert gate_report["schema"] == "autofish.sessionPlan.reviewGates.v1"
         assert gate_report["readiness"]["confirmedOneCast"]
         assert not gate_report["readiness"]["confirmedBoundedSession"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert (
+                helper.run_session_plan_gates(
+                    argparse.Namespace(
+                        path=str(plan_path),
+                        decision_register=str(decision_register),
+                        require=["confirmed-one-cast"],
+                    )
+                )
+                == 0
+            )
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert (
+                helper.run_session_plan_gates(
+                    argparse.Namespace(
+                        path=str(plan_path),
+                        decision_register=str(decision_register),
+                        require=["confirmed-bounded-session"],
+                    )
+                )
+                == 1
+            )
 
         register_output = Path(tmp) / "recorded-decisions.json"
         with contextlib.redirect_stdout(io.StringIO()) as decide_output:

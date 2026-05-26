@@ -1155,6 +1155,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
             "confirmedOneCast": bool(fishability_gate.get("passed")),
             "confirmedBoundedSession": bool(one_cast_gate.get("passed")),
         },
+        "requiredReadiness": args.require or [],
         "notes": [
             "This command sends no game input.",
             "confirmedOneCast covers fan-derived candidate review only; one-cast still requires exact PID/HWND and --confirm-input.",
@@ -1162,6 +1163,14 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         ],
     }
     print(json.dumps(report, indent=2))
+    readiness_name_by_flag = {
+        "confirmed-one-cast": "confirmedOneCast",
+        "confirmed-bounded-session": "confirmedBoundedSession",
+    }
+    for required in args.require or []:
+        readiness_name = readiness_name_by_flag[required]
+        if report["readiness"].get(readiness_name) is not True:
+            return 1
     return 0
 
 
@@ -4293,6 +4302,12 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_gates = session_plan_sub.add_parser("gates", help="Print scoped review gate status for a session plan")
     session_plan_gates.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
     session_plan_gates.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register path")
+    session_plan_gates.add_argument(
+        "--require",
+        action="append",
+        choices=("confirmed-one-cast", "confirmed-bounded-session"),
+        help="Return a failing exit code unless this readiness gate is true; repeatable",
+    )
     session_plan_gates.set_defaults(func=run_session_plan_gates)
     session_plan_runbook = session_plan_sub.add_parser("runbook", help="Print next live-proof commands from a session plan")
     session_plan_runbook.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")

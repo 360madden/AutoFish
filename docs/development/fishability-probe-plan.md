@@ -80,6 +80,8 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
 
+Add `--require confirmed-one-cast` or `--require confirmed-bounded-session` for fail-closed scripts that should stop unless the requested gate is ready.
+
 The plan remains gated: it records the candidate as fan-planning source evidence and confirmed one-cast input requires a reviewed `fishabilityCandidate` decision attached to that same session plan unless intentionally bypassed. Still run the session-plan dry-run before confirmed one-cast input.
 
 If the Rift window is minimized, Windows can report a `0x0` client rect. Do not force a restore just to plan geometry. Use the last verified client size and disable crops:
