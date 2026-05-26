@@ -10,11 +10,21 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw 'Python helper compile failed.'
     }
+    python -m py_compile tools/autofish-helper-py/tests/validate_doc_commands.py
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Documented helper command validator compile failed.'
+    }
 
     Write-Host 'Running Python helper smoke checks...'
     python tools/autofish-helper-py/tests/smoke_autofish_helper.py
     if ($LASTEXITCODE -ne 0) {
         throw 'Python helper smoke checks failed.'
+    }
+
+    Write-Host 'Validating documented helper commands...'
+    python tools/autofish-helper-py/tests/validate_doc_commands.py
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Documented helper command validation failed.'
     }
 
     Write-Host 'Checking helper command help surfaces...'

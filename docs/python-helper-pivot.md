@@ -60,12 +60,12 @@ Use this rule:
 
 > Any new live helper behavior is Python-first. Existing PowerShell and .NET paths remain only until Python has parity for that behavior.
 
-## Target first Python command
+## Current bounded one-cast command
 
-The first useful command should be equivalent to:
+The current helper implements the first bounded cast/click/wait/pull proof as:
 
 ```text
-one-cast-start:
+signal-proof one-cast:
   validate exact PID/HWND
   focus target window
   move cursor to calibrated client coordinate without clicking
@@ -76,10 +76,10 @@ one-cast-start:
   capture evidence
 ```
 
-Suggested command shape:
+Dry-run command shape:
 
 ```powershell
-python tools\autofish-helper-py\autofish_helper.py one-cast-start `
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
   --pid <CURRENT_PID> `
   --hwnd <CURRENT_HWND> `
   --x <FISHABLE_CLIENT_X> `
@@ -88,7 +88,8 @@ python tools\autofish-helper-py\autofish_helper.py one-cast-start `
   --dry-run
 ```
 
-Then rerun without `--dry-run` only after the exact-window and coordinate checks pass.
+Then rerun with `--confirm-input` and without `--dry-run` only after exact-window,
+coordinate, session-plan, and operator preflight gates pass.
 
 ## Safety constraints
 
@@ -123,6 +124,6 @@ See `docs/development/historical-signal-proof-lane.md` for the evidence format a
 5. Implement hover without click.
 6. Implement key `8`.
 7. Capture after keypress and record reticle color.
-8. Implement `one-cast-start --dry-run`.
+8. Implement `signal-proof one-cast --dry-run`.
 9. Implement left-click confirmation for yellow or blue/cyan reticles.
 10. Add bite/pull timing only after scripted cast-start is reproduced.
