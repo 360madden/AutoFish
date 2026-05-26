@@ -25,6 +25,7 @@ try {
     python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan-runbook --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof decide --help | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw 'Python helper help check failed.'
     }

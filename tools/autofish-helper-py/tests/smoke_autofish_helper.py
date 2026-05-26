@@ -327,7 +327,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         plan_path.write_text(json.dumps(plan), encoding="utf-8")
         markdown = helper.render_session_plan_runbook(str(plan_path), ".autofish-live")
         assert "--signal fishabilityCandidate" in markdown
-        assert f"--scope-token '{scope_token}'" in markdown
+        assert f"--session-plan '{plan_path}'" in markdown
         assert "session-plan gates" in markdown
         assert "Fan-derived plans also require" in markdown
 
@@ -342,6 +342,29 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert gate_report["schema"] == "autofish.sessionPlan.reviewGates.v1"
         assert gate_report["readiness"]["confirmedOneCast"]
         assert not gate_report["readiness"]["confirmedBoundedSession"]
+
+        register_output = Path(tmp) / "recorded-decisions.json"
+        with contextlib.redirect_stdout(io.StringIO()) as decide_output:
+            assert (
+                helper.run_signal_proof_decide(
+                    argparse.Namespace(
+                        signal="fishabilityCandidate",
+                        decision="fallback-only",
+                        reason="Reviewed candidate in smoke test.",
+                        evidence=["evidence/manifest.json"],
+                        proof_root=".autofish-live",
+                        operator=None,
+                        note=None,
+                        register=str(register_output),
+                        scope_token=None,
+                        session_plan=[str(plan_path)],
+                    )
+                )
+                == 0
+            )
+        decide_result = json.loads(decide_output.getvalue())
+        assert decide_result["entry"]["scopeTokens"] == [scope_token]
+        assert decide_result["entry"]["sessionPlanScopes"][0]["path"] == str(plan_path)
 
 
 def test_scoped_one_cast_gate(helper) -> None:

@@ -159,7 +159,8 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof decide `
   --signal oneCast `
   --decision fallback-only `
   --reason "Reviewed one-cast proof at current coordinate is acceptable for a small supervised bounded session." `
-  --evidence .autofish-live\<one-cast-proof>\manifest.json
+  --evidence .autofish-live\<one-cast-proof>\manifest.json `
+  --session-plan .autofish-live\session-plan-latest.json
 ```
 
 Accepted decisions are `promote` or `fallback-only`. Use `--allow-unreviewed-one-cast` only when intentionally bypassing that gate for a supervised experiment.
@@ -214,7 +215,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
   --output .autofish-live\session-plan-latest.json
 ```
 
-Then print the session-plan runbook and use its scoped `signal-proof decide --signal fishabilityCandidate --scope-token <token>` command before confirmed one-cast input:
+Then print the session-plan runbook and use its scoped `signal-proof decide --signal fishabilityCandidate --session-plan <plan>` command before confirmed one-cast input:
 
 ```powershell
 python tools\autofish-helper-py\autofish_helper.py session-plan runbook `
@@ -228,7 +229,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
 
-The created plan still marks the fan candidate as planning-only source evidence; confirmed one-cast input from that plan requires a reviewed `fishabilityCandidate` decision with the plan's review scope token unless intentionally bypassed with `--allow-unreviewed-fan-candidate`. Run the generated session-plan dry-run before any confirmed one-cast proof.
+The created plan still marks the fan candidate as planning-only source evidence; confirmed one-cast input from that plan requires a reviewed `fishabilityCandidate` decision attached to that same session plan unless intentionally bypassed with `--allow-unreviewed-fan-candidate`. Run the generated session-plan dry-run before any confirmed one-cast proof.
 
 ## ChromaLink coordinate proof
 

@@ -1188,7 +1188,6 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
     fan_candidate_evidence = proof_root.rstrip("\\/") + "\\<candidate-reticle-proof>\\manifest.json"
     review = plan.get("review") if isinstance(plan.get("review"), dict) else {}
     scope_token = review.get("scopeToken")
-    scope_token_arg = quote_ps(str(scope_token)) if scope_token else None
     lines = [
         "# AutoFish Session Plan Runbook",
         "",
@@ -1233,7 +1232,7 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
                 "  --decision fallback-only `",
                 "  --reason \"Reviewed fan candidate as fishable enough for one supervised one-cast proof.\" `",
                 f"  --evidence {quote_ps(fan_candidate_evidence)} `",
-                *([f"  --scope-token {scope_token_arg} `"] if scope_token_arg else []),
+                f"  --session-plan {plan_arg} `",
                 f"  --proof-root {proof_root_arg}",
                 "```",
                 "",
@@ -1260,7 +1259,7 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         "  --decision fallback-only `",
         "  --reason \"Reviewed one-cast proof is acceptable for a small supervised bounded session.\" `",
         f"  --evidence {quote_ps(one_cast_evidence)} `",
-        *([f"  --scope-token {scope_token_arg} `"] if scope_token_arg else []),
+        f"  --session-plan {plan_arg} `",
         f"  --proof-root {proof_root_arg}",
         "```",
         "",
@@ -1353,6 +1352,15 @@ def latest_accepted_decision(
     return None
 
 
+def decision_scope_hint(session_plan_info: dict[str, Any] | None, scope_token: str | None) -> str:
+    if not scope_token:
+        return ""
+    plan_path = session_plan_info.get("path") if isinstance(session_plan_info, dict) else None
+    if plan_path:
+        return f" --session-plan {plan_path}"
+    return f" --scope-token {scope_token}"
+
+
 def check_one_cast_review_gate(args: argparse.Namespace, session_plan_info: dict[str, Any] | None = None) -> dict[str, Any]:
     if getattr(args, "allow_unreviewed_one_cast", False):
         return {
@@ -1386,7 +1394,7 @@ def check_one_cast_review_gate(args: argparse.Namespace, session_plan_info: dict
         gate["reason"] = (
             "Confirmed bounded-session requires a reviewed oneCast decision of promote or fallback-only in "
             f"{register_path}. Run one-cast proof, record it with signal-proof decide --signal oneCast"
-            + (f" --scope-token {scope_token}" if scope_token else "")
+            + decision_scope_hint(session_plan_info, scope_token)
             + ", or intentionally bypass with --allow-unreviewed-one-cast."
         )
     return gate
@@ -1454,7 +1462,7 @@ def check_fan_candidate_review_gate(
             "Confirmed one-cast from a fishability-fan session plan requires a reviewed fishabilityCandidate "
             f"decision of promote or fallback-only in {register_path}. Run reticle skip-click/cancel proof for the "
             "candidate, then record it with signal-proof decide --signal fishabilityCandidate"
-            + (f" --scope-token {scope_token}" if scope_token else "")
+            + decision_scope_hint(session_plan_info, scope_token)
             + ", or intentionally bypass with --allow-unreviewed-fan-candidate."
         )
     return gate
@@ -4179,11 +4187,41 @@ def load_decision_register(path: Path) -> dict[str, Any]:
     return register
 
 
+def collect_decision_scopes(args: argparse.Namespace) -> tuple[list[str], list[dict[str, Any]]]:
+    tokens: list[str] = []
+    plan_scopes: list[dict[str, Any]] = []
+
+    for token in getattr(args, "scope_token", None) or []:
+        if token and str(token) not in tokens:
+            tokens.append(str(token))
+
+    for plan_path in getattr(args, "session_plan", None) or []:
+        loaded = load_session_plan(plan_path)
+        assert loaded is not None
+        token = get_session_plan_review_token(loaded)
+        if not token:
+            raise RuntimeError(f"Session plan has no review.scopeToken: {plan_path}")
+        if token not in tokens:
+            tokens.append(token)
+        plan = loaded["plan"]
+        review = plan.get("review") if isinstance(plan.get("review"), dict) else {}
+        plan_scopes.append(
+            {
+                "path": loaded["path"],
+                "scopeToken": token,
+                "scope": review.get("scope"),
+            }
+        )
+
+    return tokens, plan_scopes
+
+
 def run_signal_proof_decide(args: argparse.Namespace) -> int:
     register_path = Path(args.register)
     register_path.parent.mkdir(parents=True, exist_ok=True)
     register = load_decision_register(register_path)
     recorded_at = datetime.now(timezone.utc).isoformat()
+    scope_tokens, session_plan_scopes = collect_decision_scopes(args)
     entry = {
         "recordedAtUtc": recorded_at,
         "signal": args.signal,
@@ -4193,10 +4231,12 @@ def run_signal_proof_decide(args: argparse.Namespace) -> int:
         "proofRoot": args.proof_root,
         "operator": args.operator,
         "notes": args.note or [],
-        "scopeTokens": args.scope_token or [],
+        "scopeTokens": scope_tokens,
     }
-    if args.scope_token:
-        entry["scopeToken"] = args.scope_token[-1]
+    if scope_tokens:
+        entry["scopeToken"] = scope_tokens[-1]
+    if session_plan_scopes:
+        entry["sessionPlanScopes"] = session_plan_scopes
     register["entries"].append(entry)
     register["latestBySignal"][args.signal] = entry
     register["updatedAtUtc"] = recorded_at
@@ -4484,6 +4524,7 @@ def build_parser() -> argparse.ArgumentParser:
     decide.add_argument("--reason", required=True, help="Short human-reviewed reason for the decision")
     decide.add_argument("--evidence", action="append", help="Evidence path, manifest, summary, screenshot, or note; repeat as needed")
     decide.add_argument("--scope-token", action="append", help="Session-plan review scope token this decision applies to; repeatable")
+    decide.add_argument("--session-plan", action="append", help="Attach this session plan's review scope token to the decision; repeatable")
     decide.add_argument("--proof-root", default=".autofish-live", help="Proof root used for the decision; default: .autofish-live")
     decide.add_argument("--operator", help="Optional operator/reviewer name")
     decide.add_argument("--note", action="append", help="Extra note; repeat as needed")

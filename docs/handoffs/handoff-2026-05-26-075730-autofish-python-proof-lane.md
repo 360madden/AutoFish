@@ -88,7 +88,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
 
 ### Scoped review gates
 
-Each new session plan now has a deterministic review scope token (`review.scopeToken`) derived from the target PID/HWND, client coordinate, profile/defaults, and fan source when present. Reviewed `fishabilityCandidate` and `oneCast` decisions should be recorded with `--scope-token <token>` from the session-plan runbook. This prevents stale decisions for older coordinates or windows from unlocking new live input.
+Each new session plan now has a deterministic review scope token (`review.scopeToken`) derived from the target PID/HWND, client coordinate, profile/defaults, and fan source when present. Reviewed `fishabilityCandidate` and `oneCast` decisions should be recorded with `--session-plan <plan>` from the session-plan runbook, which attaches the plan scope automatically. This prevents stale decisions for older coordinates or windows from unlocking new live input.
 
 Use this no-input gate check at any time:
 
