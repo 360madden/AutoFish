@@ -24,3 +24,7 @@ jobs:
       - name: Validate fishing profiles
         shell: pwsh
         run: .\scripts\validate-profiles.ps1
+
+      - name: Run Python helper checks
+        shell: pwsh
+        run: .\scripts\run-python-helper-checks.ps1
