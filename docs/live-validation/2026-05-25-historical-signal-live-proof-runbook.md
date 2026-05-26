@@ -103,6 +103,7 @@ Decision:
 - `promote` only if cursor handle/color/crop states distinguish useful fishing phases across at least 3 casts.
 - `fallback-only` if it works only under this UI/graphics/window setup.
 - `retire` if crops/cursor handles do not separate invalid, valid, waiting, and bite-ready states.
+- Do not promote native hover APIs unless `/autofish trace` samples show non-nil/non-empty `Inspect.Cursor`, `Inspect.Tooltip`, or `Inspect.Interaction` values while the visual reticle or tooltip is active.
 
 ### 3. Current log proof
 

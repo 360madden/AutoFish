@@ -136,6 +136,14 @@ Evidence:
 - `.autofish-live/reticle-escape-cancel-latest/manifest.json`
 - `.autofish-live/reticle-skip-click-cancel-live-validation-latest/manifest.json`
 - `.autofish-live/signal-proof-summary-after-cancel-option-latest/summary.md`
+- `.autofish-live/reloadui-after-signaltrace-counts-latest/manifest.json`
+- `.autofish-live/preflight-after-signaltrace-counts-reload-latest/g0-preflight-summary.json`
+- `.autofish-live/signaltrace-counts-start-live-latest/manifest.json`
+- `.autofish-live/signaltrace-counts-reticle-live-latest/manifest.json`
+- `.autofish-live/signaltrace-counts-reticle-live-latest/after-key.bmp`
+- `.autofish-live/signaltrace-counts-stop-status-live-latest/manifest.json`
+- `.autofish-live/signaltrace-counts-stop-status-live-latest/command-002-autofish-trace-status-full-client.bmp`
+- `.autofish-live/signal-proof-summary-after-signaltrace-latest/summary.md`
 
 Result:
 
@@ -161,13 +169,15 @@ Large-window follow-up:
 - The post-skip-click full screenshot showed a visible game tooltip at the reticle: `Deep Water`, `Requires Fishing 1`, and `Your skill is 9`.
 - `/autofish signals` was run while that yellow reticle/tooltip was still visible. The addon printed `Inspect.Cursor type=nil held=nil`, `Inspect.Tooltip type=nil shown=nil extra=nil`, and `Inspect.Interaction none-active`.
 - Escape cancellation was validated with the same exact PID/HWND: the crop changed from yellow reticle/cursor handle `0x3BF07A0` to normal water/cursor handle `0x630ED0`. `--cancel-after-key` was then added and live-validated so future skip-click proofs can automatically clear the targeting reticle unless the operator intentionally wants it left active.
+- A follow-up addon-side trace patch records `Inspect.Cursor`, `Inspect.Tooltip`, and `Inspect.Interaction` values in bounded `/autofish trace` samples. A live trace over a skip-click key-`8` reticle proof recorded `samples=13` with `cursor_non_nil=0`, `tooltip_non_nil=0`, and `interaction_active=0`.
 
 Reviewed status:
 
 - Cursor-handle changes are useful evidence.
 - The large-window proof confirms the user's observation that key `8` can display a yellow cast reticle over water and that left click can start the fishing-pole cast animation.
 - The visible `Deep Water` tooltip is useful visual evidence, but the current native `Inspect.Tooltip` and `Inspect.Interaction` probes did not expose that tooltip/hover state to the addon during this run.
-- Pixel/reticle color classification remains `needs-more-evidence` because promotion still requires repeated casts and clean separation of valid reticle, invalid reticle, cast-start, bite-ready, and post-loot states.
+- Native API hover detection is **not promoted**: the current local client exposed no useful cursor, tooltip, or interaction values while the visual yellow reticle was active.
+- Pixel/reticle color classification is now `fallback-only` for helper-side calibration/proof because the yellow visual state is repeatable, but promotion still requires repeated casts and clean separation of valid reticle, invalid reticle, cast-start, bite-ready, and post-loot states.
 - Reticle/cursor should remain a fallback candidate until repeated clean crops distinguish valid reticle, cast-start, bite-ready, and invalid states.
 
 ## `/log` proof

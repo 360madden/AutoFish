@@ -700,66 +700,126 @@ local function formatInteractionSummary(interactions)
   return table.concat(names, ",")
 end
 
+local function collectFocusedApiSignalSnapshot()
+  local signals = {
+    cursor = {
+      available = Inspect and type(Inspect.Cursor) == "function",
+    },
+    tooltip = {
+      available = Inspect and type(Inspect.Tooltip) == "function",
+    },
+    interaction = {
+      available = Inspect and type(Inspect.Interaction) == "function",
+    },
+  }
+
+  if signals.cursor.available then
+    local ok, cursorType, held = pcall(Inspect.Cursor)
+    signals.cursor.ok = ok == true
+    if ok then
+      signals.cursor.type = formatProbeValue(cursorType)
+      signals.cursor.held = formatProbeValue(held)
+    else
+      signals.cursor.error = trimText(cursorType, 80)
+    end
+  end
+
+  if signals.tooltip.available then
+    local ok, tooltipType, shown, extra, fourth = pcall(Inspect.Tooltip)
+    signals.tooltip.ok = ok == true
+    if ok then
+      signals.tooltip.type = formatProbeValue(tooltipType)
+      signals.tooltip.shown = formatProbeValue(shown)
+      signals.tooltip.extra = formatProbeValue(extra)
+      signals.tooltip.fourth = formatProbeValue(fourth)
+    else
+      signals.tooltip.error = trimText(tooltipType, 80)
+    end
+  end
+
+  if signals.interaction.available then
+    local ok, interactions = pcall(Inspect.Interaction)
+    signals.interaction.ok = ok == true
+    if ok then
+      signals.interaction.rawType = type(interactions)
+      signals.interaction.summary = formatInteractionSummary(interactions)
+      signals.interaction.count = type(interactions) == "table" and countEntries(interactions) or 0
+    else
+      signals.interaction.error = trimText(interactions, 80)
+    end
+  end
+
+  return signals
+end
+
+local function traceValuePresent(value, absentValue)
+  if value == nil then
+    return false
+  end
+
+  local text = tostring(value)
+  return text ~= "nil" and text ~= "?" and text ~= absentValue
+end
+
 local function printLiveApiSignals()
-  if Inspect and type(Inspect.Cursor) == "function" then
-    local cursorType, held = safeCall(Inspect.Cursor)
+  local signals = collectFocusedApiSignalSnapshot()
+
+  if signals.cursor.available then
     Console.Write(
-      "  Inspect.Cursor: type=" .. formatProbeValue(cursorType) .. " held=" .. formatProbeValue(held),
+      "  Inspect.Cursor: type=" .. formatProbeValue(signals.cursor.type) .. " held=" .. formatProbeValue(signals.cursor.held),
       "#CCCCCC"
     )
   end
 
-  if Inspect and type(Inspect.Tooltip) == "function" then
-    local tooltipType, shown, extra = safeCall(Inspect.Tooltip)
+  if signals.tooltip.available then
     Console.Write(
-      "  Inspect.Tooltip: type=" .. formatProbeValue(tooltipType) .. " shown=" .. formatProbeValue(shown) .. " extra=" .. formatProbeValue(extra),
+      "  Inspect.Tooltip: type=" .. formatProbeValue(signals.tooltip.type) .. " shown=" .. formatProbeValue(signals.tooltip.shown) .. " extra=" .. formatProbeValue(signals.tooltip.extra) .. " fourth=" .. formatProbeValue(signals.tooltip.fourth),
       "#CCCCCC"
     )
   end
 
-  if Inspect and type(Inspect.Interaction) == "function" then
-    local interactions = safeCall(Inspect.Interaction)
+  if signals.interaction.available then
     Console.Write(
-      "  Inspect.Interaction: " .. formatInteractionSummary(interactions),
+      "  Inspect.Interaction: " .. formatProbeValue(signals.interaction.summary),
       "#CCCCCC"
     )
   end
 end
 
 local function printCursorSignal()
-  if not (Inspect and type(Inspect.Cursor) == "function") then
+  local signals = collectFocusedApiSignalSnapshot()
+  if not signals.cursor.available then
     Console.Write("Inspect.Cursor unavailable.", "#FFAA44")
     return
   end
 
-  local cursorType, held = safeCall(Inspect.Cursor)
   Console.Write(
-    "Inspect.Cursor type=" .. formatProbeValue(cursorType) .. " held=" .. formatProbeValue(held),
+    "Inspect.Cursor type=" .. formatProbeValue(signals.cursor.type) .. " held=" .. formatProbeValue(signals.cursor.held),
     "#66CCFF"
   )
 end
 
 local function printTooltipSignal()
-  if not (Inspect and type(Inspect.Tooltip) == "function") then
+  local signals = collectFocusedApiSignalSnapshot()
+  if not signals.tooltip.available then
     Console.Write("Inspect.Tooltip unavailable.", "#FFAA44")
     return
   end
 
-  local tooltipType, shown, extra = safeCall(Inspect.Tooltip)
   Console.Write(
-    "Inspect.Tooltip type=" .. formatProbeValue(tooltipType) .. " shown=" .. formatProbeValue(shown) .. " extra=" .. formatProbeValue(extra),
+    "Inspect.Tooltip type=" .. formatProbeValue(signals.tooltip.type) .. " shown=" .. formatProbeValue(signals.tooltip.shown) .. " extra=" .. formatProbeValue(signals.tooltip.extra) .. " fourth=" .. formatProbeValue(signals.tooltip.fourth),
     "#66CCFF"
   )
 end
 
 local function printInteractionSignal()
-  if not (Inspect and type(Inspect.Interaction) == "function") then
+  local signals = collectFocusedApiSignalSnapshot()
+  if not signals.interaction.available then
     Console.Write("Inspect.Interaction unavailable.", "#FFAA44")
     return
   end
 
-  local interactions = safeCall(Inspect.Interaction)
-  Console.Write("Inspect.Interaction " .. formatInteractionSummary(interactions), "#66CCFF")
+  Console.Write("Inspect.Interaction " .. formatProbeValue(signals.interaction.summary), "#66CCFF")
 end
 
 local function collectTableKeys(root, limit)
@@ -950,6 +1010,10 @@ local function recordTraceSample(snapshot, observation)
   local fishing = type(snapshot.fishing) == "table" and snapshot.fishing or {}
   local castbar = type(snapshot.castbar) == "table" and snapshot.castbar or {}
   local pole = fishing.equippedPole or fishing.inventoryPole
+  local apiSignals = collectFocusedApiSignalSnapshot()
+  local cursor = apiSignals.cursor or {}
+  local tooltip = apiSignals.tooltip or {}
+  local interaction = apiSignals.interaction or {}
 
   trace.samples[#trace.samples + 1] = {
     capturedAt = snapshot.capturedAt,
@@ -966,6 +1030,13 @@ local function recordTraceSample(snapshot, observation)
     inventoryFreeSlots = inventory.estimatedFreeSlots,
     pole = type(pole) == "table" and (pole.matchText or buildMatchText(pole)) or nil,
     trackFish = type(fishing.trackFishBuff) == "table",
+    cursorType = cursor.type,
+    cursorHeld = cursor.held,
+    tooltipType = tooltip.type,
+    tooltipShown = tooltip.shown,
+    tooltipExtra = tooltip.extra,
+    tooltipFourth = tooltip.fourth,
+    interactionSummary = interaction.summary,
   }
 
   trace.lastCapturedAt = snapshot.capturedAt
@@ -1672,6 +1743,20 @@ function AutoFishLive.PrintTrace(argsText)
 
   AutoFishLive.Refresh("trace.status", true)
   local last = trace.samples[#trace.samples] or {}
+  local cursorNonNil = 0
+  local tooltipNonNil = 0
+  local interactionActive = 0
+  for _, sample in ipairs(trace.samples) do
+    if traceValuePresent(sample.cursorType) or traceValuePresent(sample.cursorHeld) then
+      cursorNonNil = cursorNonNil + 1
+    end
+    if traceValuePresent(sample.tooltipType) or traceValuePresent(sample.tooltipShown) or traceValuePresent(sample.tooltipExtra) or traceValuePresent(sample.tooltipFourth) then
+      tooltipNonNil = tooltipNonNil + 1
+    end
+    if traceValuePresent(sample.interactionSummary, "none-active") then
+      interactionActive = interactionActive + 1
+    end
+  end
   Console.Write(
     string.format(
       "trace active=%s samples=%s lastReason=%s",
@@ -1689,6 +1774,37 @@ function AutoFishLive.PrintTrace(argsText)
       toNumber(last.confidence) or 0,
       tostring(last.inventoryFreeSlots ~= nil and last.inventoryFreeSlots or "?")),
     "#CCCCCC")
+  Console.Write(
+    string.format(
+      "trace last api cursor=%s held=%s tooltip=%s shown=%s extra=%s interact=%s",
+      tostring(last.cursorType or "?"),
+      tostring(last.cursorHeld or "?"),
+      tostring(last.tooltipType or "?"),
+      tostring(last.tooltipShown or "?"),
+      tostring(last.tooltipExtra or "?"),
+      tostring(last.interactionSummary or "?")),
+    "#CCCCCC")
+  Console.Write(
+    string.format(
+      "trace api counts cursor_non_nil=%s tooltip_non_nil=%s interaction_active=%s",
+      tostring(cursorNonNil),
+      tostring(tooltipNonNil),
+      tostring(interactionActive)),
+    "#CCCCCC")
+
+  local first = math.max(1, #trace.samples - 2)
+  for index = first, #trace.samples do
+    local sample = trace.samples[index] or {}
+    Console.Write(
+      string.format(
+        "trace sample %s reason=%s cursor=%s tooltip=%s interact=%s",
+        tostring(index),
+        tostring(sample.reason or "?"),
+        tostring(sample.cursorType or "?"),
+        tostring(sample.tooltipType or "?"),
+        tostring(sample.interactionSummary or "?")),
+      "#888888")
+  end
 end
 
 function AutoFishLive.PrintHelp()
@@ -1705,7 +1821,7 @@ function AutoFishLive.PrintHelp()
   Console.Write("  /autofish signals   - show cursor, tooltip, and interaction API values", "#CCCCCC")
   Console.Write("  /autofish events    - list useful event table keys for feedback probes", "#CCCCCC")
   Console.Write("  /autofish observe   - show fail-closed bridge observation mapping", "#CCCCCC")
-  Console.Write("  /autofish trace     - start/status/stop a bounded manual one-cast trace", "#CCCCCC")
+  Console.Write("  /autofish trace     - start/status/stop a bounded manual one-cast/API trace", "#CCCCCC")
   Console.Write("  /autofish snapshot  - refresh the saved snapshot without extra output", "#CCCCCC")
   Console.Write("  /autofish help      - show this help", "#CCCCCC")
 end
