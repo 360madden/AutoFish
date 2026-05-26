@@ -67,6 +67,39 @@ Color suggestions are conservative. Red/orange invalid reticles can include yell
 
 No live command should send input without an explicit target PID/HWND and either `--dry-run` or `--confirm-input`. The helper refuses to send `-` by default because this local setup binds it to `reloadui`.
 
+## Fishability fan planning
+
+Prefer proving **fishability** over visually detecting water. The helper can plan a screen-space fan of candidate points without sending input:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan `
+  --pid <CURRENT_RIFT_PID> `
+  --hwnd <CURRENT_RIFT_HWND> `
+  --origin-x <PLAYER_OR_SCREEN_ANCHOR_X> `
+  --origin-y <PLAYER_OR_SCREEN_ANCHOR_Y> `
+  --forward-x <OPERATOR_FORWARD_POINT_X> `
+  --forward-y <OPERATOR_FORWARD_POINT_Y> `
+  --dry-run
+```
+
+If Rift is minimized and the live client rect reports `0x0`, keep the helper read-only and avoid forced restore by doing geometry-only planning with the last verified client size:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan `
+  --pid <CURRENT_RIFT_PID> `
+  --hwnd <CURRENT_RIFT_HWND> `
+  --origin-x <PLAYER_OR_SCREEN_ANCHOR_X> `
+  --origin-y <PLAYER_OR_SCREEN_ANCHOR_Y> `
+  --forward-x <OPERATOR_FORWARD_POINT_X> `
+  --forward-y <OPERATOR_FORWARD_POINT_Y> `
+  --client-width <LAST_VERIFIED_CLIENT_WIDTH> `
+  --client-height <LAST_VERIFIED_CLIENT_HEIGHT> `
+  --no-capture-crops `
+  --dry-run
+```
+
+This writes a `fishabilityFan` manifest with candidate client points and optional no-input crops. It does not press the fishing key, click, move, or classify water. Future confirmed probing must classify points from game feedback such as castbar start, chat/system errors, item events, inventory deltas, or progression events. Coordinate-backed micro-step facing requires a reliable before/after player coordinate source and is not implemented yet.
+
 ## Log proof harness
 
 The `/log` family of historical signals is read-only and must prove current usefulness before runtime use:

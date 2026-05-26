@@ -12,6 +12,7 @@ import argparse
 import ctypes
 from ctypes import wintypes
 import json
+import math
 import os
 from pathlib import Path
 import struct
@@ -59,7 +60,7 @@ DEFAULT_LOG_TERMS = (
     "bait",
 )
 SIGNAL_DECISIONS = ("promote", "fallback-only", "retire", "needs-more-evidence")
-SIGNAL_NAMES = ("reticle", "log", "layout", "audio", "inventory", "slash")
+SIGNAL_NAMES = ("reticle", "fishabilityFan", "log", "layout", "audio", "inventory", "slash")
 
 
 class POINT(ctypes.Structure):
@@ -276,6 +277,7 @@ def validate_target(hwnd: int, expected_pid: int, *, require_foreground: bool) -
 
     client_width = int(rect.right - rect.left)
     client_height = int(rect.bottom - rect.top)
+    is_minimized = bool(user32.IsIconic(hwnd))
     below_readable_preference = (
         client_width < PREFERRED_READABLE_CLIENT_WIDTH
         or client_height < PREFERRED_READABLE_CLIENT_HEIGHT
@@ -286,6 +288,7 @@ def validate_target(hwnd: int, expected_pid: int, *, require_foreground: bool) -
         "ownerProcessId": int(owner_pid.value),
         "clientWidth": client_width,
         "clientHeight": client_height,
+        "isMinimized": is_minimized,
         "foregroundWindow": hwnd_hex(foreground),
         "foregroundMatches": foreground_matches,
         "readability": {
@@ -1035,6 +1038,220 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
         return 1
 
 
+def parse_int_list(values: list[int] | None, default: list[int]) -> list[int]:
+    if not values:
+        return list(default)
+    return [int(value) for value in values]
+
+
+def generate_fan_candidates(
+    *,
+    origin_x: int,
+    origin_y: int,
+    forward_x: int,
+    forward_y: int,
+    distances: list[int],
+    laterals: list[int],
+    max_points: int,
+    client_width: int,
+    client_height: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    dx = forward_x - origin_x
+    dy = forward_y - origin_y
+    length = math.hypot(dx, dy)
+    if length < 1.0:
+        raise RuntimeError("Forward point must differ from origin by at least 1 client pixel.")
+
+    unit_x = dx / length
+    unit_y = dy / length
+    right_x = -unit_y
+    right_y = unit_x
+
+    candidates: list[dict[str, Any]] = []
+    for distance in distances:
+        for lateral in laterals:
+            x = int(round(origin_x + unit_x * distance + right_x * lateral))
+            y = int(round(origin_y + unit_y * distance + right_y * lateral))
+            candidates.append(
+                {
+                    "index": len(candidates),
+                    "name": f"d{distance}_l{lateral}",
+                    "clientX": x,
+                    "clientY": y,
+                    "distancePx": distance,
+                    "lateralPx": lateral,
+                    "inBounds": 0 <= x < client_width and 0 <= y < client_height,
+                    "plannedClassification": "unproven-pending-game-feedback",
+                    "notes": [
+                        "This is a screen-space candidate point, not a water claim.",
+                        "Fishability must be classified by castbar, chat/error, item, inventory, or other game feedback.",
+                    ],
+                }
+            )
+            if len(candidates) >= max_points:
+                break
+        if len(candidates) >= max_points:
+            break
+
+    geometry = {
+        "origin": {"clientX": origin_x, "clientY": origin_y},
+        "forwardPoint": {"clientX": forward_x, "clientY": forward_y},
+        "forwardVector": {"dx": round(unit_x, 6), "dy": round(unit_y, 6)},
+        "rightVector": {"dx": round(right_x, 6), "dy": round(right_y, 6)},
+        "distancesPx": distances,
+        "lateralsPx": laterals,
+        "maxPoints": max_points,
+    }
+    return candidates, geometry
+
+
+def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
+    hwnd = parse_hwnd(args.hwnd)
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-fishability-fan-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    if not args.dry_run:
+        raise RuntimeError("fishability-fan currently supports --dry-run only; no probe input is implemented.")
+
+    manifest: dict[str, Any] = {
+        "schema": "autofish.signalProof.fishabilityFan.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "mode": "dry-run",
+        "safety": {
+            "sendsInput": False,
+            "sendsMovement": False,
+            "sendsFishingKey": False,
+            "clickCount": 0,
+            "requiresExactPidHwnd": True,
+            "requiresCoordinateSourceForActorFacing": True,
+            "movementCalibrationImplemented": False,
+        },
+        "request": {
+            "pid": args.pid,
+            "hwnd": hwnd_hex(hwnd),
+            "originX": args.origin_x,
+            "originY": args.origin_y,
+            "forwardX": args.forward_x,
+            "forwardY": args.forward_y,
+            "clientWidth": args.client_width,
+            "clientHeight": args.client_height,
+            "distancePx": args.distance_px,
+            "lateralPx": args.lateral_px,
+            "maxPoints": args.max_points,
+            "cropSize": args.crop_size,
+            "captureCrops": not args.no_capture_crops,
+        },
+        "target": None,
+        "geometry": None,
+        "candidates": [],
+        "captures": [],
+        "decision": {
+            "classification": "planning-only",
+            "notes": [
+                "This command plans a screen-space fishability fan; it does not prove water.",
+                "Use game feedback such as castbar, chat/error text, item events, and inventory deltas to classify candidate points.",
+                "Coordinate-backed facing calibration requires a reliable before/after player position source before any micro-step movement is useful.",
+            ],
+        },
+    }
+
+    try:
+        target = validate_target(hwnd, args.pid, require_foreground=False)
+        manifest["target"] = target
+        if (args.client_width is None) != (args.client_height is None):
+            raise RuntimeError("--client-width and --client-height must be supplied together.")
+
+        live_width = int(target["clientWidth"])
+        live_height = int(target["clientHeight"])
+        using_operator_size = False
+        if live_width > 0 and live_height > 0:
+            width = live_width
+            height = live_height
+        elif args.client_width is not None and args.client_height is not None:
+            if not args.no_capture_crops:
+                raise RuntimeError(
+                    "Target client rect is unavailable; use --no-capture-crops with --client-width/--client-height for planning-only."
+                )
+            if args.client_width <= 0 or args.client_height <= 0:
+                raise RuntimeError("--client-width and --client-height must be positive.")
+            width = int(args.client_width)
+            height = int(args.client_height)
+            using_operator_size = True
+        else:
+            minimized_note = " Target appears minimized." if target.get("isMinimized") else ""
+            raise RuntimeError(
+                f"Target client rect is unavailable ({live_width}x{live_height}).{minimized_note} "
+                "Restore/maximize Rift before capture planning, or pass --client-width/--client-height "
+                "with --no-capture-crops for geometry-only planning."
+            )
+
+        effective_target = dict(target)
+        effective_target["clientWidth"] = width
+        effective_target["clientHeight"] = height
+        effective_target["clientSizeSource"] = "operator-supplied" if using_operator_size else "live-target"
+        manifest["effectiveClient"] = {
+            "width": width,
+            "height": height,
+            "source": effective_target["clientSizeSource"],
+            "liveWidth": live_width,
+            "liveHeight": live_height,
+            "targetMinimized": bool(target.get("isMinimized")),
+        }
+        assert_client_point(effective_target, args.origin_x, args.origin_y)
+        assert_client_point(effective_target, args.forward_x, args.forward_y)
+
+        distances = parse_int_list(args.distance_px, [180, 280, 380])
+        laterals = parse_int_list(args.lateral_px, [-120, 0, 120])
+        if args.max_points < 1:
+            raise RuntimeError("--max-points must be at least 1")
+
+        candidates, geometry = generate_fan_candidates(
+            origin_x=args.origin_x,
+            origin_y=args.origin_y,
+            forward_x=args.forward_x,
+            forward_y=args.forward_y,
+            distances=distances,
+            laterals=laterals,
+            max_points=args.max_points,
+            client_width=width,
+            client_height=height,
+        )
+        manifest["geometry"] = geometry
+        manifest["candidates"] = candidates
+        if using_operator_size:
+            manifest["decision"]["notes"].append(
+                "Candidate bounds used operator-supplied client dimensions because the live target client rect was unavailable."
+            )
+
+        if not args.no_capture_crops:
+            for candidate in candidates:
+                if not candidate["inBounds"]:
+                    continue
+                label = safe_file_stem(candidate["name"], f"candidate-{candidate['index']:02d}")
+                path = output_root / f"{candidate['index']:02d}-{label}.bmp"
+                capture_info = capture_client_crop(
+                    hwnd,
+                    args.pid,
+                    int(candidate["clientX"]),
+                    int(candidate["clientY"]),
+                    args.crop_size,
+                    path,
+                )
+                capture_info["candidateIndex"] = candidate["index"]
+                capture_info["candidateName"] = candidate["name"]
+                capture_info["capturedAtUtc"] = datetime.now(timezone.utc).isoformat()
+                manifest["captures"].append(capture_info)
+
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": True, "outputRoot": str(output_root), "manifest": str(output_root / "manifest.json")}, indent=2))
+        return 0
+    except Exception as exc:
+        manifest["error"] = str(exc)
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+
+
 def run_signal_proof_log(args: argparse.Namespace) -> int:
     log_path = Path(args.log_path)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-log-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -1453,6 +1670,10 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
         if summary.get("nonUnknownColorCount", 0) > 0:
             return "fallback-candidate-review"
         return "needs-more-evidence"
+    if signal == "fishabilityFan":
+        if summary.get("candidateCount", 0) > 0:
+            return "planning-only-needs-game-feedback"
+        return "needs-candidates"
     if signal == "log":
         if summary.get("matchedLineCount", 0) > 0:
             return "fallback-candidate-review"
@@ -1535,6 +1756,23 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "cursorHandles": sorted(set(cursor_handles)),
                 "cursorHandleCount": len(set(cursor_handles)),
                 "actionNames": [action.get("name") for action in manifest.get("actions", []) if isinstance(action, dict)],
+            }
+        )
+    elif signal == "fishabilityFan":
+        candidates = manifest.get("candidates") if isinstance(manifest.get("candidates"), list) else []
+        captures = manifest.get("captures") if isinstance(manifest.get("captures"), list) else []
+        safety = manifest.get("safety") if isinstance(manifest.get("safety"), dict) else {}
+        effective_client = manifest.get("effectiveClient") if isinstance(manifest.get("effectiveClient"), dict) else {}
+        in_bounds = [candidate for candidate in candidates if isinstance(candidate, dict) and candidate.get("inBounds")]
+        summary.update(
+            {
+                "candidateCount": len(candidates),
+                "inBoundsCandidateCount": len(in_bounds),
+                "captureCount": len(captures),
+                "sendsInput": bool(safety.get("sendsInput")),
+                "movementCalibrationImplemented": bool(safety.get("movementCalibrationImplemented")),
+                "clientSizeSource": effective_client.get("source"),
+                "targetMinimized": bool(effective_client.get("targetMinimized")),
             }
         )
     elif signal == "log":
@@ -1631,6 +1869,13 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             if reasons:
                 lines.append(f"- color reasons: {', '.join(reasons)}")
             lines.append(f"- cursor handles: {summary.get('cursorHandleCount', 0)}")
+        elif summary["signal"] == "fishabilityFan":
+            lines.append(f"- candidates: {summary.get('candidateCount', 0)}; in bounds: {summary.get('inBoundsCandidateCount', 0)}")
+            lines.append(f"- captures: {summary.get('captureCount', 0)}")
+            lines.append(f"- client size source: {summary.get('clientSizeSource')}")
+            lines.append(f"- target minimized: {summary.get('targetMinimized')}")
+            lines.append(f"- sends input: {summary.get('sendsInput')}")
+            lines.append(f"- movement calibration implemented: {summary.get('movementCalibrationImplemented')}")
         elif summary["signal"] == "log":
             lines.append(f"- appended chars: {summary.get('appendedCharacterCount', 0)}")
             lines.append(f"- matched lines: {summary.get('matchedLineCount', 0)}")
@@ -1768,6 +2013,24 @@ def build_parser() -> argparse.ArgumentParser:
     reticle.add_argument("--watch-interval-ms", type=int, default=500, help="Interval between watch captures; default: 500")
     reticle.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-reticle-*.")
     reticle.set_defaults(func=run_signal_proof_reticle)
+
+    fan = signal_sub.add_parser("fishability-fan", help="Dry-run a screen-space fan of candidate fishing probe points without input")
+    fan.add_argument("--pid", type=int, required=True, help="Expected Rift process ID")
+    fan.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
+    fan.add_argument("--origin-x", type=int, required=True, help="Client X for the fan origin, typically near the player/screen anchor")
+    fan.add_argument("--origin-y", type=int, required=True, help="Client Y for the fan origin, typically near the player/screen anchor")
+    fan.add_argument("--forward-x", type=int, required=True, help="Client X of an operator-calibrated forward point")
+    fan.add_argument("--forward-y", type=int, required=True, help="Client Y of an operator-calibrated forward point")
+    fan.add_argument("--client-width", type=int, help="Planning-only client width to use when the target is minimized/unavailable; requires --client-height and --no-capture-crops")
+    fan.add_argument("--client-height", type=int, help="Planning-only client height to use when the target is minimized/unavailable; requires --client-width and --no-capture-crops")
+    fan.add_argument("--distance-px", type=int, action="append", help="Forward distance in pixels; repeatable. Defaults: 180, 280, 380")
+    fan.add_argument("--lateral-px", type=int, action="append", help="Right/left lateral offset in pixels; repeatable. Defaults: -120, 0, 120")
+    fan.add_argument("--max-points", type=int, default=9, help="Maximum candidate points to generate; default: 9")
+    fan.add_argument("--crop-size", type=int, default=140, help="No-input crop size for each in-bounds candidate; default: 140")
+    fan.add_argument("--no-capture-crops", action="store_true", help="Only write candidate geometry; do not capture no-input crops")
+    fan.add_argument("--dry-run", action="store_true", required=True, help="Required; fan planning sends no input")
+    fan.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-fishability-fan-*.")
+    fan.set_defaults(func=run_signal_proof_fishability_fan)
 
     log = signal_sub.add_parser("log", help="Capture and scan newly appended Rift log text without sending input")
     log.add_argument("--log-path", required=True, help="Path to the Rift log file to watch")

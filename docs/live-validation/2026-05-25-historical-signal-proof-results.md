@@ -200,6 +200,32 @@ Reviewed status:
 - Treat `blueCyan` color stats as manual-review-only; current evidence shows water/background contamination can produce false blue/cyan suggestions, and the helper now flags those cases instead of silently suggesting blue/cyan.
 - Reticle/cursor should remain a fallback candidate until repeated clean crops distinguish valid reticle, cast-start, bite-ready, and invalid states.
 
+## Fishability fan planning follow-up
+
+Evidence:
+
+- `.autofish-live/preflight-fishability-fan-latest/g0-preflight-summary.json`
+- `.autofish-live/fishability-fan-dryrun-latest/manifest.json`
+- `.autofish-live/signal-proof-summary-after-fishability-fan-latest/summary.md`
+- `.autofish-live/signal-proof-decisions.json`
+
+Result:
+
+- The current exact Rift target still resolves to PID `89748`, HWND `0x2CD0D30`.
+- The target was minimized during this follow-up, so Windows reported the live client rect as `0x0`.
+- To avoid forcing the game foreground or shrinking/restoring the game window, the proof used `--client-width 1920 --client-height 1009 --no-capture-crops`.
+- The dry-run generated nine in-bounds screen-space candidate points from origin `(965,690)` toward operator-forward point `(1244,382)` using distances `180`, `280`, and `380` with lateral offsets `-120`, `0`, and `120`.
+- No movement, fishing key, mouse click, or unattended loop was sent.
+- This is planning evidence only. It does not prove water or fishability until a later bounded probe classifies each point from game feedback.
+
+Reviewed decision:
+
+- `fishabilityFan`: `needs-more-evidence`
+
+Interpretation:
+
+The repo now has a safer path for the user's proposed cone/fan approach: plan a forward screen-space fan first, then classify each candidate from castbar, chat/system error, item/inventory, skill/currency/progression, and only then fallback visuals. Coordinate-backed micro-step facing remains blocked because player actor facing is not exposed by the Rift API and a forward tap only becomes numeric evidence after a reliable before/after player coordinate source is proven.
+
 ## `/log` proof
 
 Result:
@@ -241,3 +267,5 @@ The new expected diagnostic is either:
 - `raw slot changes detected` with per-slot add/remove/change lines.
 
 Then repeat the clean reticle proof around the current fishable coordinate enough times to classify reticle/cursor as `fallback-only`, `promote`, or `retire`. Promotion still requires repeatability across multiple casts and a clear distinction between cast-valid, invalid, bite-ready, and post-loot states.
+
+For the fishability fan lane, restore/maximize Rift only when the operator is ready for live evidence, rerun exact PID/HWND preflight, confirm current client size, and use the dry-run candidate manifest as the starting point for later bounded game-feedback classification.
