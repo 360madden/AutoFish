@@ -970,6 +970,94 @@ def run_session_plan_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def quote_ps(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
+    loaded = load_session_plan(plan_path)
+    assert loaded is not None
+    plan = loaded["plan"]
+    profile = plan.get("profile") if isinstance(plan.get("profile"), dict) else {}
+    target = plan.get("target") if isinstance(plan.get("target"), dict) else {}
+    point = plan.get("fishablePoint") if isinstance(plan.get("fishablePoint"), dict) else {}
+    defaults = plan.get("defaults") if isinstance(plan.get("defaults"), dict) else {}
+    helper = "python tools\\autofish-helper-py\\autofish_helper.py"
+    plan_arg = quote_ps(plan_path)
+    proof_root_arg = quote_ps(proof_root)
+    one_cast_evidence = proof_root.rstrip("\\/") + "\\<one-cast-proof>\\manifest.json"
+    lines = [
+        "# AutoFish Session Plan Runbook",
+        "",
+        f"- plan: `{plan_path}`",
+        f"- target: PID `{target.get('pid')}`, HWND `{target.get('hwnd')}`",
+        f"- fishable client point: `({point.get('x')},{point.get('y')})`",
+        f"- profile: `{profile.get('id') or '-'}`",
+        f"- key: `{defaults.get('key', '8')}`; max casts: `{defaults.get('maxCasts', 3)}`",
+        "",
+        "## 1. Review the plan",
+        "",
+        "```powershell",
+        f"{helper} session-plan show --path {plan_arg}",
+        "```",
+        "",
+        "## 2. One-cast dry-run",
+        "",
+        "```powershell",
+        f"{helper} signal-proof one-cast --session-plan {plan_arg} --dry-run",
+        "```",
+        "",
+        "## 3. One supervised one-cast proof",
+        "",
+        "```powershell",
+        f"{helper} signal-proof one-cast --session-plan {plan_arg} --confirm-input",
+        "```",
+        "",
+        "## 4. Record reviewed one-cast decision after screenshot/manifest review",
+        "",
+        "```powershell",
+        f"{helper} signal-proof decide `",
+        "  --signal oneCast `",
+        "  --decision fallback-only `",
+        "  --reason \"Reviewed one-cast proof is acceptable for a small supervised bounded session.\" `",
+        f"  --evidence {quote_ps(one_cast_evidence)} `",
+        f"  --proof-root {proof_root_arg}",
+        "```",
+        "",
+        "## 5. Bounded-session dry-run",
+        "",
+        "```powershell",
+        f"{helper} signal-proof bounded-session --session-plan {plan_arg} --dry-run",
+        "```",
+        "",
+        "## 6. Confirmed bounded-session proof",
+        "",
+        "```powershell",
+        f"{helper} signal-proof bounded-session --session-plan {plan_arg} --confirm-input",
+        "```",
+        "",
+        "Safety notes:",
+        "",
+        "- Do not use this plan after Rift restarts, the window is resized, or the fishable point changes.",
+        "- Confirmed commands still require exact PID/HWND and foreground target.",
+        "- Bounded-session confirmed mode requires a reviewed oneCast decision unless explicitly bypassed.",
+        "- No command in this runbook sends movement.",
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def run_session_plan_runbook(args: argparse.Namespace) -> int:
+    markdown = render_session_plan_runbook(args.path, args.proof_root)
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown, encoding="utf-8")
+        print(json.dumps({"ok": True, "path": str(output_path)}, indent=2))
+    else:
+        print(markdown, end="")
+    return 0
+
+
 def check_one_cast_review_gate(args: argparse.Namespace) -> dict[str, Any]:
     if getattr(args, "allow_unreviewed_one_cast", False):
         return {
@@ -3590,6 +3678,11 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_show = session_plan_sub.add_parser("show", help="Print a session plan JSON file")
     session_plan_show.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
     session_plan_show.set_defaults(func=run_session_plan_show)
+    session_plan_runbook = session_plan_sub.add_parser("runbook", help="Print next live-proof commands from a session plan")
+    session_plan_runbook.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
+    session_plan_runbook.add_argument("--proof-root", default=".autofish-live", help="Proof root to use in suggested decision command")
+    session_plan_runbook.add_argument("--output", help="Optional markdown output path")
+    session_plan_runbook.set_defaults(func=run_session_plan_runbook)
 
     signal = subparsers.add_parser("signal-proof", help="Proof-first harness for historical/fallback signals")
     signal_sub = signal.add_subparsers(dest="signal", required=True)

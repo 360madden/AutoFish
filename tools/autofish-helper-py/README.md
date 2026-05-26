@@ -86,6 +86,13 @@ python tools\autofish-helper-py\autofish_helper.py session-plan create `
 
 Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, or the fishable coordinate changes.
 
+To print the exact next commands from a plan:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan runbook `
+  --path .autofish-live\session-plan-latest.json
+```
+
 Dry-run first:
 
 ```powershell

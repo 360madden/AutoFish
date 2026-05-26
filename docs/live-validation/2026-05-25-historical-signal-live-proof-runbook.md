@@ -70,6 +70,13 @@ python tools\autofish-helper-py\autofish_helper.py session-plan create `
 
 Do not reuse a session plan after Rift restarts, the window is resized, or the fishable coordinate changes.
 
+Print the next commands from the plan:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan runbook `
+  --path .autofish-live\session-plan-latest.json
+```
+
 ## Proof order
 
 Run proofs in this order so native/low-brittleness evidence is captured before fragile fallbacks.
