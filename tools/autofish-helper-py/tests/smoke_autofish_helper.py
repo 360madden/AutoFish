@@ -802,6 +802,25 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert clear_report["mutated"]
         assert not stop_file.exists()
 
+        valid_evidence = Path(tmp) / "one-cast-proof" / "manifest.json"
+        valid_evidence.parent.mkdir(parents=True, exist_ok=True)
+        valid_evidence.write_text(
+            json.dumps(
+                {
+                    "schema": "autofish.signalProof.oneCast.v1",
+                    "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+                    "mode": "confirm-input",
+                    "request": {},
+                    "safety": {},
+                    "captures": [],
+                    "actions": [],
+                    "result": {"completed": True, "liveInputSent": True},
+                    "decision": {"classification": "evidence-only"},
+                    "reviewGates": {},
+                }
+            ),
+            encoding="utf-8",
+        )
         register_output = Path(tmp) / "recorded-decisions.json"
         with contextlib.redirect_stdout(io.StringIO()) as decide_output:
             assert (
@@ -810,7 +829,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
                         signal="fishabilityCandidate",
                         decision="fallback-only",
                         reason="Reviewed candidate in smoke test.",
-                        evidence=["evidence/manifest.json"],
+                        evidence=[str(valid_evidence), "evidence/manifest.json"],
                         proof_root=".autofish-live",
                         operator=None,
                         note=None,
@@ -824,6 +843,11 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         decide_result = json.loads(decide_output.getvalue())
         assert decide_result["entry"]["scopeTokens"] == [scope_token]
         assert decide_result["entry"]["sessionPlanScopes"][0]["path"] == str(plan_path)
+        evidence_validation = decide_result["entry"]["evidenceValidation"]
+        assert evidence_validation[0]["status"] == "signal-proof-manifest"
+        assert evidence_validation[0]["manifestShapeValid"]
+        assert evidence_validation[0]["signal"] == "oneCast"
+        assert evidence_validation[1]["status"] == "missing"
 
 
 def test_session_plan_target_freshness_gate(helper) -> None:

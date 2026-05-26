@@ -5474,6 +5474,72 @@ def collect_decision_scopes(args: argparse.Namespace) -> tuple[list[str], list[d
     return tokens, plan_scopes
 
 
+def inspect_decision_evidence_paths(evidence: list[str] | None, proof_root: str | None) -> list[dict[str, Any]]:
+    inspections: list[dict[str, Any]] = []
+    for value in evidence or []:
+        raw_path = str(value)
+        path = Path(raw_path)
+        candidates = [path]
+        if not path.is_absolute() and proof_root:
+            candidates.append(Path(proof_root) / raw_path)
+
+        selected = candidates[0]
+        exists = False
+        path_error: str | None = None
+        for candidate in candidates:
+            try:
+                if candidate.exists():
+                    selected = candidate
+                    exists = True
+                    break
+            except OSError as exc:
+                if candidate == selected:
+                    path_error = str(exc)
+
+        entry: dict[str, Any] = {
+            "path": raw_path,
+            "resolvedPath": str(selected),
+            "exists": exists,
+        }
+        if path_error:
+            entry["error"] = path_error
+        if not exists:
+            entry["status"] = "missing"
+            inspections.append(entry)
+            continue
+        if selected.name != "manifest.json":
+            entry["status"] = "exists-non-manifest"
+            inspections.append(entry)
+            continue
+        try:
+            manifest = json.loads(selected.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            entry.update({"status": "invalid-json", "error": str(exc)})
+            inspections.append(entry)
+            continue
+        if not isinstance(manifest, dict):
+            entry.update({"status": "invalid-root", "error": "Manifest root is not a JSON object."})
+            inspections.append(entry)
+            continue
+        schema = str(manifest.get("schema") or "")
+        validation_errors = (
+            validate_signal_proof_manifest_shape(manifest)
+            if schema.startswith("autofish.signalProof.")
+            else []
+        )
+        entry.update(
+            {
+                "status": "signal-proof-manifest" if schema.startswith("autofish.signalProof.") else "unknown-manifest",
+                "schema": schema or None,
+                "signal": signal_from_schema(schema),
+                "manifestShapeValid": not validation_errors,
+                "manifestValidationErrors": validation_errors,
+            }
+        )
+        inspections.append(entry)
+    return inspections
+
+
 def run_signal_proof_decide(args: argparse.Namespace) -> int:
     register_path = Path(args.register)
     register_path.parent.mkdir(parents=True, exist_ok=True)
@@ -5490,6 +5556,7 @@ def run_signal_proof_decide(args: argparse.Namespace) -> int:
         "operator": args.operator,
         "notes": args.note or [],
         "scopeTokens": scope_tokens,
+        "evidenceValidation": inspect_decision_evidence_paths(args.evidence or [], args.proof_root),
     }
     if scope_tokens:
         entry["scopeToken"] = scope_tokens[-1]
