@@ -57,6 +57,8 @@ try {
     python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Select-String -Pattern 'allow-red-reticle-click' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan-runbook --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof doctor --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof doctor --help | Select-String -Pattern 'decision-register' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof decide --help | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw 'Python helper help check failed.'

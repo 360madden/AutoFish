@@ -48,6 +48,7 @@ def test_doc_command_validator_surface(helper, doc_validator) -> None:
     assert "one-cast" in surface["signal-proof"]
     assert "bounded-session" in surface["signal-proof"]
     assert "facing-delta" in surface["signal-proof"]
+    assert "doctor" in surface["signal-proof"]
 
 
 def test_profile_defaults(helper) -> None:
@@ -351,6 +352,75 @@ def test_manifest_shape_validation_summary(helper) -> None:
     )
     assert "manifest validation errors" in markdown
     assert "reviewGates is required for oneCast manifests" in markdown
+
+
+def test_signal_proof_doctor_report(helper) -> None:
+    with tempfile.TemporaryDirectory(prefix="autofish-helper-doctor-") as tmp:
+        root = Path(tmp) / "proofs"
+        invalid_manifest_path = root / "invalid-one-cast" / "manifest.json"
+        invalid_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        invalid_manifest_path.write_text(
+            json.dumps(
+                {
+                    "schema": "autofish.signalProof.oneCast.v1",
+                    "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+                    "mode": "confirm-input",
+                    "request": {},
+                    "safety": {},
+                    "captures": [],
+                    "actions": [],
+                    "result": {"completed": False},
+                    "decision": {"classification": "evidence-only"},
+                }
+            ),
+            encoding="utf-8",
+        )
+        register_path = Path(tmp) / "decisions.json"
+        register_path.write_text(
+            json.dumps(
+                {
+                    "schema": "autofish.signalProof.decisions.v1",
+                    "entries": [
+                        {
+                            "signal": "oneCast",
+                            "decision": "fallback-only",
+                            "reason": "Smoke-test decision with missing evidence.",
+                            "evidence": ["missing/manifest.json"],
+                            "proofRoot": str(root),
+                        }
+                    ],
+                    "latestBySignal": {},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        report = helper.build_signal_proof_doctor_report(str(root), str(register_path))
+        assert report["schema"] == "autofish.signalProof.doctor.v1"
+        assert not report["sendsGameInput"]
+        assert report["summary"]["manifestCount"] == 1
+        assert report["summary"]["invalidManifestCount"] == 1
+        assert report["summary"]["weakDecisionEvidenceCount"] == 1
+        assert report["nextActions"]
+        markdown = helper.render_signal_proof_doctor_markdown(report)
+        assert "AutoFish Signal Proof Doctor" in markdown
+        assert "invalid manifests: 1" in markdown
+
+        output_root = Path(tmp) / "doctor-out"
+        with contextlib.redirect_stdout(io.StringIO()) as doctor_output:
+            assert (
+                helper.run_signal_proof_doctor(
+                    argparse.Namespace(
+                        proof_root=str(root),
+                        decision_register=str(register_path),
+                        output_root=str(output_root),
+                    )
+                )
+                == 0
+            )
+        result = json.loads(doctor_output.getvalue())
+        assert Path(result["doctor"]).exists()
+        assert Path(result["markdown"]).exists()
 
 
 def test_target_snapshot_invalid_hwnd(helper) -> None:
@@ -1004,6 +1074,7 @@ def main() -> int:
     test_red_reticle_click_guard(helper)
     test_red_reticle_guard_summary(helper)
     test_manifest_shape_validation_summary(helper)
+    test_signal_proof_doctor_report(helper)
     test_target_snapshot_invalid_hwnd(helper)
     test_stale_session_plan_refuses_plan_backed_proofs(helper)
     test_fishability_fan_suggested_commands(helper)

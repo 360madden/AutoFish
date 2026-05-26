@@ -5380,11 +5380,7 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def run_signal_proof_summarize(args: argparse.Namespace) -> int:
-    proof_root = Path(args.proof_root)
-    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-summary-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    output_root.mkdir(parents=True, exist_ok=True)
-
+def build_signal_proof_summary_report(proof_root: Path) -> dict[str, Any]:
     summaries = [
         summarize_signal_proof_manifest(path, manifest)
         for path, manifest in load_signal_proof_manifests(proof_root)
@@ -5397,7 +5393,7 @@ def run_signal_proof_summarize(args: argparse.Namespace) -> int:
         review = str(summary.get("suggestedReview") or "manual-review")
         bucket["suggestedReviews"][review] = bucket["suggestedReviews"].get(review, 0) + 1
 
-    report = {
+    return {
         "schema": "autofish.signalProof.summary.v1",
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
         "proofRoot": str(proof_root),
@@ -5411,11 +5407,19 @@ def run_signal_proof_summarize(args: argparse.Namespace) -> int:
         ],
     }
 
+
+def run_signal_proof_summarize(args: argparse.Namespace) -> int:
+    proof_root = Path(args.proof_root)
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-summary-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    report = build_signal_proof_summary_report(proof_root)
+
     json_path = output_root / "summary.json"
     markdown_path = output_root / "summary.md"
     json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     markdown_path.write_text(render_signal_proof_markdown(report), encoding="utf-8")
-    print(json.dumps({"ok": True, "manifestCount": len(summaries), "outputRoot": str(output_root), "summary": str(json_path), "markdown": str(markdown_path)}, indent=2))
+    print(json.dumps({"ok": True, "manifestCount": report["manifestCount"], "outputRoot": str(output_root), "summary": str(json_path), "markdown": str(markdown_path)}, indent=2))
     return 0
 
 
@@ -5538,6 +5542,152 @@ def inspect_decision_evidence_paths(evidence: list[str] | None, proof_root: str 
         )
         inspections.append(entry)
     return inspections
+
+
+def decision_evidence_validation(entry: dict[str, Any]) -> list[dict[str, Any]]:
+    existing = entry.get("evidenceValidation")
+    if isinstance(existing, list):
+        return [item for item in existing if isinstance(item, dict)]
+    evidence = entry.get("evidence") if isinstance(entry.get("evidence"), list) else []
+    proof_root = str(entry.get("proofRoot") or ".autofish-live")
+    return inspect_decision_evidence_paths([str(value) for value in evidence], proof_root)
+
+
+def latest_summaries_by_signal(summaries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    latest: dict[str, dict[str, Any]] = {}
+    for summary in summaries:
+        signal = str(summary.get("signal") or "unknown")
+        current = latest.get(signal)
+        current_key = str(current.get("generatedAtUtc") or "") if current else ""
+        summary_key = str(summary.get("generatedAtUtc") or "")
+        if current is None or summary_key >= current_key:
+            latest[signal] = summary
+    return latest
+
+
+def build_signal_proof_doctor_report(proof_root: str, decision_register: str) -> dict[str, Any]:
+    proof_path = Path(proof_root)
+    summary_report = build_signal_proof_summary_report(proof_path)
+    summaries = summary_report["summaries"]
+    invalid_manifest_count = len([summary for summary in summaries if not summary.get("manifestShapeValid", True)])
+    errored_manifest_count = len([summary for summary in summaries if summary.get("hasError")])
+    failed_gate_manifest_count = len([summary for summary in summaries if summary.get("failedReviewGateNames")])
+    red_reticle_block_count = sum(int(summary.get("redReticleClickGuardFailedCount") or 0) for summary in summaries)
+
+    register_path = Path(decision_register)
+    decision_register_error = None
+    try:
+        register = load_decision_register(register_path)
+    except RuntimeError as exc:
+        register = {"entries": [], "latestBySignal": {}}
+        decision_register_error = str(exc)
+
+    entries = register.get("entries") if isinstance(register.get("entries"), list) else []
+    decision_evidence: list[dict[str, Any]] = []
+    for entry in entries:
+        if isinstance(entry, dict):
+            decision_evidence.extend(decision_evidence_validation(entry))
+    weak_evidence_statuses = {"missing", "invalid-json", "invalid-root"}
+    weak_decision_evidence_count = len(
+        [
+            item
+            for item in decision_evidence
+            if item.get("status") in weak_evidence_statuses or item.get("manifestShapeValid") is False
+        ]
+    )
+
+    next_actions: list[str] = []
+    if summary_report["manifestCount"] == 0:
+        next_actions.append("Run a no-input proof command first, such as signal-proof reticle --dry-run or target/session-plan gates.")
+    if invalid_manifest_count:
+        next_actions.append("Rerun or repair invalid proof manifests before recording promote/fallback decisions.")
+    if red_reticle_block_count:
+        next_actions.append("Review red-reticle blocked casts; recalibrate the fishable point before another confirmed click.")
+    if failed_gate_manifest_count:
+        next_actions.append("Fix failed proof review gates before treating the latest proof as ready.")
+    if weak_decision_evidence_count:
+        next_actions.append("Update decisions with existing, valid evidence manifests so review history is auditable.")
+    if not next_actions and summary_report["manifestCount"] > 0:
+        next_actions.append("Review latest summaries and record scoped signal-proof decide entries where evidence is strong enough.")
+
+    latest_by_signal = latest_summaries_by_signal(summaries)
+    return {
+        "schema": "autofish.signalProof.doctor.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "proofRoot": str(proof_path),
+        "decisionRegister": str(register_path),
+        "sendsGameInput": False,
+        "summary": {
+            "manifestCount": summary_report["manifestCount"],
+            "invalidManifestCount": invalid_manifest_count,
+            "erroredManifestCount": errored_manifest_count,
+            "failedGateManifestCount": failed_gate_manifest_count,
+            "redReticleBlockedClickCount": red_reticle_block_count,
+            "decisionCount": len(entries),
+            "weakDecisionEvidenceCount": weak_decision_evidence_count,
+            "decisionRegisterError": decision_register_error,
+        },
+        "bySignal": summary_report["bySignal"],
+        "latestBySignal": latest_by_signal,
+        "decisionLatestBySignal": register.get("latestBySignal") if isinstance(register.get("latestBySignal"), dict) else {},
+        "decisionEvidence": decision_evidence,
+        "nextActions": next_actions,
+        "notes": [
+            "Doctor is read-only and sends no game input.",
+            "This is an operator triage report, not a promotion decision.",
+        ],
+    }
+
+
+def render_signal_proof_doctor_markdown(report: dict[str, Any]) -> str:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    lines = [
+        "# AutoFish Signal Proof Doctor",
+        "",
+        f"Generated: {report.get('generatedAtUtc')}",
+        f"Proof root: `{report.get('proofRoot')}`",
+        f"Decision register: `{report.get('decisionRegister')}`",
+        f"Sends game input: `{str(report.get('sendsGameInput')).lower()}`",
+        "",
+        "## Health",
+        "",
+        f"- manifests: {summary.get('manifestCount', 0)}",
+        f"- invalid manifests: {summary.get('invalidManifestCount', 0)}",
+        f"- errored manifests: {summary.get('erroredManifestCount', 0)}",
+        f"- manifests with failed gates: {summary.get('failedGateManifestCount', 0)}",
+        f"- red-reticle blocked clicks: {summary.get('redReticleBlockedClickCount', 0)}",
+        f"- decisions: {summary.get('decisionCount', 0)}",
+        f"- weak decision evidence entries: {summary.get('weakDecisionEvidenceCount', 0)}",
+    ]
+    if summary.get("decisionRegisterError"):
+        lines.append(f"- decision register error: `{summary.get('decisionRegisterError')}`")
+
+    lines.extend(["", "## Latest proof by signal", "", "| Signal | Suggested review | Manifest |", "|---|---|---|"])
+    latest_by_signal = report.get("latestBySignal") if isinstance(report.get("latestBySignal"), dict) else {}
+    for signal, latest in sorted(latest_by_signal.items()):
+        if not isinstance(latest, dict):
+            continue
+        lines.append(f"| {signal} | {latest.get('suggestedReview')} | `{latest.get('manifestPath')}` |")
+    if not latest_by_signal:
+        lines.append("| - | - | - |")
+
+    lines.extend(["", "## Next actions", ""])
+    for index, action in enumerate(report.get("nextActions") or [], start=1):
+        lines.append(f"{index}. {action}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def run_signal_proof_doctor(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-doctor-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+    report = build_signal_proof_doctor_report(args.proof_root, args.decision_register)
+    json_path = output_root / "doctor.json"
+    markdown_path = output_root / "doctor.md"
+    json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    markdown_path.write_text(render_signal_proof_doctor_markdown(report), encoding="utf-8")
+    print(json.dumps({"ok": True, "outputRoot": str(output_root), "doctor": str(json_path), "markdown": str(markdown_path)}, indent=2))
+    return 0
 
 
 def run_signal_proof_decide(args: argparse.Namespace) -> int:
@@ -5947,6 +6097,12 @@ def build_parser() -> argparse.ArgumentParser:
     summarize.add_argument("--proof-root", default=".autofish-live", help="Directory or manifest.json to summarize; default: .autofish-live")
     summarize.add_argument("--output-root", help="Summary output folder; default: .autofish-live/signal-proof-summary-*.")
     summarize.set_defaults(func=run_signal_proof_summarize)
+
+    doctor = signal_sub.add_parser("doctor", help="Read-only proof-root and decision-register health report")
+    doctor.add_argument("--proof-root", default=".autofish-live", help="Proof root to inspect; default: .autofish-live")
+    doctor.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register to inspect; default: .autofish-live/signal-proof-decisions.json")
+    doctor.add_argument("--output-root", help="Doctor output folder; default: .autofish-live/signal-proof-doctor-*.")
+    doctor.set_defaults(func=run_signal_proof_doctor)
 
     decide = signal_sub.add_parser("decide", help="Record a reviewed promote/fallback/retire decision for a proof signal")
     decide.add_argument("--signal", choices=SIGNAL_NAMES, required=True, help="Signal being classified")

@@ -448,3 +448,13 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof summarize `
 ```
 
 This writes `summary.json` and `summary.md` with per-signal review buckets. The buckets are not final decisions; promotion still requires repeated live evidence and operator review.
+
+For a faster read-only health check of the current proof root and decision register, run:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof doctor `
+  --proof-root .autofish-live `
+  --decision-register .autofish-live\signal-proof-decisions.json
+```
+
+This writes `doctor.json` and `doctor.md` with invalid-manifest counts, failed review gates, red-reticle blocked-click counts, decision-evidence quality, latest proof by signal, and suggested next actions. It sends no game input.
