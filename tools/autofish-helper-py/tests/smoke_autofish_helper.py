@@ -486,6 +486,48 @@ def test_signal_proof_doctor_report(helper) -> None:
         assert Path(result["markdown"]).exists()
 
 
+def test_facing_delta_manifest_result_is_always_dict(helper) -> None:
+    manifest = {
+        "schema": "autofish.signalProof.facingDelta.v1",
+        "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+        "mode": "dry-run",
+        "request": {},
+        "safety": {"sendsMovement": False},
+        "result": helper.build_facing_delta_result(
+            "blocked-no-fresh-before-position",
+            reason="Fresh ChromaLink before-position is required.",
+            before_coordinate_ready=False,
+        ),
+        "decision": {"classification": "blocked-no-fresh-before-position"},
+    }
+    assert helper.validate_signal_proof_manifest_shape(manifest) == []
+    summary = helper.summarize_signal_proof_manifest(Path("manifest.json"), manifest)
+    assert summary["manifestShapeValid"]
+    assert summary["classification"] == "blocked-no-fresh-before-position"
+    assert summary["suggestedReview"] == "blocked-rerun-prerequisites"
+
+    with tempfile.TemporaryDirectory(prefix="autofish-helper-facing-delta-invalid-") as tmp:
+        output_root = Path(tmp) / "facing-delta"
+        args = helper.build_parser().parse_args(
+            [
+                "signal-proof",
+                "facing-delta",
+                "--pid",
+                "1234",
+                "--hwnd",
+                "0x1",
+                "--dry-run",
+                "--output-root",
+                str(output_root),
+            ]
+        )
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            assert helper.run_signal_proof_facing_delta(args) == 1
+        written = json.loads((output_root / "manifest.json").read_text(encoding="utf-8"))
+        assert isinstance(written["result"], dict)
+        assert helper.validate_signal_proof_manifest_shape(written) == []
+
+
 def test_target_snapshot_invalid_hwnd(helper) -> None:
     parser = helper.build_parser()
     args = parser.parse_args(
@@ -1139,6 +1181,7 @@ def main() -> int:
     test_red_reticle_guard_summary(helper)
     test_manifest_shape_validation_summary(helper)
     test_signal_proof_doctor_report(helper)
+    test_facing_delta_manifest_result_is_always_dict(helper)
     test_target_snapshot_invalid_hwnd(helper)
     test_stale_session_plan_refuses_plan_backed_proofs(helper)
     test_fishability_fan_suggested_commands(helper)

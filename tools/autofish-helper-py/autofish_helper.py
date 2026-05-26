@@ -4035,6 +4035,31 @@ def compute_facing_delta(before: dict[str, Any], after: dict[str, Any], *, min_d
     }
 
 
+def build_facing_delta_result(
+    classification: str,
+    *,
+    usable: bool = False,
+    reason: str | None = None,
+    before_coordinate_ready: bool | None = None,
+    after_coordinate_ready: bool | None = None,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "classification": classification,
+        "usable": usable,
+        "delta": {},
+        "operationalFacing": {
+            "isNativeActorFacing": False,
+        },
+    }
+    if reason:
+        result["reason"] = reason
+    if before_coordinate_ready is not None:
+        result["beforeCoordinateReady"] = before_coordinate_ready
+    if after_coordinate_ready is not None:
+        result["afterCoordinateReady"] = after_coordinate_ready
+    return result
+
+
 def parse_addon_coord_line(line: str) -> dict[str, Any]:
     values: dict[str, float] = {}
     for axis, value in ADDON_COORD_RE.findall(line or ""):
@@ -4336,7 +4361,10 @@ def run_signal_proof_facing_delta(args: argparse.Namespace) -> int:
         "before": None,
         "movement": None,
         "after": None,
-        "result": None,
+        "result": build_facing_delta_result(
+            "unproven",
+            reason="No coordinate delta has been computed yet.",
+        ),
         "decision": {
             "classification": "unproven",
             "notes": [
@@ -4377,6 +4405,11 @@ def run_signal_proof_facing_delta(args: argparse.Namespace) -> int:
         manifest["before"] = before
         if not before["coordinateReady"]:
             manifest["decision"]["classification"] = "blocked-no-fresh-before-position"
+            manifest["result"] = build_facing_delta_result(
+                manifest["decision"]["classification"],
+                reason="Fresh ChromaLink before-position is required.",
+                before_coordinate_ready=False,
+            )
             write_manifest(output_root, manifest)
             print(
                 json.dumps(
@@ -4400,6 +4433,11 @@ def run_signal_proof_facing_delta(args: argparse.Namespace) -> int:
                 "reason": "Dry run only; no movement input sent.",
             }
             manifest["decision"]["classification"] = "dry-run-ready-for-confirmed-movement"
+            manifest["result"] = build_facing_delta_result(
+                manifest["decision"]["classification"],
+                reason="Dry run only; before-position is fresh and no movement input was sent.",
+                before_coordinate_ready=True,
+            )
             write_manifest(output_root, manifest)
             print(
                 json.dumps(
@@ -4432,6 +4470,12 @@ def run_signal_proof_facing_delta(args: argparse.Namespace) -> int:
         manifest["after"] = after
         if not after["coordinateReady"]:
             manifest["decision"]["classification"] = "blocked-no-fresh-after-position"
+            manifest["result"] = build_facing_delta_result(
+                manifest["decision"]["classification"],
+                reason="Fresh ChromaLink after-position is required.",
+                before_coordinate_ready=True,
+                after_coordinate_ready=False,
+            )
             write_manifest(output_root, manifest)
             print(
                 json.dumps(
