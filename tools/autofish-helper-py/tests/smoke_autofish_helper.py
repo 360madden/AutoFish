@@ -200,6 +200,47 @@ def test_direct_live_command_stop_file_defaults(helper) -> None:
     assert bounded_session.max_plan_age_minutes == helper.DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES
 
 
+def test_red_reticle_click_guard(helper) -> None:
+    red_capture = {
+        "colorStats": {
+            "suggestedReticleColor": "red",
+            "legacySuggestedReticleColor": "red",
+            "suggestionReason": "red_orange_pixels_met_invalid_reticle_threshold",
+        }
+    }
+    blocked = helper.build_red_reticle_click_guard(
+        red_capture,
+        click_planned=True,
+        allow_red_reticle_click=False,
+    )
+    assert blocked["required"]
+    assert not blocked["passed"]
+    assert "refusing" in blocked["reason"]
+
+    overridden = helper.build_red_reticle_click_guard(
+        red_capture,
+        click_planned=True,
+        allow_red_reticle_click=True,
+    )
+    assert overridden["passed"]
+    assert overridden["overridden"]
+
+    skipped = helper.build_red_reticle_click_guard(
+        red_capture,
+        click_planned=False,
+        allow_red_reticle_click=False,
+    )
+    assert not skipped["required"]
+    assert skipped["passed"]
+
+    yellow = helper.build_red_reticle_click_guard(
+        {"colorStats": {"suggestedReticleColor": "yellow"}},
+        click_planned=True,
+        allow_red_reticle_click=False,
+    )
+    assert yellow["passed"]
+
+
 def test_target_snapshot_invalid_hwnd(helper) -> None:
     parser = helper.build_parser()
     args = parser.parse_args(
@@ -824,6 +865,7 @@ def main() -> int:
     test_session_plan_defaults(helper)
     test_runbook_render(helper, doc_validator)
     test_direct_live_command_stop_file_defaults(helper)
+    test_red_reticle_click_guard(helper)
     test_target_snapshot_invalid_hwnd(helper)
     test_stale_session_plan_refuses_plan_backed_proofs(helper)
     test_fishability_fan_suggested_commands(helper)

@@ -756,6 +756,48 @@ def choose_reticle_color(counts: dict[str, int]) -> tuple[str, str, bool]:
     return "unknown", "no_color_threshold_met", False
 
 
+def build_red_reticle_click_guard(
+    capture_info: dict[str, Any] | None,
+    *,
+    click_planned: bool,
+    allow_red_reticle_click: bool,
+) -> dict[str, Any]:
+    if not click_planned:
+        return {
+            "required": False,
+            "passed": True,
+            "reason": "Confirm click is skipped.",
+            "allowRedReticleClick": bool(allow_red_reticle_click),
+        }
+
+    stats = capture_info.get("colorStats") if isinstance(capture_info, dict) else {}
+    if not isinstance(stats, dict):
+        stats = {}
+    suggested = stats.get("suggestedReticleColor")
+    legacy = stats.get("legacySuggestedReticleColor")
+    gate = {
+        "required": True,
+        "passed": True,
+        "allowRedReticleClick": bool(allow_red_reticle_click),
+        "suggestedReticleColor": suggested,
+        "legacySuggestedReticleColor": legacy,
+        "suggestionReason": stats.get("suggestionReason"),
+        "manualReviewRequired": bool(stats.get("manualReviewRequired")),
+    }
+    if suggested == "red":
+        if allow_red_reticle_click:
+            gate["overridden"] = True
+            gate["reason"] = "Red reticle was detected, but --allow-red-reticle-click was supplied."
+        else:
+            gate["passed"] = False
+            gate["reason"] = "Red reticle was detected after the fishing key; refusing the confirm click."
+    elif suggested in ("yellow", "blueCyan", "green"):
+        gate["reason"] = f"Suggested reticle color is {suggested}; no red-reticle abort."
+    else:
+        gate["reason"] = "No red reticle was detected by the heuristic; continue with manual evidence review."
+    return gate
+
+
 def color_stats(width: int, height: int, bgra_top_down: bytes) -> dict[str, Any]:
     counts = {"red": 0, "yellow": 0, "blueCyan": 0, "green": 0, "bright": 0}
     center_counts = {"red": 0, "yellow": 0, "blueCyan": 0, "green": 0, "bright": 0}
@@ -2826,7 +2868,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
             raise RuntimeError("Target is minimized; restore/maximize Rift manually before live one-cast proof.")
         manifest["target"] = target
 
-        def capture(label: str, extra: dict[str, Any] | None = None) -> None:
+        def capture(label: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
             validate_current_target(require_foreground=args.confirm_input)
             path = output_root / f"{label}.bmp"
             capture_info = capture_client_crop(hwnd, args.pid, args.x, args.y, args.crop_size, path)
@@ -2836,6 +2878,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
                 capture_info.update(extra)
             manifest["captures"].append(capture_info)
             write_manifest(output_root, manifest)
+            return capture_info
 
         capture("baseline")
 
@@ -2876,11 +2919,24 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
             key_info = press_key_once(args.key, args.key_hold_ms)
             manifest["actions"].append({"name": "press-fishing-key", **key_info})
             time.sleep(args.post_key_delay_ms / 1000.0)
-            capture("after-key")
+            after_key_capture = capture("after-key")
+            manifest["reviewGates"]["redReticleClickGuard"] = build_red_reticle_click_guard(
+                after_key_capture,
+                click_planned=not args.skip_confirm_click,
+                allow_red_reticle_click=bool(args.allow_red_reticle_click),
+            )
 
             if args.skip_confirm_click:
                 manifest["actions"].append({"name": "skip-confirm-click", "reason": "--skip-confirm-click"})
             else:
+                if not manifest["reviewGates"]["redReticleClickGuard"].get("passed"):
+                    manifest["actions"].append(
+                        {
+                            "name": "abort-confirm-click",
+                            "reason": manifest["reviewGates"]["redReticleClickGuard"].get("reason"),
+                        }
+                    )
+                    raise RuntimeError(str(manifest["reviewGates"]["redReticleClickGuard"].get("reason")))
                 assert_stop_file_absent(args.stop_file)
                 screen_x, screen_y = current_screen_point(require_foreground=True)
                 move_cursor_to(screen_x, screen_y)
@@ -3052,7 +3108,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
             raise RuntimeError("Target is minimized; restore/maximize Rift manually before live bounded-session proof.")
         manifest["target"] = target
 
-        def capture(label: str, extra: dict[str, Any] | None = None) -> None:
+        def capture(label: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
             validate_current_target(require_foreground=args.confirm_input)
             path = output_root / f"{label}.bmp"
             capture_info = capture_client_crop(hwnd, args.pid, args.x, args.y, args.crop_size, path)
@@ -3062,6 +3118,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                 capture_info.update(extra)
             manifest["captures"].append(capture_info)
             write_manifest(output_root, manifest)
+            return capture_info
 
         capture("baseline")
 
@@ -3107,12 +3164,29 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                 key_info = press_key_once(args.key, args.key_hold_ms)
                 cast["actions"].append({"name": "press-fishing-key", **key_info})
                 time.sleep(args.post_key_delay_ms / 1000.0)
-                if args.capture_each_cast:
-                    capture(f"cast-{cast_number:03d}-after-key", {"castNumber": cast_number})
+                after_key_capture = capture(
+                    f"cast-{cast_number:03d}-after-key",
+                    {"castNumber": cast_number, "requiredForRedReticleGuard": True},
+                )
+                cast["redReticleClickGuard"] = build_red_reticle_click_guard(
+                    after_key_capture,
+                    click_planned=not args.skip_confirm_click,
+                    allow_red_reticle_click=bool(args.allow_red_reticle_click),
+                )
+                manifest["reviewGates"]["redReticleClickGuard"] = cast["redReticleClickGuard"]
 
                 if args.skip_confirm_click:
                     cast["actions"].append({"name": "skip-confirm-click", "reason": "--skip-confirm-click"})
                 else:
+                    if not cast["redReticleClickGuard"].get("passed"):
+                        cast["actions"].append(
+                            {
+                                "name": "abort-confirm-click",
+                                "reason": cast["redReticleClickGuard"].get("reason"),
+                            }
+                        )
+                        manifest["reviewGates"]["redReticleClickGuard"] = cast["redReticleClickGuard"]
+                        raise RuntimeError(str(cast["redReticleClickGuard"].get("reason")))
                     assert_stop_file_absent(args.stop_file)
                     screen_x, screen_y = current_screen_point(require_foreground=True)
                     move_cursor_to(screen_x, screen_y)
@@ -5408,6 +5482,7 @@ def build_parser() -> argparse.ArgumentParser:
     one_cast_mode.add_argument("--confirm-input", action="store_true", help="Allow one bounded cast attempt at the calibrated point")
     one_cast.add_argument("--allow-reload-key", action="store_true", help="Allow '-' key despite local reloadui binding")
     one_cast.add_argument("--skip-confirm-click", action="store_true", help="Press the fishing key but do not left-click the cast point")
+    one_cast.add_argument("--allow-red-reticle-click", action="store_true", help="Allow confirm click even when the after-key crop heuristically detects a red reticle")
     one_cast.add_argument("--pull-clicks", type=int, help="Number of pull/loot clicks after the wait; default: 1")
     one_cast.add_argument("--cast-wait-seconds", type=float, help="Wait after cast before pull/loot clicks; default: profile biteTimeoutMs or 18")
     one_cast.add_argument("--crop-size", type=int, help="Square crop size around client point; default: 220")
@@ -5445,6 +5520,7 @@ def build_parser() -> argparse.ArgumentParser:
     bounded_session_mode.add_argument("--confirm-input", action="store_true", help="Allow a supervised bounded session")
     bounded_session.add_argument("--allow-reload-key", action="store_true", help="Allow '-' key despite local reloadui binding")
     bounded_session.add_argument("--skip-confirm-click", action="store_true", help="Press the fishing key but do not left-click the cast point")
+    bounded_session.add_argument("--allow-red-reticle-click", action="store_true", help="Allow confirm clicks even when an after-key crop heuristically detects a red reticle")
     bounded_session.add_argument("--max-casts", type=int, help="Number of cast attempts in this bounded session; default: 3")
     bounded_session.add_argument("--max-allowed-casts", type=int, help="Safety cap for --max-casts; default: 10")
     bounded_session.add_argument("--pull-clicks", type=int, help="Number of pull/loot clicks after each wait; default: 1")

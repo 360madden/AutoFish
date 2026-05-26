@@ -51,8 +51,10 @@ try {
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'confirmed-bounded-session' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast --help | Select-String -Pattern 'max-plan-age-minutes' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast --help | Select-String -Pattern 'allow-red-reticle-click' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Select-String -Pattern 'max-plan-age-minutes' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Select-String -Pattern 'allow-red-reticle-click' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan-runbook --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof decide --help | Out-Null

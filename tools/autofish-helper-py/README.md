@@ -152,7 +152,7 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
   --confirm-input
 ```
 
-The command performs at most one cast attempt. Confirmed mode can move the cursor, press the fishing key once, left-click the calibrated cast point, wait, and perform the configured bounded pull/loot clicks. It sends no movement and no loop. The default stop file is `.autofish-live\STOP.txt`; if that file or an explicit `--stop-file <path>` exists before or during the wait, the command aborts before the next action. Live-input mode refuses minimized Rift windows so it does not restore the client to a tiny saved size.
+The command performs at most one cast attempt. Confirmed mode can move the cursor, press the fishing key once, left-click the calibrated cast point, wait, and perform the configured bounded pull/loot clicks. It sends no movement and no loop. The default stop file is `.autofish-live\STOP.txt`; if that file or an explicit `--stop-file <path>` exists before or during the wait, the command aborts before the next action. Live-input mode refuses minimized Rift windows so it does not restore the client to a tiny saved size. After the fishing key, the helper captures the reticle crop before the confirm click and refuses to click if the heuristic reports an obvious red reticle. Use `--allow-red-reticle-click` only for an explicitly supervised diagnostic override.
 
 When `--profile <id-or-json-path>` is supplied, the helper records the profile in the manifest and uses profile pacing defaults unless the CLI overrides them:
 
@@ -183,7 +183,7 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session 
   --confirm-input
 ```
 
-Confirmed mode refuses minimized Rift windows, sends no movement, and stops before the next action if `.autofish-live\STOP.txt` or an explicit `--stop-file <path>` exists. Use `--capture-each-cast` when visual proof for each phase is more important than minimizing captures.
+Confirmed mode refuses minimized Rift windows, sends no movement, checks the after-key reticle crop before each confirm click, and stops before the next action if `.autofish-live\STOP.txt` or an explicit `--stop-file <path>` exists. Use `--capture-each-cast` when visual proof for each phase is more important than minimizing captures. Obvious red reticles abort before clicking unless `--allow-red-reticle-click` is supplied intentionally.
 
 Confirmed bounded sessions also require a reviewed `oneCast` decision in `.autofish-live\signal-proof-decisions.json`:
 
