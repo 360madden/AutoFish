@@ -519,41 +519,103 @@ def write_bmp_24(path: Path, width: int, height: int, bgra_top_down: bytes) -> N
             f.write(padding)
 
 
+def classify_reticle_pixel(r: int, g: int, b: int) -> tuple[str, ...]:
+    matches: list[str] = []
+    if r >= 150 and g <= 115 and b <= 115 and r >= g + 35 and r >= b + 35:
+        matches.append("red")
+    if r >= 150 and g >= 135 and b <= 130 and abs(r - g) <= 90:
+        matches.append("yellow")
+    if b >= 135 and g >= 90 and r <= 135 and b >= r + 25:
+        matches.append("blueCyan")
+    if g >= 135 and r <= 140 and b <= 150 and g >= r + 25:
+        matches.append("green")
+    return tuple(matches)
+
+
+def choose_reticle_color(counts: dict[str, int]) -> tuple[str, str, bool]:
+    red = counts.get("red", 0)
+    yellow = counts.get("yellow", 0)
+    blue_cyan = counts.get("blueCyan", 0)
+    green = counts.get("green", 0)
+
+    # Invalid Rift reticles are red/orange and may also satisfy the broad
+    # yellow threshold. Prefer red when both channels are strong enough.
+    if red >= 500 and red >= int(yellow * 0.45):
+        return "red", "red_orange_pixels_met_invalid_reticle_threshold", False
+    if yellow >= 500:
+        return "yellow", "yellow_pixels_met_valid_reticle_threshold", False
+    if green >= 500:
+        return "green", "green_pixels_met_reticle_threshold", False
+
+    # Water/highlight backgrounds can dominate blue/cyan counts. Only suggest
+    # blue/cyan when the evidence is strong and not mixed with red/yellow/green.
+    if blue_cyan >= 500 and red < 100 and yellow < 100 and green < 100:
+        return "blueCyan", "strong_isolated_blue_cyan_pixels", True
+
+    legacy_candidates = {"red": red, "yellow": yellow, "blueCyan": blue_cyan, "green": green}
+    legacy = max(legacy_candidates, key=legacy_candidates.get)
+    if legacy == "blueCyan" and blue_cyan >= 20:
+        return "unknown", "blue_cyan_requires_manual_review_due_to_water_background_risk", True
+    if legacy_candidates[legacy] >= 20:
+        return "unknown", f"{legacy}_pixels_below_reticle_threshold", False
+    return "unknown", "no_color_threshold_met", False
+
+
 def color_stats(width: int, height: int, bgra_top_down: bytes) -> dict[str, Any]:
     counts = {"red": 0, "yellow": 0, "blueCyan": 0, "green": 0, "bright": 0}
+    center_counts = {"red": 0, "yellow": 0, "blueCyan": 0, "green": 0, "bright": 0}
     total_r = total_g = total_b = 0
-    for i in range(0, width * height * 4, 4):
+    center_left = max(0, int(width * 0.25))
+    center_right = min(width, int(width * 0.75))
+    center_top = max(0, int(height * 0.25))
+    center_bottom = min(height, int(height * 0.75))
+    for pixel_index in range(width * height):
+        i = pixel_index * 4
         b = bgra_top_down[i]
         g = bgra_top_down[i + 1]
         r = bgra_top_down[i + 2]
+        x = pixel_index % width
+        y = pixel_index // width
+        in_center = center_left <= x < center_right and center_top <= y < center_bottom
         total_r += r
         total_g += g
         total_b += b
         if max(r, g, b) >= 130:
             counts["bright"] += 1
-        if r >= 150 and g <= 115 and b <= 115 and r >= g + 35 and r >= b + 35:
-            counts["red"] += 1
-        if r >= 150 and g >= 135 and b <= 130 and abs(r - g) <= 90:
-            counts["yellow"] += 1
-        if b >= 135 and g >= 90 and r <= 135 and b >= r + 25:
-            counts["blueCyan"] += 1
-        if g >= 135 and r <= 140 and b <= 150 and g >= r + 25:
-            counts["green"] += 1
+            if in_center:
+                center_counts["bright"] += 1
+        for color in classify_reticle_pixel(r, g, b):
+            counts[color] += 1
+            if in_center:
+                center_counts[color] += 1
 
-    color_candidates = {k: counts[k] for k in ("red", "yellow", "blueCyan", "green")}
-    suggested = max(color_candidates, key=color_candidates.get)
-    if color_candidates[suggested] < 20:
-        suggested = "unknown"
+    legacy_candidates = {k: counts[k] for k in ("red", "yellow", "blueCyan", "green")}
+    legacy_suggested = max(legacy_candidates, key=legacy_candidates.get)
+    if legacy_candidates[legacy_suggested] < 20:
+        legacy_suggested = "unknown"
+    suggested, suggestion_reason, review_required = choose_reticle_color(counts)
     pixels = width * height
     return {
         "pixels": pixels,
+        "centerRect": {
+            "left": center_left,
+            "top": center_top,
+            "right": center_right,
+            "bottom": center_bottom,
+            "width": center_right - center_left,
+            "height": center_bottom - center_top,
+        },
         "averageRgb": {
             "r": round(total_r / pixels, 2),
             "g": round(total_g / pixels, 2),
             "b": round(total_b / pixels, 2),
         },
         "counts": counts,
+        "centerCounts": center_counts,
         "suggestedReticleColor": suggested,
+        "legacySuggestedReticleColor": legacy_suggested,
+        "suggestionReason": suggestion_reason,
+        "manualReviewRequired": review_required,
     }
 
 
@@ -1384,6 +1446,8 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
     if summary.get("hasError"):
         return "rerun"
     if signal == "reticle":
+        if summary.get("manualReviewRequiredCount", 0) > 0:
+            return "manual-review-required"
         if summary.get("watchCaptureCount", 0) > 0 and summary.get("cursorHandleCount", 0) > 1:
             return "fallback-candidate-review"
         if summary.get("nonUnknownColorCount", 0) > 0:
@@ -1431,22 +1495,30 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
     if signal == "reticle":
         captures = manifest.get("captures") if isinstance(manifest.get("captures"), list) else []
         colors: list[str] = []
+        legacy_colors: list[str] = []
+        suggestion_reasons: list[str] = []
         cursor_handles: list[str] = []
         watch_count = 0
+        manual_review_count = 0
         for capture in captures:
             if not isinstance(capture, dict):
                 continue
             label = str(capture.get("label") or "")
             if label.startswith("watch-"):
                 watch_count += 1
-            color = (
-                capture.get("colorStats", {})
-                .get("suggestedReticleColor")
-                if isinstance(capture.get("colorStats"), dict)
-                else None
-            )
+            is_reticle_phase = label in ("after-key", "after-click") or label.startswith("watch-")
+            stats = capture.get("colorStats") if isinstance(capture.get("colorStats"), dict) else {}
+            color = stats.get("suggestedReticleColor")
             if color:
                 colors.append(str(color))
+            legacy_color = stats.get("legacySuggestedReticleColor")
+            if legacy_color:
+                legacy_colors.append(str(legacy_color))
+            reason = stats.get("suggestionReason")
+            if reason:
+                suggestion_reasons.append(str(reason))
+            if is_reticle_phase and stats.get("manualReviewRequired"):
+                manual_review_count += 1
             cursor = capture.get("cursor") if isinstance(capture.get("cursor"), dict) else {}
             handle = cursor.get("cursorHandle")
             if handle:
@@ -1456,7 +1528,10 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "captureCount": len(captures),
                 "watchCaptureCount": watch_count,
                 "suggestedColors": sorted(set(colors)),
+                "legacySuggestedColors": sorted(set(legacy_colors)),
+                "suggestionReasons": sorted(set(suggestion_reasons)),
                 "nonUnknownColorCount": len([color for color in colors if color != "unknown"]),
+                "manualReviewRequiredCount": manual_review_count,
                 "cursorHandles": sorted(set(cursor_handles)),
                 "cursorHandleCount": len(set(cursor_handles)),
                 "actionNames": [action.get("name") for action in manifest.get("actions", []) if isinstance(action, dict)],
@@ -1547,6 +1622,14 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
         if summary["signal"] == "reticle":
             lines.append(f"- captures: {summary.get('captureCount', 0)}; watch captures: {summary.get('watchCaptureCount', 0)}")
             lines.append(f"- colors: {', '.join(summary.get('suggestedColors', [])) or '-'}")
+            legacy = summary.get("legacySuggestedColors", [])
+            if legacy:
+                lines.append(f"- legacy colors: {', '.join(legacy)}")
+            if summary.get("manualReviewRequiredCount", 0):
+                lines.append(f"- manual review required captures: {summary.get('manualReviewRequiredCount', 0)}")
+            reasons = summary.get("suggestionReasons", [])
+            if reasons:
+                lines.append(f"- color reasons: {', '.join(reasons)}")
             lines.append(f"- cursor handles: {summary.get('cursorHandleCount', 0)}")
         elif summary["signal"] == "log":
             lines.append(f"- appended chars: {summary.get('appendedCharacterCount', 0)}")

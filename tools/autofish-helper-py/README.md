@@ -60,7 +60,10 @@ The manifest records:
 - OS cursor handle/position per capture,
 - cursor-centered BMP crops,
 - rough red/yellow/blue-cyan/green color counts,
+- tightened color suggestions plus legacy suggestion/review flags,
 - the exact bounded actions sent.
+
+Color suggestions are conservative. Red/orange invalid reticles can include yellow pixels, and water/highlight backgrounds can inflate blue/cyan counts. The manifest keeps `legacySuggestedReticleColor`, `suggestionReason`, and `manualReviewRequired` so suspected blue/cyan/background cases are reviewed visually instead of silently promoted.
 
 No live command should send input without an explicit target PID/HWND and either `--dry-run` or `--confirm-input`. The helper refuses to send `-` by default because this local setup binds it to `reloadui`.
 

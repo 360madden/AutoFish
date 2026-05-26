@@ -155,6 +155,10 @@ Evidence:
 - `.autofish-live/reticle-color-sweep-near-water-edge-left-latest/manifest.json`
 - `.autofish-live/reticle-color-sweep-contact-sheet-latest/reticle-color-sweep-contact-sheet-8.jpg`
 - `.autofish-live/signal-proof-summary-after-color-sweep-latest/summary.md`
+- `.autofish-live/reticle-analyzer-validation-yellow-latest/manifest.json`
+- `.autofish-live/reticle-analyzer-validation-far-center-review-latest/manifest.json`
+- `.autofish-live/reticle-analyzer-validation-far-left-red-latest/manifest.json`
+- `.autofish-live/signal-proof-summary-after-color-analyzer2-latest/summary.md`
 
 Result:
 
@@ -183,6 +187,8 @@ Large-window follow-up:
 - A follow-up addon-side trace patch records `Inspect.Cursor`, `Inspect.Tooltip`, and `Inspect.Interaction` values in bounded `/autofish trace` samples. A live trace over a skip-click key-`8` reticle proof recorded `samples=13` with `cursor_non_nil=0`, `tooltip_non_nil=0`, and `interaction_active=0`.
 - A large-window color sweep then sampled eight client points with `--skip-click --cancel-after-key` and no left click. Clean water points produced visually yellow reticles; shore/land/too-far points produced visually red reticles. Within this run, yellow samples used OS cursor handle `0x3BF07A0`, while red/invalid samples used `0x39D40FA9`.
 - No true blue/cyan reticle was proven in this sweep. Some manifests suggested `blueCyan`, but manual review showed the heuristic was dominated by water/highlight background pixels rather than a blue/cyan targeting reticle.
+- The helper color analyzer was tightened after that finding. New manifests include `legacySuggestedReticleColor`, `suggestionReason`, and `manualReviewRequired`. Validation samples now classify a known yellow point as `yellow`, a red/orange invalid far-left point as `red` even when legacy counts say `blueCyan`, and a background-contaminated far-center sample as `unknown` with manual review required.
+- The proof summarizer now reports legacy colors, color reasons, and manual-review-required captures. Manual-review counts are scoped to reticle-phase captures (`after-key`, `after-click`, and watch frames) so baseline or after-cancel background frames do not wrongly force a proof run into manual review.
 
 Reviewed status:
 
@@ -191,7 +197,7 @@ Reviewed status:
 - The visible `Deep Water` tooltip is useful visual evidence, but the current native `Inspect.Tooltip` and `Inspect.Interaction` probes did not expose that tooltip/hover state to the addon during this run.
 - Native API hover detection is **not promoted**: the current local client exposed no useful cursor, tooltip, or interaction values while the visual yellow reticle was active.
 - Pixel/reticle color classification is now `fallback-only` for helper-side calibration/proof because yellow valid-water and red invalid/too-far states are visually repeatable, but promotion still requires repeated casts and clean separation of valid reticle, invalid reticle, cast-start, bite-ready, and post-loot states.
-- Treat `blueCyan` color stats as manual-review-only until the color analyzer is tightened; current evidence shows water/background contamination can produce false blue/cyan suggestions.
+- Treat `blueCyan` color stats as manual-review-only; current evidence shows water/background contamination can produce false blue/cyan suggestions, and the helper now flags those cases instead of silently suggesting blue/cyan.
 - Reticle/cursor should remain a fallback candidate until repeated clean crops distinguish valid reticle, cast-start, bite-ready, and invalid states.
 
 ## `/log` proof
