@@ -774,6 +774,80 @@ def write_manifest(output_root: Path, manifest: dict[str, Any]) -> None:
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
 
+def load_json_object(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Invalid JSON in {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise RuntimeError(f"Expected a JSON object in {path}.")
+    return value
+
+
+def resolve_profile_path(profile: str, profile_root: str | None) -> Path:
+    candidate = Path(profile)
+    if candidate.exists() or candidate.suffix.lower() == ".json" or any(separator in profile for separator in ("\\", "/")):
+        return candidate
+
+    root = Path(profile_root) if profile_root else Path("profiles")
+    return root / f"{profile}.json"
+
+
+def load_fishing_profile(profile: str | None, profile_root: str | None) -> dict[str, Any] | None:
+    if not profile:
+        return None
+
+    path = resolve_profile_path(profile, profile_root)
+    if not path.exists():
+        raise RuntimeError(f"Fishing profile not found: {path}")
+
+    data = load_json_object(path)
+    pacing = data.get("pacing")
+    if not isinstance(pacing, dict):
+        raise RuntimeError(f"Fishing profile {path} does not define pacing.")
+
+    return {
+        "path": str(path),
+        "id": data.get("id"),
+        "displayName": data.get("displayName"),
+        "zoneName": data.get("zoneName"),
+        "baitName": data.get("baitName"),
+        "pacing": pacing,
+        "thresholds": data.get("thresholds") if isinstance(data.get("thresholds"), dict) else {},
+        "guardrails": data.get("guardrails") if isinstance(data.get("guardrails"), dict) else {},
+    }
+
+
+def apply_fishing_runtime_defaults(args: argparse.Namespace, *, include_session_defaults: bool) -> dict[str, Any]:
+    profile_info = load_fishing_profile(getattr(args, "profile", None), getattr(args, "profile_root", None))
+    pacing = profile_info.get("pacing") if isinstance(profile_info, dict) else {}
+    applied: dict[str, Any] = {}
+
+    def apply_default(name: str, value: Any) -> None:
+        if getattr(args, name) is None:
+            setattr(args, name, value)
+            applied[name] = value
+
+    apply_default("key", "8")
+    apply_default("pull_clicks", 1)
+    apply_default("cast_wait_seconds", float(pacing.get("biteTimeoutMs", 18000)) / 1000.0)
+    apply_default("post_pull_delay_ms", int(pacing.get("lootTimeoutMs", 1200)))
+    apply_default("crop_size", 220)
+    apply_default("key_hold_ms", 80)
+    apply_default("post_hover_delay_ms", 150)
+    apply_default("post_key_delay_ms", 350)
+    apply_default("post_click_delay_ms", 800)
+    if include_session_defaults:
+        apply_default("max_casts", 3)
+        apply_default("max_allowed_casts", 10)
+        apply_default("inter_cast_delay_ms", 800)
+
+    return {
+        "profile": profile_info,
+        "appliedDefaults": applied,
+    }
+
+
 def read_text_from_offset(path: Path, offset: int, max_bytes: int) -> tuple[str, int, bool]:
     current_size = path.stat().st_size
     start = offset if offset <= current_size else 0
@@ -1090,6 +1164,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
     hwnd = parse_hwnd(args.hwnd)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-one-cast-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
+    runtime_defaults = apply_fishing_runtime_defaults(args, include_session_defaults=False)
 
     if args.key == "-" and args.confirm_input and not args.allow_reload_key:
         raise RuntimeError("Refusing to send '-' because it triggers reloadui on this setup. Use --allow-reload-key only intentionally.")
@@ -1132,6 +1207,8 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
             "dryRun": bool(args.dry_run),
             "confirmInput": bool(args.confirm_input),
         },
+        "profile": runtime_defaults["profile"],
+        "appliedDefaults": runtime_defaults["appliedDefaults"],
         "target": None,
         "captures": [],
         "actions": [],
@@ -1258,6 +1335,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
     hwnd = parse_hwnd(args.hwnd)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-bounded-session-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
+    runtime_defaults = apply_fishing_runtime_defaults(args, include_session_defaults=True)
 
     if args.key == "-" and args.confirm_input and not args.allow_reload_key:
         raise RuntimeError("Refusing to send '-' because it triggers reloadui on this setup. Use --allow-reload-key only intentionally.")
@@ -1312,6 +1390,8 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
             "dryRun": bool(args.dry_run),
             "confirmInput": bool(args.confirm_input),
         },
+        "profile": runtime_defaults["profile"],
+        "appliedDefaults": runtime_defaults["appliedDefaults"],
         "target": None,
         "captures": [],
         "casts": [],
@@ -2897,6 +2977,7 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
         request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
         result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
         safety = manifest.get("safety") if isinstance(manifest.get("safety"), dict) else {}
+        profile = manifest.get("profile") if isinstance(manifest.get("profile"), dict) else None
         summary.update(
             {
                 "classification": result.get("classification"),
@@ -2917,6 +2998,8 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "clickCount": safety.get("clickCount"),
                 "pullClicks": request.get("pullClicks"),
                 "castWaitSeconds": request.get("castWaitSeconds"),
+                "profileId": profile.get("id") if profile else None,
+                "profilePath": profile.get("path") if profile else None,
                 "target": manifest.get("target"),
             }
         )
@@ -2926,6 +3009,7 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
         request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
         result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
         safety = manifest.get("safety") if isinstance(manifest.get("safety"), dict) else {}
+        profile = manifest.get("profile") if isinstance(manifest.get("profile"), dict) else None
         completed_casts = [
             cast
             for cast in casts
@@ -2957,6 +3041,8 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "maxClickCount": safety.get("maxClickCount"),
                 "pullClicks": request.get("pullClicks"),
                 "castWaitSeconds": request.get("castWaitSeconds"),
+                "profileId": profile.get("id") if profile else None,
+                "profilePath": profile.get("path") if profile else None,
                 "target": manifest.get("target"),
             }
         )
@@ -3137,6 +3223,8 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- actions: {summary.get('actionCount', 0)} ({', '.join(str(name) for name in summary.get('actionNames', [])) or '-'})")
             lines.append(f"- captures: {summary.get('captureCount', 0)} ({', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'})")
             lines.append(f"- click count: {summary.get('clickCount')}; pull clicks: {summary.get('pullClicks')}; wait seconds: {summary.get('castWaitSeconds')}")
+            if summary.get("profileId"):
+                lines.append(f"- profile: {summary.get('profileId')} (`{summary.get('profilePath')}`)")
         elif summary["signal"] == "boundedSession":
             lines.append(f"- classification: {summary.get('classification')}")
             lines.append(f"- completed: {summary.get('completed')}; live input sent: {summary.get('liveInputSent')}")
@@ -3144,6 +3232,8 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- actions: {summary.get('actionCount', 0)} ({', '.join(str(name) for name in summary.get('actionNames', [])) or '-'})")
             lines.append(f"- captures: {summary.get('captureCount', 0)} ({', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'})")
             lines.append(f"- max clicks: {summary.get('maxClickCount')}; pull clicks: {summary.get('pullClicks')}; wait seconds: {summary.get('castWaitSeconds')}")
+            if summary.get("profileId"):
+                lines.append(f"- profile: {summary.get('profileId')} (`{summary.get('profilePath')}`)")
         elif summary["signal"] == "fishabilityFan":
             lines.append(f"- candidates: {summary.get('candidateCount', 0)}; in bounds: {summary.get('inBoundsCandidateCount', 0)}")
             lines.append(f"- captures: {summary.get('captureCount', 0)}")
@@ -3328,20 +3418,22 @@ def build_parser() -> argparse.ArgumentParser:
     one_cast.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
     one_cast.add_argument("--x", type=int, required=True, help="Client X coordinate of calibrated fishable point")
     one_cast.add_argument("--y", type=int, required=True, help="Client Y coordinate of calibrated fishable point")
-    one_cast.add_argument("--key", default="8", help="Fishing key to press during --confirm-input; default: 8")
+    one_cast.add_argument("--profile", help="Fishing profile id or JSON path used for pacing defaults")
+    one_cast.add_argument("--profile-root", default="profiles", help="Profile folder for profile ids; default: profiles")
+    one_cast.add_argument("--key", help="Fishing key to press during --confirm-input; default: 8")
     one_cast_mode = one_cast.add_mutually_exclusive_group(required=True)
     one_cast_mode.add_argument("--dry-run", action="store_true", help="Validate and capture baseline only; send no input")
     one_cast_mode.add_argument("--confirm-input", action="store_true", help="Allow one bounded cast attempt at the calibrated point")
     one_cast.add_argument("--allow-reload-key", action="store_true", help="Allow '-' key despite local reloadui binding")
     one_cast.add_argument("--skip-confirm-click", action="store_true", help="Press the fishing key but do not left-click the cast point")
-    one_cast.add_argument("--pull-clicks", type=int, default=1, help="Number of pull/loot clicks after the wait; default: 1")
-    one_cast.add_argument("--cast-wait-seconds", type=float, default=18.0, help="Wait after cast before pull/loot clicks; default: 18")
-    one_cast.add_argument("--crop-size", type=int, default=220, help="Square crop size around client point; default: 220")
-    one_cast.add_argument("--key-hold-ms", type=int, default=80, help="Key hold duration; default: 80")
-    one_cast.add_argument("--post-hover-delay-ms", type=int, default=150, help="Delay after cursor move before capture")
-    one_cast.add_argument("--post-key-delay-ms", type=int, default=350, help="Delay after keypress before capture")
-    one_cast.add_argument("--post-click-delay-ms", type=int, default=800, help="Delay after confirm click before capture")
-    one_cast.add_argument("--post-pull-delay-ms", type=int, default=1200, help="Delay after each pull/loot click before capture")
+    one_cast.add_argument("--pull-clicks", type=int, help="Number of pull/loot clicks after the wait; default: 1")
+    one_cast.add_argument("--cast-wait-seconds", type=float, help="Wait after cast before pull/loot clicks; default: profile biteTimeoutMs or 18")
+    one_cast.add_argument("--crop-size", type=int, help="Square crop size around client point; default: 220")
+    one_cast.add_argument("--key-hold-ms", type=int, help="Key hold duration; default: 80")
+    one_cast.add_argument("--post-hover-delay-ms", type=int, help="Delay after cursor move before capture; default: 150")
+    one_cast.add_argument("--post-key-delay-ms", type=int, help="Delay after keypress before capture; default: 350")
+    one_cast.add_argument("--post-click-delay-ms", type=int, help="Delay after confirm click before capture; default: 800")
+    one_cast.add_argument("--post-pull-delay-ms", type=int, help="Delay after each pull/loot click before capture; default: profile lootTimeoutMs or 1200")
     one_cast.add_argument("--stop-file", help="If this file exists before/during the run, abort before the next action")
     one_cast.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-one-cast-*.")
     one_cast.set_defaults(func=run_signal_proof_one_cast)
@@ -3351,23 +3443,25 @@ def build_parser() -> argparse.ArgumentParser:
     bounded_session.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
     bounded_session.add_argument("--x", type=int, required=True, help="Client X coordinate of calibrated fishable point")
     bounded_session.add_argument("--y", type=int, required=True, help="Client Y coordinate of calibrated fishable point")
-    bounded_session.add_argument("--key", default="8", help="Fishing key to press during --confirm-input; default: 8")
+    bounded_session.add_argument("--profile", help="Fishing profile id or JSON path used for pacing defaults")
+    bounded_session.add_argument("--profile-root", default="profiles", help="Profile folder for profile ids; default: profiles")
+    bounded_session.add_argument("--key", help="Fishing key to press during --confirm-input; default: 8")
     bounded_session_mode = bounded_session.add_mutually_exclusive_group(required=True)
     bounded_session_mode.add_argument("--dry-run", action="store_true", help="Validate and capture baseline only; send no input")
     bounded_session_mode.add_argument("--confirm-input", action="store_true", help="Allow a supervised bounded session")
     bounded_session.add_argument("--allow-reload-key", action="store_true", help="Allow '-' key despite local reloadui binding")
     bounded_session.add_argument("--skip-confirm-click", action="store_true", help="Press the fishing key but do not left-click the cast point")
-    bounded_session.add_argument("--max-casts", type=int, default=3, help="Number of cast attempts in this bounded session; default: 3")
-    bounded_session.add_argument("--max-allowed-casts", type=int, default=10, help="Safety cap for --max-casts; default: 10")
-    bounded_session.add_argument("--pull-clicks", type=int, default=1, help="Number of pull/loot clicks after each wait; default: 1")
-    bounded_session.add_argument("--cast-wait-seconds", type=float, default=18.0, help="Wait after each cast before pull/loot clicks; default: 18")
-    bounded_session.add_argument("--crop-size", type=int, default=220, help="Square crop size around client point; default: 220")
-    bounded_session.add_argument("--key-hold-ms", type=int, default=80, help="Key hold duration; default: 80")
-    bounded_session.add_argument("--post-hover-delay-ms", type=int, default=150, help="Delay after cursor move before optional capture")
-    bounded_session.add_argument("--post-key-delay-ms", type=int, default=350, help="Delay after keypress before optional capture")
-    bounded_session.add_argument("--post-click-delay-ms", type=int, default=800, help="Delay after confirm click before optional capture")
-    bounded_session.add_argument("--post-pull-delay-ms", type=int, default=1200, help="Delay after each pull/loot click before completion capture")
-    bounded_session.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Delay between cast attempts; default: 800")
+    bounded_session.add_argument("--max-casts", type=int, help="Number of cast attempts in this bounded session; default: 3")
+    bounded_session.add_argument("--max-allowed-casts", type=int, help="Safety cap for --max-casts; default: 10")
+    bounded_session.add_argument("--pull-clicks", type=int, help="Number of pull/loot clicks after each wait; default: 1")
+    bounded_session.add_argument("--cast-wait-seconds", type=float, help="Wait after each cast before pull/loot clicks; default: profile biteTimeoutMs or 18")
+    bounded_session.add_argument("--crop-size", type=int, help="Square crop size around client point; default: 220")
+    bounded_session.add_argument("--key-hold-ms", type=int, help="Key hold duration; default: 80")
+    bounded_session.add_argument("--post-hover-delay-ms", type=int, help="Delay after cursor move before optional capture; default: 150")
+    bounded_session.add_argument("--post-key-delay-ms", type=int, help="Delay after keypress before optional capture; default: 350")
+    bounded_session.add_argument("--post-click-delay-ms", type=int, help="Delay after confirm click before optional capture; default: 800")
+    bounded_session.add_argument("--post-pull-delay-ms", type=int, help="Delay after each pull/loot click before completion capture; default: profile lootTimeoutMs or 1200")
+    bounded_session.add_argument("--inter-cast-delay-ms", type=int, help="Delay between cast attempts; default: 800")
     bounded_session.add_argument("--capture-each-cast", action="store_true", help="Capture after hover/key/confirm in addition to each cast completion")
     bounded_session.add_argument("--stop-file", help="If this file exists before/during the run, abort before the next action")
     bounded_session.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-bounded-session-*.")

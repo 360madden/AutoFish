@@ -79,6 +79,7 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
   --hwnd <CURRENT_RIFT_HWND> `
   --x <FISHABLE_CLIENT_X> `
   --y <FISHABLE_CLIENT_Y> `
+  --profile starter-pond `
   --key 8 `
   --dry-run
 ```
@@ -91,6 +92,7 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
   --hwnd <CURRENT_RIFT_HWND> `
   --x <FISHABLE_CLIENT_X> `
   --y <FISHABLE_CLIENT_Y> `
+  --profile starter-pond `
   --key 8 `
   --cast-wait-seconds 18 `
   --pull-clicks 1 `
@@ -98,6 +100,11 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
 ```
 
 The command performs at most one cast attempt. Confirmed mode can move the cursor, press the fishing key once, left-click the calibrated cast point, wait, and perform the configured bounded pull/loot clicks. It sends no movement and no loop. If `--stop-file <path>` exists before or during the wait, the command aborts before the next action. Live-input mode refuses minimized Rift windows so it does not restore the client to a tiny saved size.
+
+When `--profile <id-or-json-path>` is supplied, the helper records the profile in the manifest and uses profile pacing defaults unless the CLI overrides them:
+
+- `pacing.biteTimeoutMs` -> `--cast-wait-seconds`
+- `pacing.lootTimeoutMs` -> `--post-pull-delay-ms`
 
 ## Supervised bounded session proof
 
@@ -111,6 +118,7 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session 
   --hwnd <CURRENT_RIFT_HWND> `
   --x <FISHABLE_CLIENT_X> `
   --y <FISHABLE_CLIENT_Y> `
+  --profile starter-pond `
   --key 8 `
   --max-casts 3 `
   --dry-run
@@ -124,6 +132,7 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session 
   --hwnd <CURRENT_RIFT_HWND> `
   --x <FISHABLE_CLIENT_X> `
   --y <FISHABLE_CLIENT_Y> `
+  --profile starter-pond `
   --key 8 `
   --max-casts 3 `
   --cast-wait-seconds 18 `

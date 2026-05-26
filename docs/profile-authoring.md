@@ -31,3 +31,24 @@ Run:
 ```powershell
 .\scripts\validate-profiles.ps1
 ```
+
+## Python helper usage
+
+The Python helper can use a profile id or JSON path for runtime pacing defaults:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
+  --pid <pid> `
+  --hwnd <hwnd> `
+  --x <fishable-client-x> `
+  --y <fishable-client-y> `
+  --profile starter-pond `
+  --dry-run
+```
+
+For one-cast and bounded-session proofs:
+
+- `pacing.biteTimeoutMs` becomes the default `--cast-wait-seconds`.
+- `pacing.lootTimeoutMs` becomes the default `--post-pull-delay-ms`.
+- Explicit CLI values always override profile pacing.
+- The selected profile and applied defaults are written into the proof manifest.

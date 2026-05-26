@@ -99,6 +99,7 @@ Owns:
 - bounded prototype commands such as hover, press `8`, left-click, and capture,
 - one-cast proof commands that click a calibrated point, press the fishing key, wait, and perform a bounded pull/loot click,
 - supervised bounded session proofs that repeat the proven one-cast sequence with an explicit cast cap and stop file,
+- profile-driven timing defaults from versioned fishing profiles for Python one-cast/session proofs,
 - future bite/pull/loot timing and visual detection.
 
 The helper runs on the same local PC as the Rift game window. It supervises and automates bounded desktop interactions; it should not replace the addon's local safety logic.
