@@ -84,6 +84,14 @@ python tools\autofish-helper-py\autofish_helper.py doctor `
 
 Top-level `doctor` sends no game input. It writes `doctor.json` and `doctor.md` under `.autofish-live\autofish-doctor-*`, combining proof-root health with session-plan health when the plan exists.
 
+Add `--refresh-summary` when the same command should also refresh the standalone signal-proof review artifacts under `signal-proof-summary\summary.json` and `signal-proof-summary\summary.md` inside the doctor output folder:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py doctor `
+  --refresh-summary `
+  --output-root .autofish-live\autofish-doctor-latest
+```
+
 For fail-closed scripts, repeat `--fail-on` with the conditions that should return exit code `1` after still writing the doctor artifacts:
 
 ```powershell

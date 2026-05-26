@@ -5588,18 +5588,26 @@ def build_signal_proof_summary_report(proof_root: Path) -> dict[str, Any]:
     }
 
 
-def run_signal_proof_summarize(args: argparse.Namespace) -> int:
-    proof_root = Path(args.proof_root)
-    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-summary-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+def write_signal_proof_summary_artifacts(proof_root: Path, output_root: Path) -> tuple[dict[str, Any], dict[str, str]]:
     output_root.mkdir(parents=True, exist_ok=True)
-
     report = build_signal_proof_summary_report(proof_root)
 
     json_path = output_root / "summary.json"
     markdown_path = output_root / "summary.md"
     json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     markdown_path.write_text(render_signal_proof_markdown(report), encoding="utf-8")
-    print(json.dumps({"ok": True, "manifestCount": report["manifestCount"], "outputRoot": str(output_root), "summary": str(json_path), "markdown": str(markdown_path)}, indent=2))
+    return report, {
+        "outputRoot": str(output_root),
+        "summary": str(json_path),
+        "markdown": str(markdown_path),
+    }
+
+
+def run_signal_proof_summarize(args: argparse.Namespace) -> int:
+    proof_root = Path(args.proof_root)
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-summary-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    report, summary_artifacts = write_signal_proof_summary_artifacts(proof_root, output_root)
+    print(json.dumps({"ok": True, "manifestCount": report["manifestCount"], **summary_artifacts}, indent=2))
     return 0
 
 
@@ -6016,6 +6024,19 @@ def render_autofish_doctor_markdown(report: dict[str, Any]) -> str:
     if not report.get("nextActions"):
         lines.append("-")
 
+    summary_artifacts = report.get("summaryArtifacts")
+    if isinstance(summary_artifacts, dict):
+        lines.extend(
+            [
+                "",
+                "## Refreshed signal-proof summary artifacts",
+                "",
+                f"- output root: `{summary_artifacts.get('outputRoot')}`",
+                f"- summary JSON: `{summary_artifacts.get('summary')}`",
+                f"- summary markdown: `{summary_artifacts.get('markdown')}`",
+            ]
+        )
+
     signal_report = report.get("signalProofDoctor")
     if isinstance(signal_report, dict):
         lines.extend(["", "## Signal proof doctor", "", render_signal_proof_doctor_markdown(signal_report).strip()])
@@ -6046,6 +6067,10 @@ def run_autofish_doctor(args: argparse.Namespace) -> int:
         max_plan_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
         fail_on=getattr(args, "fail_on", None) or [],
     )
+    if getattr(args, "refresh_summary", False):
+        _, summary_artifacts = write_signal_proof_summary_artifacts(Path(args.proof_root), output_root / "signal-proof-summary")
+        report["summaryArtifacts"] = summary_artifacts
+
     json_path = output_root / "doctor.json"
     markdown_path = output_root / "doctor.md"
     json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -6053,20 +6078,18 @@ def run_autofish_doctor(args: argparse.Namespace) -> int:
     if getattr(args, "next_action_only", False):
         print(str(report.get("nextAction") or "No next action."))
     else:
-        print(
-            json.dumps(
-                {
-                    "ok": not bool(report.get("failed")),
-                    "outputRoot": str(output_root),
-                    "doctor": str(json_path),
-                    "markdown": str(markdown_path),
-                    "failed": bool(report.get("failed")),
-                    "failures": report.get("failures") or [],
-                    "nextAction": report.get("nextAction"),
-                },
-                indent=2,
-            )
-        )
+        payload = {
+            "ok": not bool(report.get("failed")),
+            "outputRoot": str(output_root),
+            "doctor": str(json_path),
+            "markdown": str(markdown_path),
+            "failed": bool(report.get("failed")),
+            "failures": report.get("failures") or [],
+            "nextAction": report.get("nextAction"),
+        }
+        if report.get("summaryArtifacts"):
+            payload["summaryArtifacts"] = report["summaryArtifacts"]
+        print(json.dumps(payload, indent=2))
     return 1 if report.get("failed") else 0
 
 
@@ -6132,6 +6155,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Return exit code 1 if this read-only health condition is present; repeatable",
     )
     doctor.add_argument("--next-action-only", action="store_true", help="Print only the first recommended next action after writing doctor artifacts")
+    doctor.add_argument("--refresh-summary", action="store_true", help="Also write signal-proof summary artifacts beside the doctor output")
     doctor.add_argument("--output-root", help="Doctor output folder; default: .autofish-live/autofish-doctor-*")
     doctor.set_defaults(func=run_autofish_doctor)
 

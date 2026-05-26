@@ -35,6 +35,7 @@ try {
     python tools/autofish-helper-py/autofish_helper.py doctor --help | Select-String -Pattern 'proof-root' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py doctor --help | Select-String -Pattern 'fail-on' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py doctor --help | Select-String -Pattern 'next-action-only' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py doctor --help | Select-String -Pattern 'refresh-summary' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan from-fan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan explain --help | Out-Null

@@ -296,6 +296,7 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
                         session_plan=str(plan_path),
                         max_plan_age_minutes=0,
                         fail_on=[],
+                        refresh_summary=True,
                         output_root=str(output_root),
                     )
                 )
@@ -305,6 +306,11 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
         assert Path(result["doctor"]).exists()
         assert Path(result["markdown"]).exists()
         assert result["nextAction"]
+        assert Path(result["summaryArtifacts"]["summary"]).exists()
+        assert Path(result["summaryArtifacts"]["markdown"]).exists()
+        persisted_doctor = json.loads((output_root / "doctor.json").read_text(encoding="utf-8"))
+        assert persisted_doctor["summaryArtifacts"] == result["summaryArtifacts"]
+        assert "Refreshed signal-proof summary artifacts" in (output_root / "doctor.md").read_text(encoding="utf-8")
 
         fail_output_root = Path(tmp) / "doctor-fail-out"
         with contextlib.redirect_stdout(io.StringIO()) as fail_output:
@@ -338,6 +344,7 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
                         max_plan_age_minutes=0,
                         fail_on=[],
                         next_action_only=True,
+                        refresh_summary=True,
                         output_root=str(next_action_output_root),
                     )
                 )
@@ -347,6 +354,7 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
         assert next_action_text
         assert "{" not in next_action_text
         assert (next_action_output_root / "doctor.json").exists()
+        assert (next_action_output_root / "signal-proof-summary" / "summary.json").exists()
 
 
 def test_direct_live_command_stop_file_defaults(helper) -> None:
