@@ -55,6 +55,21 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof coordinate-cross
 
 This sends no input and does not modify ChromaLink. If the direct addon coordinates and ChromaLink `player.position` do not match within tolerance, stop any coordinate-backed facing work and treat the provider as blocked/stale.
 
+Optional local session plan after PID/HWND and fishable X/Y are current:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan create `
+  --pid <pid> `
+  --hwnd <hwnd> `
+  --x <fishable-client-x> `
+  --y <fishable-client-y> `
+  --profile starter-pond `
+  --validate-target `
+  --output .autofish-live\session-plan-latest.json
+```
+
+Do not reuse a session plan after Rift restarts, the window is resized, or the fishable coordinate changes.
+
 ## Proof order
 
 Run proofs in this order so native/low-brittleness evidence is captured before fragile fallbacks.

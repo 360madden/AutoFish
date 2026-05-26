@@ -100,6 +100,7 @@ Owns:
 - one-cast proof commands that click a calibrated point, press the fishing key, wait, and perform a bounded pull/loot click,
 - supervised bounded session proofs that repeat the proven one-cast sequence with an explicit cast cap and stop file,
 - profile-driven timing defaults from versioned fishing profiles for Python one-cast/session proofs,
+- local session plans under `.autofish-live` to carry current PID/HWND/fishable-point/profile defaults between dry-run and confirmed proof commands,
 - future bite/pull/loot timing and visual detection.
 
 The helper runs on the same local PC as the Rift game window. It supervises and automates bounded desktop interactions; it should not replace the addon's local safety logic.

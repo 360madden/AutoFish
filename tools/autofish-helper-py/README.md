@@ -71,16 +71,26 @@ No live command should send input without an explicit target PID/HWND and either
 
 Use `one-cast` after the reticle proof has identified a current fishable client coordinate. This is the Python-native replacement path for the older PowerShell prototype script.
 
-Dry-run first:
+To avoid long repeated command lines, create a local session plan after confirming current PID/HWND and fishable client X/Y:
 
 ```powershell
-python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
+python tools\autofish-helper-py\autofish_helper.py session-plan create `
   --pid <CURRENT_RIFT_PID> `
   --hwnd <CURRENT_RIFT_HWND> `
   --x <FISHABLE_CLIENT_X> `
   --y <FISHABLE_CLIENT_Y> `
   --profile starter-pond `
-  --key 8 `
+  --validate-target `
+  --output .autofish-live\session-plan-latest.json
+```
+
+Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, or the fishable coordinate changes.
+
+Dry-run first:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
+  --session-plan .autofish-live\session-plan-latest.json `
   --dry-run
 ```
 
@@ -88,12 +98,7 @@ Then, only while supervised and with Rift already restored/maximized and foregro
 
 ```powershell
 python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
-  --pid <CURRENT_RIFT_PID> `
-  --hwnd <CURRENT_RIFT_HWND> `
-  --x <FISHABLE_CLIENT_X> `
-  --y <FISHABLE_CLIENT_Y> `
-  --profile starter-pond `
-  --key 8 `
+  --session-plan .autofish-live\session-plan-latest.json `
   --cast-wait-seconds 18 `
   --pull-clicks 1 `
   --confirm-input
@@ -114,12 +119,7 @@ Dry-run:
 
 ```powershell
 python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session `
-  --pid <CURRENT_RIFT_PID> `
-  --hwnd <CURRENT_RIFT_HWND> `
-  --x <FISHABLE_CLIENT_X> `
-  --y <FISHABLE_CLIENT_Y> `
-  --profile starter-pond `
-  --key 8 `
+  --session-plan .autofish-live\session-plan-latest.json `
   --max-casts 3 `
   --dry-run
 ```
@@ -128,12 +128,7 @@ Confirmed supervised proof:
 
 ```powershell
 python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session `
-  --pid <CURRENT_RIFT_PID> `
-  --hwnd <CURRENT_RIFT_HWND> `
-  --x <FISHABLE_CLIENT_X> `
-  --y <FISHABLE_CLIENT_Y> `
-  --profile starter-pond `
-  --key 8 `
+  --session-plan .autofish-live\session-plan-latest.json `
   --max-casts 3 `
   --cast-wait-seconds 18 `
   --pull-clicks 1 `

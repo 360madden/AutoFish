@@ -848,6 +848,128 @@ def apply_fishing_runtime_defaults(args: argparse.Namespace, *, include_session_
     }
 
 
+def load_session_plan(path_text: str | None) -> dict[str, Any] | None:
+    if not path_text:
+        return None
+
+    path = Path(path_text)
+    plan = load_json_object(path)
+    schema = str(plan.get("schema") or "")
+    if schema != "autofish.sessionPlan.v1":
+        raise RuntimeError(f"Unsupported session plan schema in {path}: {schema or '<missing>'}")
+    return {"path": str(path), "plan": plan}
+
+
+def apply_session_plan_defaults(args: argparse.Namespace, *, include_session_defaults: bool) -> dict[str, Any]:
+    loaded = load_session_plan(getattr(args, "session_plan", None))
+    if not loaded:
+        return {"sessionPlan": None, "appliedDefaults": {}}
+
+    plan = loaded["plan"]
+    applied: dict[str, Any] = {}
+    target = plan.get("target") if isinstance(plan.get("target"), dict) else {}
+    point = plan.get("fishablePoint") if isinstance(plan.get("fishablePoint"), dict) else {}
+    profile = plan.get("profile") if isinstance(plan.get("profile"), dict) else {}
+    defaults = plan.get("defaults") if isinstance(plan.get("defaults"), dict) else {}
+
+    def apply_default(name: str, value: Any) -> None:
+        if value is None:
+            return
+        if getattr(args, name, None) is None:
+            setattr(args, name, value)
+            applied[name] = value
+
+    apply_default("pid", target.get("pid"))
+    apply_default("hwnd", target.get("hwnd"))
+    apply_default("x", point.get("x"))
+    apply_default("y", point.get("y"))
+    apply_default("profile", profile.get("id") or profile.get("path"))
+    apply_default("key", defaults.get("key"))
+    apply_default("pull_clicks", defaults.get("pullClicks"))
+    apply_default("cast_wait_seconds", defaults.get("castWaitSeconds"))
+    apply_default("post_pull_delay_ms", defaults.get("postPullDelayMs"))
+    apply_default("stop_file", defaults.get("stopFile"))
+    if include_session_defaults:
+        apply_default("max_casts", defaults.get("maxCasts"))
+        apply_default("max_allowed_casts", defaults.get("maxAllowedCasts"))
+        apply_default("inter_cast_delay_ms", defaults.get("interCastDelayMs"))
+
+    return {
+        "sessionPlan": loaded,
+        "appliedDefaults": applied,
+    }
+
+
+def require_runtime_values(args: argparse.Namespace, names: tuple[str, ...], *, context: str) -> None:
+    missing = [name for name in names if getattr(args, name, None) is None]
+    if missing:
+        flags = ", ".join("--" + name.replace("_", "-") for name in missing)
+        raise RuntimeError(f"{context} requires {flags}, either directly or through --session-plan.")
+
+
+def build_session_plan(args: argparse.Namespace) -> dict[str, Any]:
+    defaults: dict[str, Any] = {
+        "key": args.key,
+        "maxCasts": args.max_casts,
+        "maxAllowedCasts": args.max_allowed_casts,
+        "pullClicks": args.pull_clicks,
+        "castWaitSeconds": args.cast_wait_seconds,
+        "postPullDelayMs": args.post_pull_delay_ms,
+        "interCastDelayMs": args.inter_cast_delay_ms,
+        "stopFile": args.stop_file,
+    }
+    defaults = {key: value for key, value in defaults.items() if value is not None}
+    plan: dict[str, Any] = {
+        "schema": "autofish.sessionPlan.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "purpose": "Local AutoFish live proof session plan. Do not treat PID/HWND or fishable point as durable across Rift restarts/resizes.",
+        "target": {
+            "pid": int(args.pid),
+            "hwnd": hwnd_hex(parse_hwnd(args.hwnd)),
+        },
+        "fishablePoint": {
+            "x": int(args.x),
+            "y": int(args.y),
+            "coordinateSpace": "client",
+            "requiresRecalibrationAfterResize": True,
+        },
+        "profile": {
+            "id": args.profile,
+            "root": args.profile_root,
+        }
+        if args.profile
+        else None,
+        "defaults": defaults,
+        "safety": {
+            "requiresExactPidHwnd": True,
+            "noMovement": True,
+            "requiresDryRunBeforeConfirmInput": True,
+            "blocksReloadKeyByDefault": True,
+            "doNotUseIfRiftRestartedOrResized": True,
+        },
+        "targetValidation": None,
+    }
+    if args.validate_target:
+        plan["targetValidation"] = validate_target(parse_hwnd(args.hwnd), int(args.pid), require_foreground=False)
+    return plan
+
+
+def run_session_plan_create(args: argparse.Namespace) -> int:
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plan = build_session_plan(args)
+    output_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    print(json.dumps({"ok": True, "path": str(output_path), "schema": plan["schema"]}, indent=2))
+    return 0
+
+
+def run_session_plan_show(args: argparse.Namespace) -> int:
+    loaded = load_session_plan(args.path)
+    assert loaded is not None
+    print(json.dumps(loaded["plan"], indent=2))
+    return 0
+
+
 def check_one_cast_review_gate(args: argparse.Namespace) -> dict[str, Any]:
     if getattr(args, "allow_unreviewed_one_cast", False):
         return {
@@ -1193,6 +1315,8 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
 
 
 def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
+    plan_defaults = apply_session_plan_defaults(args, include_session_defaults=False)
+    require_runtime_values(args, ("pid", "hwnd", "x", "y"), context="one-cast")
     hwnd = parse_hwnd(args.hwnd)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-one-cast-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -1239,6 +1363,8 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
             "dryRun": bool(args.dry_run),
             "confirmInput": bool(args.confirm_input),
         },
+        "sessionPlan": plan_defaults["sessionPlan"],
+        "sessionPlanAppliedDefaults": plan_defaults["appliedDefaults"],
         "profile": runtime_defaults["profile"],
         "appliedDefaults": runtime_defaults["appliedDefaults"],
         "target": None,
@@ -1364,6 +1490,8 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
 
 
 def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
+    plan_defaults = apply_session_plan_defaults(args, include_session_defaults=True)
+    require_runtime_values(args, ("pid", "hwnd", "x", "y"), context="bounded-session")
     hwnd = parse_hwnd(args.hwnd)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-bounded-session-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -1422,6 +1550,8 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
             "dryRun": bool(args.dry_run),
             "confirmInput": bool(args.confirm_input),
         },
+        "sessionPlan": plan_defaults["sessionPlan"],
+        "sessionPlanAppliedDefaults": plan_defaults["appliedDefaults"],
         "profile": runtime_defaults["profile"],
         "appliedDefaults": runtime_defaults["appliedDefaults"],
         "reviewGate": None,
@@ -3437,6 +3567,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AutoFish helper diagnostics")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    session_plan = subparsers.add_parser("session-plan", help="Create or inspect local live-proof session plans")
+    session_plan_sub = session_plan.add_subparsers(dest="session_plan_command", required=True)
+    session_plan_create = session_plan_sub.add_parser("create", help="Create a local session plan from current PID/HWND/fishable point")
+    session_plan_create.add_argument("--pid", type=int, required=True, help="Expected Rift process ID for this local session")
+    session_plan_create.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
+    session_plan_create.add_argument("--x", type=int, required=True, help="Calibrated fishable client X")
+    session_plan_create.add_argument("--y", type=int, required=True, help="Calibrated fishable client Y")
+    session_plan_create.add_argument("--profile", help="Fishing profile id or JSON path to include in the plan")
+    session_plan_create.add_argument("--profile-root", default="profiles", help="Profile folder for profile ids; default: profiles")
+    session_plan_create.add_argument("--key", default="8", help="Fishing key default; default: 8")
+    session_plan_create.add_argument("--max-casts", type=int, default=3, help="Bounded-session cast default; default: 3")
+    session_plan_create.add_argument("--max-allowed-casts", type=int, default=10, help="Bounded-session safety cap default; default: 10")
+    session_plan_create.add_argument("--pull-clicks", type=int, default=1, help="Pull/loot click default; default: 1")
+    session_plan_create.add_argument("--cast-wait-seconds", type=float, help="Optional cast wait override; otherwise profile/default command pacing applies")
+    session_plan_create.add_argument("--post-pull-delay-ms", type=int, help="Optional post-pull delay override; otherwise profile/default command pacing applies")
+    session_plan_create.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Inter-cast delay default; default: 800")
+    session_plan_create.add_argument("--stop-file", help="Optional stop file path to include")
+    session_plan_create.add_argument("--validate-target", action="store_true", help="Validate PID/HWND now and record target geometry without sending input")
+    session_plan_create.add_argument("--output", default=".autofish-live/session-plan-latest.json", help="Output session plan JSON path")
+    session_plan_create.set_defaults(func=run_session_plan_create)
+    session_plan_show = session_plan_sub.add_parser("show", help="Print a session plan JSON file")
+    session_plan_show.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
+    session_plan_show.set_defaults(func=run_session_plan_show)
+
     signal = subparsers.add_parser("signal-proof", help="Proof-first harness for historical/fallback signals")
     signal_sub = signal.add_subparsers(dest="signal", required=True)
 
@@ -3463,10 +3617,11 @@ def build_parser() -> argparse.ArgumentParser:
     reticle.set_defaults(func=run_signal_proof_reticle)
 
     one_cast = signal_sub.add_parser("one-cast", help="Run one bounded cast/click/wait/pull proof at a calibrated client point")
-    one_cast.add_argument("--pid", type=int, required=True, help="Expected Rift process ID")
-    one_cast.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
-    one_cast.add_argument("--x", type=int, required=True, help="Client X coordinate of calibrated fishable point")
-    one_cast.add_argument("--y", type=int, required=True, help="Client Y coordinate of calibrated fishable point")
+    one_cast.add_argument("--session-plan", help="Local session plan JSON providing PID/HWND/fishable point/profile defaults")
+    one_cast.add_argument("--pid", type=int, help="Expected Rift process ID")
+    one_cast.add_argument("--hwnd", help="Expected Rift window handle, decimal or 0x hex")
+    one_cast.add_argument("--x", type=int, help="Client X coordinate of calibrated fishable point")
+    one_cast.add_argument("--y", type=int, help="Client Y coordinate of calibrated fishable point")
     one_cast.add_argument("--profile", help="Fishing profile id or JSON path used for pacing defaults")
     one_cast.add_argument("--profile-root", default="profiles", help="Profile folder for profile ids; default: profiles")
     one_cast.add_argument("--key", help="Fishing key to press during --confirm-input; default: 8")
@@ -3488,10 +3643,11 @@ def build_parser() -> argparse.ArgumentParser:
     one_cast.set_defaults(func=run_signal_proof_one_cast)
 
     bounded_session = signal_sub.add_parser("bounded-session", help="Run a supervised bounded multi-cast proof after one-cast review")
-    bounded_session.add_argument("--pid", type=int, required=True, help="Expected Rift process ID")
-    bounded_session.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
-    bounded_session.add_argument("--x", type=int, required=True, help="Client X coordinate of calibrated fishable point")
-    bounded_session.add_argument("--y", type=int, required=True, help="Client Y coordinate of calibrated fishable point")
+    bounded_session.add_argument("--session-plan", help="Local session plan JSON providing PID/HWND/fishable point/profile defaults")
+    bounded_session.add_argument("--pid", type=int, help="Expected Rift process ID")
+    bounded_session.add_argument("--hwnd", help="Expected Rift window handle, decimal or 0x hex")
+    bounded_session.add_argument("--x", type=int, help="Client X coordinate of calibrated fishable point")
+    bounded_session.add_argument("--y", type=int, help="Client Y coordinate of calibrated fishable point")
     bounded_session.add_argument("--profile", help="Fishing profile id or JSON path used for pacing defaults")
     bounded_session.add_argument("--profile-root", default="profiles", help="Profile folder for profile ids; default: profiles")
     bounded_session.add_argument("--key", help="Fishing key to press during --confirm-input; default: 8")
