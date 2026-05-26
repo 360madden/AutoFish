@@ -143,6 +143,18 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session 
 
 Confirmed mode refuses minimized Rift windows, sends no movement, and stops before the next action if the stop file exists. Use `--capture-each-cast` when visual proof for each phase is more important than minimizing captures.
 
+Confirmed bounded sessions also require a reviewed `oneCast` decision in `.autofish-live\signal-proof-decisions.json`:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof decide `
+  --signal oneCast `
+  --decision fallback-only `
+  --reason "Reviewed one-cast proof at current coordinate is acceptable for a small supervised bounded session." `
+  --evidence .autofish-live\<one-cast-proof>\manifest.json
+```
+
+Accepted decisions are `promote` or `fallback-only`. Use `--allow-unreviewed-one-cast` only when intentionally bypassing that gate for a supervised experiment.
+
 ## Fishability fan planning
 
 Prefer proving **fishability** over visually detecting water. The helper can plan a screen-space fan of candidate points without sending input:

@@ -160,6 +160,8 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session 
 
 Dry-run first with `--dry-run`. This remains supervised proof only: explicit cast cap, no movement, no minimized-window restore, and stop-file interruption before the next action.
 
+Confirmed bounded sessions require a reviewed `oneCast` decision of `promote` or `fallback-only` in `.autofish-live\signal-proof-decisions.json`. Record that with `signal-proof decide --signal oneCast` after reviewing the one-cast manifest/screenshots. Bypass with `--allow-unreviewed-one-cast` only for an explicitly supervised experiment.
+
 ### 3. Current log proof
 
 Only test logs as read-only evidence:

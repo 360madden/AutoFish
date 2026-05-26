@@ -848,6 +848,38 @@ def apply_fishing_runtime_defaults(args: argparse.Namespace, *, include_session_
     }
 
 
+def check_one_cast_review_gate(args: argparse.Namespace) -> dict[str, Any]:
+    if getattr(args, "allow_unreviewed_one_cast", False):
+        return {
+            "required": False,
+            "passed": True,
+            "overridden": True,
+            "reason": "--allow-unreviewed-one-cast was supplied.",
+        }
+
+    register_path = Path(getattr(args, "decision_register", ".autofish-live/signal-proof-decisions.json"))
+    register = load_decision_register(register_path)
+    latest_by_signal = register.get("latestBySignal") if isinstance(register.get("latestBySignal"), dict) else {}
+    latest = latest_by_signal.get("oneCast") if isinstance(latest_by_signal.get("oneCast"), dict) else None
+    decision = latest.get("decision") if latest else None
+    passed = decision in ("promote", "fallback-only")
+    gate = {
+        "required": True,
+        "passed": passed,
+        "overridden": False,
+        "register": str(register_path),
+        "acceptedDecisions": ["promote", "fallback-only"],
+        "latestOneCastDecision": latest,
+    }
+    if not passed:
+        gate["reason"] = (
+            "Confirmed bounded-session requires a reviewed oneCast decision of promote or fallback-only in "
+            f"{register_path}. Run one-cast proof, record it with signal-proof decide --signal oneCast, "
+            "or intentionally bypass with --allow-unreviewed-one-cast."
+        )
+    return gate
+
+
 def read_text_from_offset(path: Path, offset: int, max_bytes: int) -> tuple[str, int, bool]:
     current_size = path.stat().st_size
     start = offset if offset <= current_size else 0
@@ -1392,6 +1424,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
         },
         "profile": runtime_defaults["profile"],
         "appliedDefaults": runtime_defaults["appliedDefaults"],
+        "reviewGate": None,
         "target": None,
         "captures": [],
         "casts": [],
@@ -1410,6 +1443,17 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
     }
 
     try:
+        manifest["reviewGate"] = (
+            check_one_cast_review_gate(args)
+            if args.confirm_input
+            else {
+                "required": False,
+                "passed": True,
+                "reason": "Dry-run sends no input.",
+            }
+        )
+        if args.confirm_input and not manifest["reviewGate"].get("passed"):
+            raise RuntimeError(str(manifest["reviewGate"].get("reason") or "One-cast review gate failed."))
         if args.confirm_input:
             focus_target(hwnd)
         target = validate_target(hwnd, args.pid, require_foreground=args.confirm_input)
@@ -2978,6 +3022,7 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
         result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
         safety = manifest.get("safety") if isinstance(manifest.get("safety"), dict) else {}
         profile = manifest.get("profile") if isinstance(manifest.get("profile"), dict) else None
+        review_gate = manifest.get("reviewGate") if isinstance(manifest.get("reviewGate"), dict) else {}
         summary.update(
             {
                 "classification": result.get("classification"),
@@ -3000,6 +3045,9 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "castWaitSeconds": request.get("castWaitSeconds"),
                 "profileId": profile.get("id") if profile else None,
                 "profilePath": profile.get("path") if profile else None,
+                "reviewGateRequired": bool(review_gate.get("required")),
+                "reviewGatePassed": bool(review_gate.get("passed")),
+                "reviewGateOverridden": bool(review_gate.get("overridden")),
                 "target": manifest.get("target"),
             }
         )
@@ -3232,6 +3280,7 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- actions: {summary.get('actionCount', 0)} ({', '.join(str(name) for name in summary.get('actionNames', [])) or '-'})")
             lines.append(f"- captures: {summary.get('captureCount', 0)} ({', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'})")
             lines.append(f"- max clicks: {summary.get('maxClickCount')}; pull clicks: {summary.get('pullClicks')}; wait seconds: {summary.get('castWaitSeconds')}")
+            lines.append(f"- one-cast review gate required/passed/overridden: {summary.get('reviewGateRequired')}/{summary.get('reviewGatePassed')}/{summary.get('reviewGateOverridden')}")
             if summary.get("profileId"):
                 lines.append(f"- profile: {summary.get('profileId')} (`{summary.get('profilePath')}`)")
         elif summary["signal"] == "fishabilityFan":
@@ -3463,6 +3512,8 @@ def build_parser() -> argparse.ArgumentParser:
     bounded_session.add_argument("--post-pull-delay-ms", type=int, help="Delay after each pull/loot click before completion capture; default: profile lootTimeoutMs or 1200")
     bounded_session.add_argument("--inter-cast-delay-ms", type=int, help="Delay between cast attempts; default: 800")
     bounded_session.add_argument("--capture-each-cast", action="store_true", help="Capture after hover/key/confirm in addition to each cast completion")
+    bounded_session.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register used to require reviewed oneCast proof before confirmed sessions")
+    bounded_session.add_argument("--allow-unreviewed-one-cast", action="store_true", help="Bypass the oneCast decision gate intentionally; still requires --confirm-input and all target gates")
     bounded_session.add_argument("--stop-file", help="If this file exists before/during the run, abort before the next action")
     bounded_session.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-bounded-session-*.")
     bounded_session.set_defaults(func=run_signal_proof_bounded_session)
