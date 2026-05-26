@@ -1137,6 +1137,11 @@ def build_session_review_scope(plan: dict[str, Any]) -> dict[str, Any]:
             "candidateIndex": source.get("candidateIndex"),
             "candidateName": source.get("candidateName"),
         }
+        facing_evidence = source.get("facingEvidence") if isinstance(source.get("facingEvidence"), dict) else None
+        if facing_evidence:
+            scope["source"]["facingManifest"] = facing_evidence.get("manifest")
+            scope["source"]["facingClassification"] = facing_evidence.get("classification")
+            scope["source"]["facingUsable"] = bool(facing_evidence.get("usable"))
     return scope
 
 
@@ -1538,6 +1543,17 @@ def build_session_plan_from_fan(args: argparse.Namespace) -> dict[str, Any]:
     if pid is None or hwnd is None:
         raise RuntimeError("Fishability fan manifest is missing request.pid or request.hwnd.")
 
+    facing_evidence = manifest.get("facingEvidence") if isinstance(manifest.get("facingEvidence"), dict) else None
+    require_usable_facing = bool(getattr(args, "require_usable_facing", False))
+    if require_usable_facing and not facing_evidence:
+        raise RuntimeError("--require-usable-facing was supplied but the fishability fan manifest has no facingEvidence.")
+    if facing_evidence and require_usable_facing and not facing_evidence.get("usable"):
+        raise RuntimeError(
+            "Fishability fan facingEvidence is not usable: "
+            f"classification={facing_evidence.get('classification')} "
+            f"suggestedReview={facing_evidence.get('suggestedReview')}"
+        )
+
     create_args = argparse.Namespace(
         pid=int(pid),
         hwnd=str(hwnd),
@@ -1564,10 +1580,14 @@ def build_session_plan_from_fan(args: argparse.Namespace) -> dict[str, Any]:
         "classification": candidate.get("plannedClassification"),
         "requiresReticleOrGameFeedbackReview": True,
     }
+    if facing_evidence:
+        plan["source"]["facingEvidence"] = facing_evidence
     if plan.get("targetValidation") is None:
         plan["targetValidation"] = target_validation_from_fan_manifest(manifest)
     plan["safety"]["sourceCandidateIsPlanningOnly"] = True
     plan["safety"]["requiresReviewedFishableCandidateBeforeConfirmInput"] = True
+    plan["safety"]["sourceFanHasFacingEvidence"] = bool(facing_evidence)
+    plan["safety"]["doesNotTransformWorldFacingToScreen"] = True
     attach_session_review_scope(plan)
     return plan
 
@@ -2078,6 +2098,15 @@ def render_session_plan_checklist(
     ]
     if is_fan_candidate_plan:
         lines.append(f"{checked_box(bool(readiness.get('confirmedOneCast')))} Fishability candidate has a scoped reviewed decision.")
+        facing_evidence = source.get("facingEvidence") if isinstance(source.get("facingEvidence"), dict) else {}
+        if facing_evidence:
+            facing = facing_evidence.get("operationalFacing") if isinstance(facing_evidence.get("operationalFacing"), dict) else {}
+            vector = facing.get("worldVectorXY") if isinstance(facing.get("worldVectorXY"), dict) else {}
+            lines.append(
+                f"{checked_box(bool(facing_evidence.get('usable')))} Source fan carried usable operational-facing evidence "
+                f"`{facing_evidence.get('classification')}` "
+                f"(x={vector.get('x')} y={vector.get('y')} angle={facing.get('angleDegreesMath')})."
+            )
     else:
         lines.append(f"{checked_box(bool(readiness.get('confirmedOneCast')))} Fishability candidate gate is not required for this plan.")
     lines.extend(
@@ -2242,6 +2271,16 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         lines.append(
             f"- source: `fishabilityFanCandidate` index `{source.get('candidateIndex')}` name `{source.get('candidateName')}`"
         )
+        facing_evidence = source.get("facingEvidence") if isinstance(source.get("facingEvidence"), dict) else {}
+        if facing_evidence:
+            facing = facing_evidence.get("operationalFacing") if isinstance(facing_evidence.get("operationalFacing"), dict) else {}
+            vector = facing.get("worldVectorXY") if isinstance(facing.get("worldVectorXY"), dict) else {}
+            lines.append(
+                f"- source facing evidence: usable `{facing_evidence.get('usable')}`, "
+                f"classification `{facing_evidence.get('classification')}`, "
+                f"vector `x={vector.get('x')} y={vector.get('y')} angle={facing.get('angleDegreesMath')}`"
+            )
+            lines.append("- source facing note: world-coordinate facing was not converted into screen coordinates.")
     lines.extend([
         "",
         "## 1. Review the plan",
@@ -6427,6 +6466,7 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_from_fan.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Inter-cast delay default; default: 800")
     session_plan_from_fan.add_argument("--stop-file", help=f"Stop file path to include; default: {DEFAULT_STOP_FILE}")
     session_plan_from_fan.add_argument("--validate-target", action="store_true", help="Validate PID/HWND now and record target geometry without sending input")
+    session_plan_from_fan.add_argument("--require-usable-facing", action="store_true", help="Fail unless the fishability-fan manifest carries usable facingEvidence")
     session_plan_from_fan.add_argument("--output", default=".autofish-live/session-plan-latest.json", help="Output session plan JSON path")
     session_plan_from_fan.set_defaults(func=run_session_plan_from_fan)
     session_plan_show = session_plan_sub.add_parser("show", help="Print a session plan JSON file")

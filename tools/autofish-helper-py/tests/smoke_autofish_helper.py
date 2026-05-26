@@ -956,6 +956,23 @@ def test_fishability_fan_runbook_render(helper) -> None:
 def test_session_plan_from_fan_candidate(helper) -> None:
     with tempfile.TemporaryDirectory(prefix="autofish-helper-plan-from-fan-") as tmp:
         manifest_path = Path(tmp) / "manifest.json"
+        facing_result = helper.compute_facing_delta(
+            {"x": 10, "y": 20, "z": 5},
+            {"x": 10, "y": 21, "z": 5},
+            min_distance=0.01,
+        )
+        facing_evidence = {
+            "manifest": str(Path(tmp) / "facing" / "manifest.json"),
+            "schema": "autofish.signalProof.facingDelta.v1",
+            "mode": "manual-coordinate-delta",
+            "classification": facing_result["classification"],
+            "usable": True,
+            "suggestedReview": "operational-facing-candidate-review",
+            "delta": facing_result["delta"],
+            "operationalFacing": facing_result["operationalFacing"],
+            "isNativeActorFacing": False,
+            "manualReviewRequired": True,
+        }
         manifest = {
             "schema": "autofish.signalProof.fishabilityFan.v1",
             "generatedAtUtc": "2026-05-26T00:00:00+00:00",
@@ -969,6 +986,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
                 "clientScreenY": 80,
             },
             "effectiveClient": {"width": 1280, "height": 720, "source": "live-target"},
+            "facingEvidence": facing_evidence,
             "candidates": [
                 {
                     "index": 0,
@@ -996,6 +1014,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
             inter_cast_delay_ms=800,
             stop_file=str(Path(tmp) / "STOP.txt"),
             validate_target=False,
+            require_usable_facing=True,
         )
         plan = helper.build_session_plan_from_fan(args)
         assert plan["target"]["pid"] == 1234
@@ -1004,6 +1023,9 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert plan["fishablePoint"]["y"] == 50
         assert plan["profile"]["id"] == "starter-pond"
         assert plan["source"]["type"] == "fishabilityFanCandidate"
+        assert plan["source"]["facingEvidence"]["usable"]
+        assert plan["safety"]["sourceFanHasFacingEvidence"]
+        assert plan["safety"]["doesNotTransformWorldFacingToScreen"]
         assert plan["safety"]["requiresReviewedFishableCandidateBeforeConfirmInput"]
         assert plan["targetValidation"]["clientWidth"] == 1280
         assert plan["targetValidation"]["clientHeight"] == 720
@@ -1019,6 +1041,8 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert "stale" in stale_target_gate["reason"]
         scope_token = plan["review"]["scopeToken"]
         assert scope_token.startswith("afscope-")
+        assert plan["review"]["scope"]["source"]["facingUsable"]
+        assert plan["review"]["scope"]["source"]["facingClassification"] == "usable-coordinate-delta"
         gate = helper.check_fan_candidate_review_gate(
             {"plan": plan},
             str(Path(tmp) / "missing-decisions.json"),
@@ -1071,12 +1095,15 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         plan_path.write_text(json.dumps(plan), encoding="utf-8")
         markdown = helper.render_session_plan_runbook(str(plan_path), ".autofish-live")
         assert "--signal fishabilityCandidate" in markdown
+        assert "source facing evidence" in markdown
+        assert "not converted into screen coordinates" in markdown
         assert f"--session-plan '{plan_path}'" in markdown
         assert "session-plan gates" in markdown
         assert "session-plan explain" in markdown
         assert "session-plan preflight" in markdown
         checklist = helper.render_session_plan_checklist(str(plan_path), ".autofish-live", str(decision_register))
         assert "Fishability candidate has a scoped reviewed decision" in checklist
+        assert "Source fan carried usable operational-facing evidence" in checklist
         assert "--signal fishabilityCandidate" in checklist
         with contextlib.redirect_stdout(io.StringIO()) as checklist_output:
             assert (

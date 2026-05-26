@@ -38,6 +38,7 @@ try {
     python tools/autofish-helper-py/autofish_helper.py doctor --help | Select-String -Pattern 'refresh-summary' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan from-fan --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan from-fan --help | Select-String -Pattern 'require-usable-facing' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan explain --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan explain --help | Select-String -Pattern 'max-plan-age-minutes' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan preflight --help | Out-Null

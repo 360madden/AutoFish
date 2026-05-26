@@ -307,8 +307,11 @@ python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
   --manifest .autofish-live\<fishability-fan-proof>\manifest.json `
   --candidate-index <index> `
   --profile starter-pond `
+  --require-usable-facing `
   --output .autofish-live\session-plan-latest.json
 ```
+
+Use `--require-usable-facing` when the source fan was expected to carry a usable `facingDelta` audit trail. The session plan preserves that facing evidence under `source.facingEvidence` and includes it in the review scope token, but it still requires a reviewed `fishabilityCandidate` decision before confirmed one-cast input.
 
 Then print the session-plan runbook and use its scoped `signal-proof decide --signal fishabilityCandidate --session-plan <plan>` command before confirmed one-cast input:
 

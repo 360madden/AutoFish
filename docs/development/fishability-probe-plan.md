@@ -63,8 +63,11 @@ python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
   --manifest .autofish-live\<fishability-fan-proof>\manifest.json `
   --candidate-index <index> `
   --profile starter-pond `
+  --require-usable-facing `
   --output .autofish-live\session-plan-latest.json
 ```
+
+If `--require-usable-facing` is supplied, the plan creation fails unless the fan manifest carries usable `facingEvidence`. That evidence is copied into `source.facingEvidence` and included in the session review scope token, so later `fishabilityCandidate` decisions are tied to the exact target, candidate, and facing context that produced the plan.
 
 Then print the session-plan runbook and use its scoped `signal-proof decide --signal fishabilityCandidate --session-plan <plan>` command before confirmed one-cast input:
 
