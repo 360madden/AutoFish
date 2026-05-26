@@ -229,7 +229,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
 
-Add `--require target-current`, `--require confirmed-one-cast`, or `--require confirmed-bounded-session` when a script should fail closed unless that gate is ready.
+Add `--require stop-file-clear`, `--require target-current`, `--require confirmed-one-cast`, or `--require confirmed-bounded-session` when a script should fail closed unless that gate is ready. For the practical pre-live bundles, use `--require ready-one-cast` before confirmed `one-cast` and `--require ready-bounded-session` before confirmed `bounded-session`; these compound checks include the stop-file and target-current gates plus the needed reviewed-decision gate.
 
 The created plan still marks the fan candidate as planning-only source evidence; confirmed one-cast input from that plan requires a reviewed `fishabilityCandidate` decision attached to that same session plan unless intentionally bypassed with `--allow-unreviewed-fan-candidate`. Run the generated session-plan dry-run before any confirmed one-cast proof.
 

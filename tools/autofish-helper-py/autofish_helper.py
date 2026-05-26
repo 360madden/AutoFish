@@ -1086,6 +1086,28 @@ def check_session_plan_target_freshness(
     return gate
 
 
+def session_plan_stop_file_path(session_plan_info: dict[str, Any] | None) -> str:
+    plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
+    defaults = plan.get("defaults") if isinstance(plan, dict) and isinstance(plan.get("defaults"), dict) else {}
+    return str(defaults.get("stopFile") or DEFAULT_STOP_FILE)
+
+
+def check_session_plan_stop_file_gate(session_plan_info: dict[str, Any] | None) -> dict[str, Any]:
+    stop_file = session_plan_stop_file_path(session_plan_info)
+    exists = Path(stop_file).exists()
+    return {
+        "required": True,
+        "passed": not exists,
+        "path": stop_file,
+        "exists": exists,
+        "reason": (
+            "Stop file is clear."
+            if not exists
+            else "Stop file exists; delete it before any confirmed live proof input."
+        ),
+    }
+
+
 def build_session_plan(args: argparse.Namespace) -> dict[str, Any]:
     stop_file = args.stop_file or DEFAULT_STOP_FILE
     defaults: dict[str, Any] = {
@@ -1271,6 +1293,17 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
     )
     one_cast_gate = check_one_cast_review_gate(one_cast_gate_args, loaded)
     target_gate = check_session_plan_target_freshness(loaded)
+    stop_file_gate = check_session_plan_stop_file_gate(loaded)
+    ready_for_one_cast = bool(
+        stop_file_gate.get("passed")
+        and target_gate.get("passed")
+        and fishability_gate.get("passed")
+    )
+    ready_for_bounded_session = bool(
+        stop_file_gate.get("passed")
+        and target_gate.get("passed")
+        and one_cast_gate.get("passed")
+    )
     report = {
         "schema": "autofish.sessionPlan.reviewGates.v1",
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
@@ -1279,28 +1312,37 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         "source": plan.get("source") if isinstance(plan.get("source"), dict) else None,
         "decisionRegister": args.decision_register,
         "gates": {
+            "stopFileClear": stop_file_gate,
             "targetCurrent": target_gate,
             "fishabilityCandidate": fishability_gate,
             "oneCast": one_cast_gate,
         },
         "readiness": {
+            "stopFileClear": bool(stop_file_gate.get("passed")),
             "targetCurrent": bool(target_gate.get("passed")),
             "confirmedOneCast": bool(fishability_gate.get("passed")),
             "confirmedBoundedSession": bool(one_cast_gate.get("passed")),
+            "readyForOneCast": ready_for_one_cast,
+            "readyForBoundedSession": ready_for_bounded_session,
         },
         "requiredReadiness": args.require or [],
         "notes": [
             "This command sends no game input.",
+            "stopFileClear fails when the session plan stop file exists.",
             "targetCurrent compares the current Rift client size with the session plan targetValidation when a size was recorded.",
             "confirmedOneCast covers fan-derived candidate review only; one-cast still requires exact PID/HWND and --confirm-input.",
             "confirmedBoundedSession requires a scoped reviewed oneCast decision.",
+            "readyForOneCast and readyForBoundedSession are compound no-input readiness checks.",
         ],
     }
     print(json.dumps(report, indent=2))
     readiness_name_by_flag = {
+        "stop-file-clear": "stopFileClear",
         "target-current": "targetCurrent",
         "confirmed-one-cast": "confirmedOneCast",
         "confirmed-bounded-session": "confirmedBoundedSession",
+        "ready-one-cast": "readyForOneCast",
+        "ready-bounded-session": "readyForBoundedSession",
     }
     for required in args.require or []:
         readiness_name = readiness_name_by_flag[required]
@@ -1368,6 +1410,12 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         f"{helper} session-plan gates --path {plan_arg} --require target-current",
         "```",
         "",
+        "Fail closed unless all no-input one-cast readiness gates pass:",
+        "",
+        "```powershell",
+        f"{helper} session-plan gates --path {plan_arg} --require ready-one-cast",
+        "```",
+        "",
     ])
     if is_fan_candidate_plan:
         lines.extend(
@@ -1417,6 +1465,12 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         "",
         "```powershell",
         f"{helper} signal-proof bounded-session --session-plan {plan_arg} --dry-run",
+        "```",
+        "",
+        "Fail closed unless all no-input bounded-session readiness gates pass:",
+        "",
+        "```powershell",
+        f"{helper} session-plan gates --path {plan_arg} --require ready-bounded-session",
         "```",
         "",
         "## 6. Confirmed bounded-session proof",
@@ -4474,7 +4528,14 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_gates.add_argument(
         "--require",
         action="append",
-        choices=("target-current", "confirmed-one-cast", "confirmed-bounded-session"),
+        choices=(
+            "stop-file-clear",
+            "target-current",
+            "confirmed-one-cast",
+            "confirmed-bounded-session",
+            "ready-one-cast",
+            "ready-bounded-session",
+        ),
         help="Return a failing exit code unless this readiness gate is true; repeatable",
     )
     session_plan_gates.set_defaults(func=run_session_plan_gates)

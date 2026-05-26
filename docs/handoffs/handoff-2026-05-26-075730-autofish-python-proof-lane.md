@@ -1,7 +1,7 @@
 # AutoFish handoff - Python proof lane toward supervised fishing
 
 Date: 2026-05-26 07:57 -04:00
-Updated: 2026-05-26 after scoped decision/gate, target-freshness, and fresh screen-coordinate hardening
+Updated: 2026-05-26 after scoped decision/gate, stop-file readiness, target-freshness, and fresh screen-coordinate hardening
 Repo: `C:\RIFT MODDING\AutoFish`
 Branch: `main`
 Remote: `https://github.com/360madden/AutoFish`
@@ -24,6 +24,10 @@ The current implementation is not an unattended fishing loop yet. It is now a st
 
 ## Latest pushed commits in this lane
 
+- `219a2d7` - Refresh screen coordinates before input
+- `4e2e532` - Make cursor handle type portable
+- `ecde359` - Avoid setup-dotnet download in CI
+- `80c7286` - Gate session plans on target size
 - `b9fac9a` - Allow fail-fast session gate checks
 - `29e5223` - Attach decisions to session plans
 - `bc846e6` - Refresh Python proof lane handoff
@@ -101,6 +105,8 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
 ```
 
 Use `--require target-current` when a script should fail closed unless the current Rift client size still matches the session plan's recorded `targetValidation.clientWidth/clientHeight`.
+
+Use `--require ready-one-cast` before confirmed one-cast input and `--require ready-bounded-session` before confirmed bounded-session input. These are no-input compound readiness checks over stop-file-clear, target-current, and the relevant reviewed-decision gate.
 
 ### Target-freshness gate
 

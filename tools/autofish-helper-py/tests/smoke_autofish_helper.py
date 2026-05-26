@@ -271,7 +271,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
             cast_wait_seconds=None,
             post_pull_delay_ms=None,
             inter_cast_delay_ms=800,
-            stop_file=None,
+            stop_file=str(Path(tmp) / "STOP.txt"),
             validate_target=False,
         )
         plan = helper.build_session_plan_from_fan(args)
@@ -350,6 +350,8 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert "--signal fishabilityCandidate" in markdown
         assert f"--session-plan '{plan_path}'" in markdown
         assert "session-plan gates" in markdown
+        assert "--require ready-one-cast" in markdown
+        assert "--require ready-bounded-session" in markdown
         assert "Fan-derived plans also require" in markdown
 
         with contextlib.redirect_stdout(io.StringIO()) as gate_output:
@@ -361,8 +363,10 @@ def test_session_plan_from_fan_candidate(helper) -> None:
             )
         gate_report = json.loads(gate_output.getvalue())
         assert gate_report["schema"] == "autofish.sessionPlan.reviewGates.v1"
+        assert gate_report["readiness"]["stopFileClear"]
         assert gate_report["readiness"]["confirmedOneCast"]
         assert not gate_report["readiness"]["confirmedBoundedSession"]
+        assert not gate_report["readiness"]["readyForOneCast"]
         with contextlib.redirect_stdout(io.StringIO()):
             assert (
                 helper.run_session_plan_gates(
@@ -385,6 +389,25 @@ def test_session_plan_from_fan_candidate(helper) -> None:
                 )
                 == 1
             )
+
+        stop_file = Path(tmp) / "STOP.txt"
+        stop_file.write_text("stop", encoding="utf-8")
+        stop_gate = helper.check_session_plan_stop_file_gate({"plan": plan})
+        assert stop_gate["required"]
+        assert not stop_gate["passed"]
+        assert stop_gate["exists"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert (
+                helper.run_session_plan_gates(
+                    argparse.Namespace(
+                        path=str(plan_path),
+                        decision_register=str(decision_register),
+                        require=["stop-file-clear"],
+                    )
+                )
+                == 1
+            )
+        stop_file.unlink()
 
         register_output = Path(tmp) / "recorded-decisions.json"
         with contextlib.redirect_stdout(io.StringIO()) as decide_output:
