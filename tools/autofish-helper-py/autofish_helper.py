@@ -1169,6 +1169,66 @@ def get_session_plan_review_token(session_plan_info: dict[str, Any] | None) -> s
     return str(token) if token else None
 
 
+def build_session_plan_provenance(session_plan_info: dict[str, Any] | None) -> dict[str, Any] | None:
+    plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
+    if not isinstance(plan, dict):
+        return None
+
+    review = plan.get("review") if isinstance(plan.get("review"), dict) else {}
+    source = plan.get("source") if isinstance(plan.get("source"), dict) else None
+    target = plan.get("target") if isinstance(plan.get("target"), dict) else {}
+    point = plan.get("fishablePoint") if isinstance(plan.get("fishablePoint"), dict) else {}
+    profile = plan.get("profile") if isinstance(plan.get("profile"), dict) else {}
+
+    provenance: dict[str, Any] = {
+        "path": session_plan_info.get("path"),
+        "scopeToken": review.get("scopeToken"),
+        "target": {
+            "pid": target.get("pid"),
+            "hwnd": target.get("hwnd"),
+        },
+        "fishablePoint": {
+            "x": point.get("x"),
+            "y": point.get("y"),
+            "coordinateSpace": point.get("coordinateSpace", "client"),
+        },
+        "profile": {
+            "id": profile.get("id"),
+            "root": profile.get("root"),
+        } if profile else None,
+    }
+
+    if source:
+        source_provenance: dict[str, Any] = {
+            "type": source.get("type"),
+            "manifest": source.get("manifest"),
+            "candidateIndex": source.get("candidateIndex"),
+            "candidateName": source.get("candidateName"),
+            "classification": source.get("classification"),
+        }
+        facing_evidence = source.get("facingEvidence") if isinstance(source.get("facingEvidence"), dict) else None
+        if facing_evidence:
+            operational_facing = (
+                facing_evidence.get("operationalFacing")
+                if isinstance(facing_evidence.get("operationalFacing"), dict)
+                else {}
+            )
+            source_provenance["facingEvidence"] = {
+                "manifest": facing_evidence.get("manifest"),
+                "classification": facing_evidence.get("classification"),
+                "usable": bool(facing_evidence.get("usable")),
+                "suggestedReview": facing_evidence.get("suggestedReview"),
+                "operationalFacing": operational_facing,
+                "isNativeActorFacing": bool(
+                    facing_evidence.get("isNativeActorFacing")
+                    or operational_facing.get("isNativeActorFacing")
+                ),
+            }
+        provenance["source"] = source_provenance
+
+    return {key: value for key, value in provenance.items() if value is not None}
+
+
 def positive_int_or_none(value: Any) -> int | None:
     try:
         parsed = int(value)
@@ -3019,6 +3079,7 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
             "confirmInput": bool(args.confirm_input),
         },
         "sessionPlan": plan_defaults["sessionPlan"],
+        "sessionPlanProvenance": build_session_plan_provenance(plan_defaults["sessionPlan"]),
         "sessionPlanAppliedDefaults": plan_defaults["appliedDefaults"],
         "profile": runtime_defaults["profile"],
         "appliedDefaults": runtime_defaults["appliedDefaults"],
@@ -3260,6 +3321,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
             "confirmInput": bool(args.confirm_input),
         },
         "sessionPlan": plan_defaults["sessionPlan"],
+        "sessionPlanProvenance": build_session_plan_provenance(plan_defaults["sessionPlan"]),
         "sessionPlanAppliedDefaults": plan_defaults["appliedDefaults"],
         "profile": runtime_defaults["profile"],
         "appliedDefaults": runtime_defaults["appliedDefaults"],
@@ -5371,6 +5433,39 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
     return "manual-review"
 
 
+def summarize_session_plan_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
+    provenance = manifest.get("sessionPlanProvenance")
+    if not isinstance(provenance, dict):
+        return {}
+
+    source = provenance.get("source") if isinstance(provenance.get("source"), dict) else {}
+    facing_evidence = (
+        source.get("facingEvidence")
+        if isinstance(source.get("facingEvidence"), dict)
+        else {}
+    )
+    return {
+        "sessionPlanPath": provenance.get("path"),
+        "sessionPlanScopeToken": provenance.get("scopeToken"),
+        "sessionPlanSourceType": source.get("type"),
+        "sessionPlanSourceManifest": source.get("manifest"),
+        "sessionPlanSourceCandidateIndex": source.get("candidateIndex"),
+        "sessionPlanSourceCandidateName": source.get("candidateName"),
+        "sessionPlanSourceClassification": source.get("classification"),
+        "sourceFacingEvidenceAttached": bool(facing_evidence),
+        "sourceFacingManifest": facing_evidence.get("manifest"),
+        "sourceFacingUsable": bool(facing_evidence.get("usable")),
+        "sourceFacingClassification": facing_evidence.get("classification"),
+        "sourceFacingSuggestedReview": facing_evidence.get("suggestedReview"),
+        "sourceOperationalFacing": (
+            facing_evidence.get("operationalFacing")
+            if isinstance(facing_evidence.get("operationalFacing"), dict)
+            else {}
+        ),
+        "sourceFacingIsNativeActorFacing": bool(facing_evidence.get("isNativeActorFacing")),
+    }
+
+
 def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     schema = str(manifest.get("schema") or "unknown")
     signal = signal_from_schema(schema)
@@ -5468,6 +5563,7 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "reviewGatePassed": bool(review_gate.get("passed")),
                 "reviewGateOverridden": bool(review_gate.get("overridden")),
                 "target": manifest.get("target"),
+                **summarize_session_plan_provenance(manifest),
                 **summarize_review_gates(manifest),
                 **summarize_red_reticle_click_guards(manifest),
             }
@@ -5518,6 +5614,7 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "reviewGatePassed": bool(review_gate.get("passed")),
                 "reviewGateOverridden": bool(review_gate.get("overridden")),
                 "target": manifest.get("target"),
+                **summarize_session_plan_provenance(manifest),
                 **summarize_review_gates(manifest),
                 **summarize_red_reticle_click_guards(manifest),
             }
@@ -5667,6 +5764,36 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
     return summary
 
 
+def append_session_plan_provenance_lines(lines: list[str], summary: dict[str, Any]) -> None:
+    plan_path = summary.get("sessionPlanPath")
+    scope_token = summary.get("sessionPlanScopeToken")
+    source_type = summary.get("sessionPlanSourceType")
+    if not (plan_path or scope_token or source_type):
+        return
+
+    lines.append(f"- session plan: `{plan_path or '-'}`; scope: `{scope_token or '-'}`")
+    if source_type:
+        lines.append(
+            "- session plan source: "
+            f"{source_type}; manifest: `{summary.get('sessionPlanSourceManifest') or '-'}`; "
+            f"candidate: index={summary.get('sessionPlanSourceCandidateIndex')} "
+            f"name={summary.get('sessionPlanSourceCandidateName') or '-'} "
+            f"classification={summary.get('sessionPlanSourceClassification') or '-'}"
+        )
+    if summary.get("sourceFacingEvidenceAttached"):
+        facing = summary.get("sourceOperationalFacing") if isinstance(summary.get("sourceOperationalFacing"), dict) else {}
+        vector = facing.get("worldVectorXY") if isinstance(facing.get("worldVectorXY"), dict) else {}
+        lines.append(
+            f"- source facing evidence: usable={summary.get('sourceFacingUsable')} "
+            f"classification={summary.get('sourceFacingClassification')} "
+            f"review={summary.get('sourceFacingSuggestedReview')}"
+        )
+        lines.append(
+            f"- source operational facing: x={vector.get('x')} y={vector.get('y')} "
+            f"angle={facing.get('angleDegreesMath')} native={summary.get('sourceFacingIsNativeActorFacing')}"
+        )
+
+
 def render_signal_proof_markdown(report: dict[str, Any]) -> str:
     lines = [
         "# AutoFish Signal Proof Summary",
@@ -5730,6 +5857,7 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
                     lines.append(f"- red-reticle guard reasons: {'; '.join(str(reason) for reason in reasons)}")
             if summary.get("profileId"):
                 lines.append(f"- profile: {summary.get('profileId')} (`{summary.get('profilePath')}`)")
+            append_session_plan_provenance_lines(lines, summary)
         elif summary["signal"] == "boundedSession":
             lines.append(f"- classification: {summary.get('classification')}")
             lines.append(f"- completed: {summary.get('completed')}; live input sent: {summary.get('liveInputSent')}")
@@ -5758,6 +5886,7 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
                     lines.append(f"- red-reticle guard reasons: {'; '.join(str(reason) for reason in reasons)}")
             if summary.get("profileId"):
                 lines.append(f"- profile: {summary.get('profileId')} (`{summary.get('profilePath')}`)")
+            append_session_plan_provenance_lines(lines, summary)
         elif summary["signal"] == "fishabilityFan":
             lines.append(f"- candidates: {summary.get('candidateCount', 0)}; in bounds: {summary.get('inBoundsCandidateCount', 0)}")
             lines.append(f"- captures: {summary.get('captureCount', 0)}")

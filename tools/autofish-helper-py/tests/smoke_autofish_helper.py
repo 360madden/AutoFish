@@ -1093,6 +1093,68 @@ def test_session_plan_from_fan_candidate(helper) -> None:
 
         plan_path = Path(tmp) / "session-plan.json"
         plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        provenance = helper.build_session_plan_provenance({"path": str(plan_path), "plan": plan})
+        assert provenance["scopeToken"] == scope_token
+        assert provenance["source"]["manifest"] == str(manifest_path)
+        assert provenance["source"]["facingEvidence"]["usable"]
+        assert provenance["source"]["facingEvidence"]["classification"] == "usable-coordinate-delta"
+
+        one_cast_summary = helper.summarize_signal_proof_manifest(
+            Path(tmp) / "one-cast-proof" / "manifest.json",
+            {
+                "schema": "autofish.signalProof.oneCast.v1",
+                "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+                "mode": "dry-run",
+                "request": {"pullClicks": 1, "castWaitSeconds": 18},
+                "safety": {"clickCount": 0},
+                "captures": [],
+                "actions": [],
+                "result": {"classification": "dry-run-ready", "completed": True, "liveInputSent": False},
+                "decision": {"classification": "evidence-only"},
+                "reviewGates": {},
+                "sessionPlanProvenance": provenance,
+            },
+        )
+        assert one_cast_summary["sessionPlanScopeToken"] == scope_token
+        assert one_cast_summary["sessionPlanSourceType"] == "fishabilityFanCandidate"
+        assert one_cast_summary["sessionPlanSourceManifest"] == str(manifest_path)
+        assert one_cast_summary["sourceFacingEvidenceAttached"]
+        assert one_cast_summary["sourceFacingUsable"]
+        assert one_cast_summary["sourceOperationalFacing"]["worldVectorXY"]["y"] == 1.0
+
+        bounded_summary = helper.summarize_signal_proof_manifest(
+            Path(tmp) / "bounded-session-proof" / "manifest.json",
+            {
+                "schema": "autofish.signalProof.boundedSession.v1",
+                "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+                "mode": "dry-run",
+                "request": {"maxCasts": 3, "pullClicks": 1, "castWaitSeconds": 18},
+                "safety": {"maxClickCount": 0},
+                "captures": [],
+                "casts": [],
+                "result": {"classification": "dry-run-ready", "completed": True, "liveInputSent": False},
+                "decision": {"classification": "evidence-only"},
+                "reviewGates": {},
+                "sessionPlanProvenance": provenance,
+            },
+        )
+        assert bounded_summary["sessionPlanScopeToken"] == scope_token
+        assert bounded_summary["sourceFacingEvidenceAttached"]
+
+        proof_markdown = helper.render_signal_proof_markdown(
+            {
+                "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+                "proofRoot": ".autofish-live",
+                "manifestCount": 2,
+                "bySignal": {
+                    "oneCast": {"count": 1, "suggestedReviews": {one_cast_summary["suggestedReview"]: 1}},
+                    "boundedSession": {"count": 1, "suggestedReviews": {bounded_summary["suggestedReview"]: 1}},
+                },
+                "summaries": [one_cast_summary, bounded_summary],
+            }
+        )
+        assert "session plan source: fishabilityFanCandidate" in proof_markdown
+        assert "source facing evidence: usable=True" in proof_markdown
         markdown = helper.render_session_plan_runbook(str(plan_path), ".autofish-live")
         assert "--signal fishabilityCandidate" in markdown
         assert "source facing evidence" in markdown
