@@ -145,6 +145,23 @@ Do not treat ChromaLink reachability as coordinate truth. AutoFish must require 
 
 The facing-delta calibration path is documented in `docs/development/facing-delta-calibration.md`. It computes an operational X/Y facing vector from fresh before/after coordinates around one tiny confirmed forward movement pulse. Use that vector as a fan-planning hint only; it is not native Rift actor facing/yaw.
 
+`signal-proof fishability-fan` can now attach a usable `facingDelta` manifest as audit context:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan `
+  --pid <pid> `
+  --hwnd <hwnd> `
+  --origin-x <player-or-screen-anchor-x> `
+  --origin-y <player-or-screen-anchor-y> `
+  --forward-x <operator-forward-point-x> `
+  --forward-y <operator-forward-point-y> `
+  --facing-manifest .autofish-live\<facing-proof>\manifest.json `
+  --require-usable-facing `
+  --dry-run
+```
+
+This still does not create a world-to-screen mapping. Candidate points remain screen-space points from the operator-supplied origin/forward pair; the facing evidence proves only that a reviewed operational-facing hint was available when the fan was planned.
+
 Therefore, coordinate-backed fan probing is blocked on all of the following:
 
 1. reliable current player coordinates,

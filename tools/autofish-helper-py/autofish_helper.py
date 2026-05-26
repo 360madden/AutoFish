@@ -3515,6 +3515,49 @@ def build_reticle_candidate_commands(
     }
 
 
+def load_facing_evidence(path: str | None, *, require_usable: bool) -> dict[str, Any] | None:
+    if require_usable and not path:
+        raise RuntimeError("--require-usable-facing requires --facing-manifest.")
+    if not path:
+        return None
+
+    facing_path = Path(path)
+    manifest = load_json_object(facing_path)
+    schema = str(manifest.get("schema") or "")
+    if schema != "autofish.signalProof.facingDelta.v1":
+        raise RuntimeError(f"Unsupported facing manifest schema in {facing_path}: {schema or '<missing>'}")
+
+    validation_errors = validate_signal_proof_manifest_shape(manifest)
+    if validation_errors:
+        raise RuntimeError(f"Facing manifest is not valid enough to attach: {', '.join(validation_errors)}")
+
+    summary = summarize_signal_proof_manifest(facing_path, manifest)
+    if require_usable and not summary.get("usable"):
+        raise RuntimeError(
+            f"Facing manifest is not usable: classification={summary.get('classification')} "
+            f"suggestedReview={summary.get('suggestedReview')}"
+        )
+
+    facing = summary.get("operationalFacing") if isinstance(summary.get("operationalFacing"), dict) else {}
+    return {
+        "manifest": str(facing_path),
+        "schema": schema,
+        "mode": manifest.get("mode"),
+        "classification": summary.get("classification"),
+        "usable": bool(summary.get("usable")),
+        "suggestedReview": summary.get("suggestedReview"),
+        "delta": summary.get("delta") if isinstance(summary.get("delta"), dict) else {},
+        "operationalFacing": facing,
+        "isNativeActorFacing": bool(facing.get("isNativeActorFacing")),
+        "manualReviewRequired": True,
+        "notes": [
+            "Facing evidence is attached for audit/review context only.",
+            "Fishability fan candidate coordinates are still screen-space origin/forward inputs.",
+            "AutoFish does not convert world-coordinate facing into screen coordinates without a separately proven mapping.",
+        ],
+    }
+
+
 def render_fishability_fan_runbook(manifest_path: str) -> str:
     path = Path(manifest_path)
     manifest = load_json_object(path)
@@ -3546,6 +3589,22 @@ def render_fishability_fan_runbook(manifest_path: str) -> str:
     if not candidates:
         lines.append("No candidates were found in this manifest.")
         return "\n".join(lines).rstrip() + "\n"
+
+    facing_evidence = manifest.get("facingEvidence") if isinstance(manifest.get("facingEvidence"), dict) else {}
+    if facing_evidence:
+        facing = facing_evidence.get("operationalFacing") if isinstance(facing_evidence.get("operationalFacing"), dict) else {}
+        vector = facing.get("worldVectorXY") if isinstance(facing.get("worldVectorXY"), dict) else {}
+        lines.extend(
+            [
+                "Attached facing evidence:",
+                "",
+                f"- manifest: `{facing_evidence.get('manifest')}`",
+                f"- usable/classification: `{facing_evidence.get('usable')}` / `{facing_evidence.get('classification')}`",
+                f"- vector/angle: `x={vector.get('x')} y={vector.get('y')} angle={facing.get('angleDegreesMath')}`",
+                "- This is review context only; candidate points below remain screen-space points from the fan manifest.",
+                "",
+            ]
+        )
 
     for candidate in candidates:
         if not isinstance(candidate, dict):
@@ -3672,9 +3731,12 @@ def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
             "captureCrops": not args.no_capture_crops,
             "key": args.key,
             "probeWatchSeconds": args.probe_watch_seconds,
+            "facingManifest": args.facing_manifest,
+            "requireUsableFacing": bool(args.require_usable_facing),
         },
         "target": None,
         "geometry": None,
+        "facingEvidence": None,
         "candidates": [],
         "captures": [],
         "decision": {
@@ -3688,6 +3750,15 @@ def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
     }
 
     try:
+        facing_evidence = load_facing_evidence(args.facing_manifest, require_usable=bool(args.require_usable_facing))
+        manifest["facingEvidence"] = facing_evidence
+        manifest["safety"]["usesOperationalFacingEvidence"] = facing_evidence is not None
+        manifest["safety"]["doesNotTransformWorldFacingToScreen"] = True
+        if facing_evidence is not None:
+            manifest["decision"]["notes"].append(
+                "Operational facing evidence is attached only as review context; screen-space fan geometry still comes from origin/forward client points."
+            )
+
         target = validate_target(hwnd, args.pid, require_foreground=False)
         manifest["target"] = target
         if (args.client_width is None) != (args.client_height is None):
@@ -5417,6 +5488,7 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
         captures = manifest.get("captures") if isinstance(manifest.get("captures"), list) else []
         safety = manifest.get("safety") if isinstance(manifest.get("safety"), dict) else {}
         effective_client = manifest.get("effectiveClient") if isinstance(manifest.get("effectiveClient"), dict) else {}
+        facing_evidence = manifest.get("facingEvidence") if isinstance(manifest.get("facingEvidence"), dict) else {}
         in_bounds = [candidate for candidate in candidates if isinstance(candidate, dict) and candidate.get("inBounds")]
         summary.update(
             {
@@ -5427,6 +5499,12 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "movementCalibrationImplemented": bool(safety.get("movementCalibrationImplemented")),
                 "clientSizeSource": effective_client.get("source"),
                 "targetMinimized": bool(effective_client.get("targetMinimized")),
+                "facingEvidenceAttached": bool(facing_evidence),
+                "facingManifest": facing_evidence.get("manifest"),
+                "facingClassification": facing_evidence.get("classification"),
+                "facingUsable": bool(facing_evidence.get("usable")),
+                "facingSuggestedReview": facing_evidence.get("suggestedReview"),
+                "operationalFacing": facing_evidence.get("operationalFacing") if isinstance(facing_evidence.get("operationalFacing"), dict) else {},
             }
         )
     elif signal == "chromalinkWorldState":
@@ -5648,6 +5726,17 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- target minimized: {summary.get('targetMinimized')}")
             lines.append(f"- sends input: {summary.get('sendsInput')}")
             lines.append(f"- movement calibration implemented: {summary.get('movementCalibrationImplemented')}")
+            if summary.get("facingEvidenceAttached"):
+                facing = summary.get("operationalFacing") if isinstance(summary.get("operationalFacing"), dict) else {}
+                vector = facing.get("worldVectorXY") if isinstance(facing.get("worldVectorXY"), dict) else {}
+                lines.append(
+                    f"- facing evidence: usable={summary.get('facingUsable')} "
+                    f"classification={summary.get('facingClassification')} review={summary.get('facingSuggestedReview')}"
+                )
+                lines.append(
+                    f"- operational facing: x={vector.get('x')} y={vector.get('y')} angle={facing.get('angleDegreesMath')} "
+                    f"native={facing.get('isNativeActorFacing')}"
+                )
         elif summary["signal"] == "chromalinkWorldState":
             lines.append(f"- classification: {summary.get('classification')}")
             lines.append(f"- coordinate ready: {summary.get('coordinateReady')}")
@@ -6572,6 +6661,8 @@ def build_parser() -> argparse.ArgumentParser:
     fan.add_argument("--max-points", type=int, default=9, help="Maximum candidate points to generate; default: 9")
     fan.add_argument("--crop-size", type=int, default=140, help="No-input crop size for each in-bounds candidate; default: 140")
     fan.add_argument("--no-capture-crops", action="store_true", help="Only write candidate geometry; do not capture no-input crops")
+    fan.add_argument("--facing-manifest", help="Optional facingDelta manifest to attach as audit context; does not convert world-facing to screen coordinates")
+    fan.add_argument("--require-usable-facing", action="store_true", help="Fail unless --facing-manifest points to a usable operational-facing result")
     fan.add_argument("--dry-run", action="store_true", required=True, help="Required; fan planning sends no input")
     fan.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-fishability-fan-*.")
     fan.set_defaults(func=run_signal_proof_fishability_fan)

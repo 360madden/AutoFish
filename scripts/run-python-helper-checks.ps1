@@ -65,6 +65,7 @@ try {
     python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Select-String -Pattern 'max-plan-age-minutes' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Select-String -Pattern 'allow-red-reticle-click' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan --help | Select-String -Pattern 'facing-manifest' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan-runbook --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof chromalink --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof coordinate-crosscheck --help | Out-Null

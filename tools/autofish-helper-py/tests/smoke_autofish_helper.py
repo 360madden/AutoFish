@@ -701,6 +701,94 @@ def test_facing_from_coords_manual_delta(helper) -> None:
         assert summary["suggestedReview"] == "operational-facing-candidate-review"
 
 
+def test_fishability_fan_attaches_facing_evidence(helper) -> None:
+    with tempfile.TemporaryDirectory(prefix="autofish-helper-fan-facing-evidence-") as tmp:
+        root = Path(tmp)
+        facing_path = root / "facing" / "manifest.json"
+        facing_path.parent.mkdir()
+        facing_result = helper.compute_facing_delta(
+            {"x": 10, "y": 20, "z": 5},
+            {"x": 10, "y": 21, "z": 5},
+            min_distance=0.01,
+        )
+        facing_manifest = {
+            "schema": "autofish.signalProof.facingDelta.v1",
+            "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+            "mode": "manual-coordinate-delta",
+            "request": {},
+            "safety": {"sendsMovement": False},
+            "result": facing_result,
+            "decision": {"classification": facing_result["classification"]},
+        }
+        facing_path.write_text(json.dumps(facing_manifest), encoding="utf-8")
+
+        evidence = helper.load_facing_evidence(str(facing_path), require_usable=True)
+        assert evidence["usable"]
+        assert evidence["classification"] == "usable-coordinate-delta"
+        assert evidence["operationalFacing"]["isNativeActorFacing"] is False
+
+        fan_manifest_path = root / "fan" / "manifest.json"
+        fan_manifest_path.parent.mkdir()
+        fan_manifest = {
+            "schema": "autofish.signalProof.fishabilityFan.v1",
+            "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+            "mode": "dry-run",
+            "request": {
+                "pid": 1234,
+                "hwnd": "0x1234",
+                "originX": 100,
+                "originY": 100,
+                "forwardX": 100,
+                "forwardY": 0,
+            },
+            "safety": {"sendsInput": False, "movementCalibrationImplemented": False},
+            "target": {"hwnd": "0x1234"},
+            "effectiveClient": {"width": 300, "height": 300, "source": "operator-supplied"},
+            "facingEvidence": evidence,
+            "candidates": [
+                {
+                    "index": 0,
+                    "name": "d50_l0",
+                    "clientX": 100,
+                    "clientY": 50,
+                    "inBounds": True,
+                    "suggestedCommands": helper.build_reticle_candidate_commands(
+                        pid=1234,
+                        hwnd=0x1234,
+                        x=100,
+                        y=50,
+                        key="8",
+                        watch_seconds=2.0,
+                    ),
+                }
+            ],
+            "captures": [],
+            "decision": {"classification": "planning-only"},
+        }
+        fan_manifest_path.write_text(json.dumps(fan_manifest), encoding="utf-8")
+
+        summary = helper.summarize_signal_proof_manifest(fan_manifest_path, fan_manifest)
+        assert summary["manifestShapeValid"]
+        assert summary["facingEvidenceAttached"]
+        assert summary["facingUsable"]
+        assert summary["facingClassification"] == "usable-coordinate-delta"
+
+        markdown = helper.render_signal_proof_markdown(
+            {
+                "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+                "proofRoot": str(root),
+                "manifestCount": 1,
+                "bySignal": {"fishabilityFan": {"count": 1, "suggestedReviews": {summary["suggestedReview"]: 1}}},
+                "summaries": [summary],
+            }
+        )
+        assert "facing evidence: usable=True" in markdown
+
+        runbook = helper.render_fishability_fan_runbook(str(fan_manifest_path))
+        assert "Attached facing evidence" in runbook
+        assert "review context only" in runbook
+
+
 def test_target_snapshot_invalid_hwnd(helper) -> None:
     parser = helper.build_parser()
     args = parser.parse_args(
@@ -1357,6 +1445,7 @@ def main() -> int:
     test_signal_proof_doctor_report(helper)
     test_facing_delta_manifest_result_is_always_dict(helper)
     test_facing_from_coords_manual_delta(helper)
+    test_fishability_fan_attaches_facing_evidence(helper)
     test_target_snapshot_invalid_hwnd(helper)
     test_stale_session_plan_refuses_plan_backed_proofs(helper)
     test_fishability_fan_suggested_commands(helper)
