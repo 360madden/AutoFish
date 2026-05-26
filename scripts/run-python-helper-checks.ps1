@@ -66,6 +66,10 @@ try {
     python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Select-String -Pattern 'allow-red-reticle-click' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan-runbook --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof chromalink --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof coordinate-crosscheck --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof facing-delta --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof facing-from-coords --help | Select-String -Pattern 'before-line' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof doctor --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof doctor --help | Select-String -Pattern 'decision-register' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof decide --help | Out-Null

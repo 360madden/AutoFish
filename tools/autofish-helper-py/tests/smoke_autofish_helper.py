@@ -50,6 +50,7 @@ def test_doc_command_validator_surface(helper, doc_validator) -> None:
     assert "one-cast" in surface["signal-proof"]
     assert "bounded-session" in surface["signal-proof"]
     assert "facing-delta" in surface["signal-proof"]
+    assert "facing-from-coords" in surface["signal-proof"]
     assert "doctor" in surface["signal-proof"]
 
 
@@ -658,6 +659,46 @@ def test_facing_delta_manifest_result_is_always_dict(helper) -> None:
         written = json.loads((output_root / "manifest.json").read_text(encoding="utf-8"))
         assert isinstance(written["result"], dict)
         assert helper.validate_signal_proof_manifest_shape(written) == []
+
+
+def test_facing_from_coords_manual_delta(helper) -> None:
+    with tempfile.TemporaryDirectory(prefix="autofish-helper-facing-from-coords-") as tmp:
+        output_root = Path(tmp) / "facing-from-coords"
+        with contextlib.redirect_stdout(io.StringIO()) as run_output:
+            assert (
+                helper.run_signal_proof_facing_from_coords(
+                    argparse.Namespace(
+                        before_line="coords x=10 y=20 z=5 playerUnit=u1",
+                        before_x=None,
+                        before_y=None,
+                        before_z=None,
+                        after_line="coords x=10 y=21 z=5 playerUnit=u1",
+                        after_x=None,
+                        after_y=None,
+                        after_z=None,
+                        min_distance=0.01,
+                        output_root=str(output_root),
+                    )
+                )
+                == 0
+            )
+        result = json.loads(run_output.getvalue())
+        assert result["ok"]
+        assert result["classification"] == "usable-coordinate-delta"
+        assert result["operationalFacing"]["isNativeActorFacing"] is False
+
+        manifest = json.loads((output_root / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["schema"] == "autofish.signalProof.facingDelta.v1"
+        assert manifest["mode"] == "manual-coordinate-delta"
+        assert not manifest["safety"]["sendsInput"]
+        assert not manifest["safety"]["sendsMovement"]
+        assert manifest["before"]["coordinateReady"]
+        assert manifest["after"]["coordinateReady"]
+        assert helper.validate_signal_proof_manifest_shape(manifest) == []
+
+        summary = helper.summarize_signal_proof_manifest(output_root / "manifest.json", manifest)
+        assert summary["usable"]
+        assert summary["suggestedReview"] == "operational-facing-candidate-review"
 
 
 def test_target_snapshot_invalid_hwnd(helper) -> None:
@@ -1315,6 +1356,7 @@ def main() -> int:
     test_manifest_shape_validation_summary(helper)
     test_signal_proof_doctor_report(helper)
     test_facing_delta_manifest_result_is_always_dict(helper)
+    test_facing_from_coords_manual_delta(helper)
     test_target_snapshot_invalid_hwnd(helper)
     test_stale_session_plan_refuses_plan_backed_proofs(helper)
     test_fishability_fan_suggested_commands(helper)

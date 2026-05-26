@@ -35,6 +35,7 @@ Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` be
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof chromalink` for read-only ChromaLink world-state/player-coordinate freshness proof.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof coordinate-crosscheck` for read-only comparison of manual `/autofish coords` output against fresh ChromaLink `player.position`.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof facing-delta` for guarded operational facing estimation from fresh coordinates plus one tiny confirmed movement pulse.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof facing-from-coords` for no-input operational facing math from two manually captured `/autofish coords` lines when ChromaLink is not fresh.
 - `python tools/autofish-helper-py/autofish_helper.py session-plan gates|explain|preflight|checklist|runbook` for no-input readiness checks, blocked-gate explanations, fail-closed readable preflights, ordered operator checklists, and scoped next commands from a current session plan.
 - `python tools/autofish-helper-py/autofish_helper.py doctor` for one read-only operator health bundle combining proof-root health and session-plan health when a plan exists.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof slash` for bounded `/autofish` command output screenshots.

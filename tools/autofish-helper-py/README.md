@@ -389,6 +389,16 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof facing-delta `
 
 Confirmed mode requires exact PID/HWND, foreground target, non-minimized target, fresh ChromaLink before-position, and a movement hold within the safety cap. It sends no fishing key and no mouse clicks. The result is a normalized X/Y coordinate-delta vector plus a math angle; treat it as an operational facing hint only.
 
+If ChromaLink is not fresh but `/autofish coords` is visible in chat, compute the same operational delta from two manually captured coordinate lines without helper movement or ChromaLink queries:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof facing-from-coords `
+  --before-line "coords x=<x1> y=<y1> z=<z1> playerUnit=<unit>" `
+  --after-line "coords x=<x2> y=<y2> z=<z2> playerUnit=<unit>"
+```
+
+Use this only after the operator deliberately collects the before coordinate, performs the intended tiny manual step, and collects the after coordinate. It still writes a `facingDelta` manifest, but marks the movement as operator-manual and `isNativeActorFacing=false`.
+
 ## Log proof harness
 
 The `/log` family of historical signals is read-only and must prove current usefulness before runtime use:

@@ -4090,6 +4090,50 @@ def parse_addon_coord_line(line: str) -> dict[str, Any]:
     }
 
 
+def manual_coordinate_sample(
+    label: str,
+    *,
+    line: str | None,
+    x: float | None,
+    y: float | None,
+    z: float | None,
+) -> dict[str, Any]:
+    numeric_values = (x, y, z)
+    has_any_numeric = any(value is not None for value in numeric_values)
+    if has_any_numeric and not all(value is not None for value in numeric_values):
+        raise RuntimeError(f"--{label}-x, --{label}-y, and --{label}-z must be supplied together.")
+    if has_any_numeric and line:
+        raise RuntimeError(f"Use either --{label}-line or --{label}-x/--{label}-y/--{label}-z, not both.")
+
+    if has_any_numeric:
+        coordinate = {
+            "source": f"manual-{label}-coordinate-values",
+            "line": None,
+            "x": float(x),
+            "y": float(y),
+            "z": float(z),
+            "playerUnit": None,
+        }
+    elif line:
+        coordinate = parse_addon_coord_line(line)
+    else:
+        raise RuntimeError(f"Provide --{label}-line or --{label}-x/--{label}-y/--{label}-z.")
+
+    return {
+        "source": coordinate.get("source"),
+        "sampleLabel": label,
+        "line": coordinate.get("line"),
+        "coordinateReady": True,
+        "manual": True,
+        "position": {
+            "x": coordinate["x"],
+            "y": coordinate["y"],
+            "z": coordinate["z"],
+            "playerUnit": coordinate.get("playerUnit"),
+        },
+    }
+
+
 def addon_coordinate_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
     numeric_values = (args.addon_x, args.addon_y, args.addon_z)
     has_any_numeric = any(value is not None for value in numeric_values)
@@ -4500,6 +4544,105 @@ def run_signal_proof_facing_delta(args: argparse.Namespace) -> int:
             return 0
 
         result = compute_facing_delta(before["position"], after["position"], min_distance=args.min_distance)
+        manifest["result"] = result
+        manifest["decision"]["classification"] = result["classification"]
+        write_manifest(output_root, manifest)
+        print(
+            json.dumps(
+                {
+                    "ok": bool(result["usable"]),
+                    "outputRoot": str(output_root),
+                    "manifest": str(output_root / "manifest.json"),
+                    "classification": result["classification"],
+                    "delta": result["delta"],
+                    "operationalFacing": result["operationalFacing"],
+                },
+                indent=2,
+            )
+        )
+        return 0
+    except Exception as exc:
+        manifest["error"] = str(exc)
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+
+
+def run_signal_proof_facing_from_coords(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-facing-from-coords-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    manifest: dict[str, Any] = {
+        "schema": "autofish.signalProof.facingDelta.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "mode": "manual-coordinate-delta",
+        "safety": {
+            "sendsInput": False,
+            "sendsMovement": False,
+            "sendsFishingKey": False,
+            "clickCount": 0,
+            "movementPulseCount": 0,
+            "requiresExactPidHwnd": False,
+            "requiresManualBeforeAfterCoordinateEvidence": True,
+            "modifiesChromaLink": False,
+            "usesChromaLinkAsReadOnlyProvider": False,
+            "isNativeActorFacing": False,
+        },
+        "request": {
+            "minDistance": args.min_distance,
+            "beforeLineProvided": bool(args.before_line),
+            "afterLineProvided": bool(args.after_line),
+            "beforeValuesProvided": any(value is not None for value in (args.before_x, args.before_y, args.before_z)),
+            "afterValuesProvided": any(value is not None for value in (args.after_x, args.after_y, args.after_z)),
+        },
+        "target": None,
+        "before": None,
+        "movement": {
+            "kind": "operator-manual-between-coordinate-samples",
+            "sentByHelper": False,
+            "sendsMovement": False,
+            "notes": [
+                "The helper did not move the character.",
+                "The operator must collect the before coordinate, perform any intended manual step, then collect the after coordinate.",
+            ],
+        },
+        "after": None,
+        "result": build_facing_delta_result(
+            "unproven",
+            reason="No manual coordinate delta has been computed yet.",
+        ),
+        "decision": {
+            "classification": "unproven",
+            "notes": [
+                "This estimates operational facing from two manually supplied /autofish coords samples.",
+                "It sends no game input, sends no movement, and does not query or modify ChromaLink.",
+                "The result is an operator-facing hint only; it is not native Rift actor-facing/yaw.",
+            ],
+        },
+    }
+
+    try:
+        if args.min_distance < 0:
+            raise RuntimeError("--min-distance must be non-negative.")
+
+        before = manual_coordinate_sample(
+            "before",
+            line=args.before_line,
+            x=args.before_x,
+            y=args.before_y,
+            z=args.before_z,
+        )
+        after = manual_coordinate_sample(
+            "after",
+            line=args.after_line,
+            x=args.after_x,
+            y=args.after_y,
+            z=args.after_z,
+        )
+        result = compute_facing_delta(before["position"], after["position"], min_distance=args.min_distance)
+
+        manifest["before"] = before
+        manifest["after"] = after
         manifest["result"] = result
         manifest["decision"]["classification"] = result["classification"]
         write_manifest(output_root, manifest)
@@ -6486,6 +6629,22 @@ def build_parser() -> argparse.ArgumentParser:
     facing_mode.add_argument("--confirm-movement", action="store_true", help="Allow one tiny movement-key pulse after exact foreground and fresh-coordinate gates pass")
     facing.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-facing-delta-*.")
     facing.set_defaults(func=run_signal_proof_facing_delta)
+
+    facing_from_coords = signal_sub.add_parser(
+        "facing-from-coords",
+        help="Compute operational facing from two manual /autofish coords samples without sending input",
+    )
+    facing_from_coords.add_argument("--before-line", help='Before-movement /autofish coords line, for example: coords x=1.23 y=4.56 z=7.89 playerUnit=...')
+    facing_from_coords.add_argument("--before-x", type=float, help="Before coordX value; requires --before-y and --before-z")
+    facing_from_coords.add_argument("--before-y", type=float, help="Before coordY value; requires --before-x and --before-z")
+    facing_from_coords.add_argument("--before-z", type=float, help="Before coordZ value; requires --before-x and --before-y")
+    facing_from_coords.add_argument("--after-line", help='After-movement /autofish coords line, for example: coords x=1.33 y=4.56 z=7.89 playerUnit=...')
+    facing_from_coords.add_argument("--after-x", type=float, help="After coordX value; requires --after-y and --after-z")
+    facing_from_coords.add_argument("--after-y", type=float, help="After coordY value; requires --after-x and --after-z")
+    facing_from_coords.add_argument("--after-z", type=float, help="After coordZ value; requires --after-x and --after-y")
+    facing_from_coords.add_argument("--min-distance", type=float, default=0.01, help="Minimum X/Y coordinate delta required to mark facing usable; default: 0.01")
+    facing_from_coords.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-facing-from-coords-*.")
+    facing_from_coords.set_defaults(func=run_signal_proof_facing_from_coords)
 
     log = signal_sub.add_parser("log", help="Capture and scan newly appended Rift log text without sending input")
     log.add_argument("--log-path", required=True, help="Path to the Rift log file to watch")

@@ -83,6 +83,18 @@ The confirmed mode sends exactly one tiny movement-key pulse only after:
 5. `--hold-ms` is within the configured safety cap,
 6. the movement key is not `-`.
 
+## Manual coordinate-delta fallback
+
+If ChromaLink is down or stale but the addon-side `/autofish coords` command is visible in chat, record the same operational-facing math from two manually captured coordinate samples:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof facing-from-coords `
+  --before-line "coords x=<x1> y=<y1> z=<z1> playerUnit=<unit>" `
+  --after-line "coords x=<x2> y=<y2> z=<z2> playerUnit=<unit>"
+```
+
+This command sends no game input, sends no movement, and does not query or modify ChromaLink. It assumes the operator intentionally collected the before coordinate, performed the intended tiny manual step, then collected the after coordinate. Its manifest still uses the `facingDelta` signal so summaries and reviewed decisions stay on one operational-facing lane.
+
 ## Output
 
 When successful, the manifest records:
