@@ -1613,11 +1613,17 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         required_readiness=args.require or [],
     )
     print(json.dumps(report, indent=2))
-    for required in args.require or []:
+    return 1 if session_plan_required_readiness_failures(report) else 0
+
+
+def session_plan_required_readiness_failures(report: dict[str, Any]) -> list[str]:
+    readiness = report.get("readiness") if isinstance(report.get("readiness"), dict) else {}
+    failures: list[str] = []
+    for required in report.get("requiredReadiness") or []:
         readiness_name = READINESS_NAME_BY_FLAG[required]
-        if report["readiness"].get(readiness_name) is not True:
-            return 1
-    return 0
+        if readiness.get(readiness_name) is not True:
+            failures.append(str(required))
+    return failures
 
 
 def session_plan_gate_status(gate: dict[str, Any] | None) -> str:
@@ -1661,6 +1667,8 @@ def session_plan_next_action(report: dict[str, Any]) -> str:
 def render_session_plan_gate_explanation(report: dict[str, Any]) -> str:
     readiness = report.get("readiness") if isinstance(report.get("readiness"), dict) else {}
     gates = report.get("gates") if isinstance(report.get("gates"), dict) else {}
+    required_readiness = [str(flag) for flag in report.get("requiredReadiness") or []]
+    failing_required = session_plan_required_readiness_failures(report)
     lines = [
         "# AutoFish Session Plan Gate Explanation",
         "",
@@ -1669,6 +1677,8 @@ def render_session_plan_gate_explanation(report: dict[str, Any]) -> str:
         f"- sends game input: `no`",
         f"- ready for one-cast: `{'yes' if readiness.get('readyForOneCast') else 'no'}`",
         f"- ready for bounded session: `{'yes' if readiness.get('readyForBoundedSession') else 'no'}`",
+        f"- required readiness: `{', '.join(required_readiness) if required_readiness else '-'}`",
+        f"- failing required readiness: `{', '.join(failing_required) if failing_required else '-'}`",
         "",
         "| Gate | Status | Reason |",
         "| --- | --- | --- |",
@@ -1704,6 +1714,24 @@ def run_session_plan_explain(args: argparse.Namespace) -> int:
     else:
         print(markdown)
     return 0
+
+
+def run_session_plan_preflight(args: argparse.Namespace) -> int:
+    report = build_session_plan_gate_report(
+        args.path,
+        args.decision_register,
+        max_plan_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+        required_readiness=args.require or [],
+    )
+    markdown = render_session_plan_gate_explanation(report)
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown + "\n", encoding="utf-8")
+        print(json.dumps({"ok": True, "path": str(output_path)}, indent=2))
+    else:
+        print(markdown)
+    return 1 if session_plan_required_readiness_failures(report) else 0
 
 
 def quote_ps(value: str) -> str:
@@ -1762,6 +1790,12 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         "",
         "```powershell",
         f"{helper} session-plan explain --path {plan_arg}",
+        "```",
+        "",
+        "Preflight and fail closed with a readable reason if one-cast is not ready:",
+        "",
+        "```powershell",
+        f"{helper} session-plan preflight --path {plan_arg} --require ready-one-cast",
         "```",
         "",
         "Fail closed if the current target client size no longer matches the plan:",
@@ -4911,6 +4945,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     session_plan_explain.add_argument("--output", help="Optional markdown output path")
     session_plan_explain.set_defaults(func=run_session_plan_explain)
+    session_plan_preflight = session_plan_sub.add_parser(
+        "preflight",
+        help="Print operator gate explanation and fail closed when requested readiness is blocked",
+    )
+    session_plan_preflight.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
+    session_plan_preflight.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register path")
+    session_plan_preflight.add_argument(
+        "--max-plan-age-minutes",
+        type=float,
+        default=DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+        help=(
+            "Maximum session plan age for planFresh/ready-* gates; use <=0 to disable. "
+            f"Default: {DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES}"
+        ),
+    )
+    session_plan_preflight.add_argument(
+        "--require",
+        action="append",
+        choices=tuple(READINESS_NAME_BY_FLAG.keys()),
+        help="Return a failing exit code unless this readiness gate is true; repeatable",
+    )
+    session_plan_preflight.add_argument("--output", help="Optional markdown output path")
+    session_plan_preflight.set_defaults(func=run_session_plan_preflight)
     session_plan_stop_file = session_plan_sub.add_parser("stop-file", help="Create, clear, or inspect the stop file from a session plan")
     session_plan_stop_file_sub = session_plan_stop_file.add_subparsers(dest="stop_file_action", required=True)
     for action, help_text in (
@@ -4936,17 +4993,7 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_gates.add_argument(
         "--require",
         action="append",
-        choices=(
-            "stop-file-clear",
-            "plan-fresh",
-            "target-current",
-            "target-foreground",
-            "client-readable",
-            "confirmed-one-cast",
-            "confirmed-bounded-session",
-            "ready-one-cast",
-            "ready-bounded-session",
-        ),
+        choices=tuple(READINESS_NAME_BY_FLAG.keys()),
         help="Return a failing exit code unless this readiness gate is true; repeatable",
     )
     session_plan_gates.set_defaults(func=run_session_plan_gates)

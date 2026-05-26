@@ -119,6 +119,7 @@ def test_runbook_render(helper) -> None:
         assert "signal-proof bounded-session --session-plan" in markdown
         assert "--signal oneCast" in markdown
         assert "session-plan explain" in markdown
+        assert "session-plan preflight" in markdown
         assert "session-plan stop-file create" in markdown
         assert "session-plan stop-file clear" in markdown
         assert ".autofish-live/STOP.txt" in markdown
@@ -405,6 +406,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert f"--session-plan '{plan_path}'" in markdown
         assert "session-plan gates" in markdown
         assert "session-plan explain" in markdown
+        assert "session-plan preflight" in markdown
         assert "--require ready-one-cast" in markdown
         assert "--require ready-bounded-session" in markdown
         assert "session-plan stop-file create" in markdown
@@ -430,6 +432,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         explanation = helper.render_session_plan_gate_explanation(gate_report)
         assert "AutoFish Session Plan Gate Explanation" in explanation
         assert "sends game input: `no`" in explanation
+        assert "required readiness: `-`" in explanation
         assert "## Next action" in explanation
         with contextlib.redirect_stdout(io.StringIO()) as explain_output:
             assert (
@@ -444,6 +447,34 @@ def test_session_plan_from_fan_candidate(helper) -> None:
                 == 0
             )
         assert "AutoFish Session Plan Gate Explanation" in explain_output.getvalue()
+        with contextlib.redirect_stdout(io.StringIO()) as preflight_pass_output:
+            assert (
+                helper.run_session_plan_preflight(
+                    argparse.Namespace(
+                        path=str(plan_path),
+                        decision_register=str(decision_register),
+                        max_plan_age_minutes=0,
+                        require=["confirmed-one-cast"],
+                        output=None,
+                    )
+                )
+                == 0
+            )
+        assert "failing required readiness: `-`" in preflight_pass_output.getvalue()
+        with contextlib.redirect_stdout(io.StringIO()) as preflight_fail_output:
+            assert (
+                helper.run_session_plan_preflight(
+                    argparse.Namespace(
+                        path=str(plan_path),
+                        decision_register=str(decision_register),
+                        max_plan_age_minutes=0,
+                        require=["ready-one-cast"],
+                        output=None,
+                    )
+                )
+                == 1
+            )
+        assert "failing required readiness: `ready-one-cast`" in preflight_fail_output.getvalue()
         with contextlib.redirect_stdout(io.StringIO()):
             assert (
                 helper.run_session_plan_gates(

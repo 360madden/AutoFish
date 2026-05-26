@@ -108,6 +108,14 @@ python tools\autofish-helper-py\autofish_helper.py session-plan explain `
   --path .autofish-live\session-plan-latest.json
 ```
 
+To combine the readable explanation with a fail-closed exit code for scripts:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan preflight `
+  --path .autofish-live\session-plan-latest.json `
+  --require ready-one-cast
+```
+
 Dry-run first:
 
 ```powershell
@@ -236,7 +244,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
 
-Use `session-plan explain --path .autofish-live\session-plan-latest.json` when the JSON gates are not enough; it prints a no-input operator summary, blocked reasons, and the next unblocked action.
+Use `session-plan explain --path .autofish-live\session-plan-latest.json` when the JSON gates are not enough; it prints a no-input operator summary, blocked reasons, and the next unblocked action. Use `session-plan preflight --require ready-one-cast` or `--require ready-bounded-session` when a script should print that same readable summary and fail closed if the requested readiness bundle is blocked.
 
 Add `--require stop-file-clear`, `--require plan-fresh`, `--require target-current`, `--require target-foreground`, `--require client-readable`, `--require confirmed-one-cast`, or `--require confirmed-bounded-session` when a script should fail closed unless that gate is ready. For the practical pre-live bundles, use `--require ready-one-cast` before confirmed `one-cast` and `--require ready-bounded-session` before confirmed `bounded-session`; these compound checks include the stop-file, plan-age, target-current, foreground, readability, and needed reviewed-decision gates.
 

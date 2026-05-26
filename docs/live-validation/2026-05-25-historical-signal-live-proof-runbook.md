@@ -91,6 +91,14 @@ python tools\autofish-helper-py\autofish_helper.py session-plan explain `
   --path .autofish-live\session-plan-latest.json
 ```
 
+For scripts or copy/paste live preflight, use the readable fail-closed form:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan preflight `
+  --path .autofish-live\session-plan-latest.json `
+  --require ready-one-cast
+```
+
 Print the next commands from the plan:
 
 ```powershell

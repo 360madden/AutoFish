@@ -112,7 +112,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
 
-Use `session-plan explain --path .autofish-live\session-plan-latest.json` for the no-input plain-language blocked-gate summary and next action.
+Use `session-plan explain --path .autofish-live\session-plan-latest.json` for the no-input plain-language blocked-gate summary and next action. Use `session-plan preflight --path .autofish-live\session-plan-latest.json --require ready-one-cast` when a script or operator copy/paste step should print the same summary and fail closed.
 
 Use `--require plan-fresh` when a script should fail closed unless the session plan is inside the configured age window. The same age gate is enforced by plan-backed `one-cast` and `bounded-session`. The default is 240 minutes; use `--max-plan-age-minutes <minutes>` to tighten it, or `<=0` only for intentional offline diagnostics.
 
