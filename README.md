@@ -139,6 +139,12 @@ dotnet build AutoFish.sln --configuration Release
 .\scripts\run-local-checks.ps1
 ```
 
+This now includes the Python helper smoke checks. If local `lua`/`luac` are not installed and the current change is intentionally non-Lua, use:
+
+```powershell
+.\scripts\run-local-checks.ps1 -SkipLuaChecks
+```
+
 ### Run Python helper checks only
 
 ```powershell
