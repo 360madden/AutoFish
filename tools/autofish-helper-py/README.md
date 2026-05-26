@@ -92,6 +92,8 @@ python tools\autofish-helper-py\autofish_helper.py session-plan create `
 
 Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, or the fishable coordinate changes.
 
+By default, a session plan includes `.autofish-live\STOP.txt` as the emergency stop file. Create that file to stop before the next bounded action or during a wait period; delete it before a later supervised rerun.
+
 To print the exact next commands from a plan:
 
 ```powershell

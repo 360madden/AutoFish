@@ -87,6 +87,7 @@ def test_session_plan_defaults(helper) -> None:
         assert args.profile == "starter-pond"
         assert args.key == "8"
         assert args.max_casts == 3
+        assert args.stop_file == ".autofish-live/STOP.txt"
 
 
 def test_runbook_render(helper) -> None:
@@ -117,6 +118,8 @@ def test_runbook_render(helper) -> None:
         assert "signal-proof one-cast --session-plan" in markdown
         assert "signal-proof bounded-session --session-plan" in markdown
         assert "--signal oneCast" in markdown
+        assert "New-Item -ItemType File -Force -Path" in markdown
+        assert ".autofish-live/STOP.txt" in markdown
         assert "No command in this runbook sends movement" in markdown
 
 

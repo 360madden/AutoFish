@@ -70,6 +70,8 @@ python tools\autofish-helper-py\autofish_helper.py session-plan create `
 
 Do not reuse a session plan after Rift restarts, the window is resized, or the fishable coordinate changes.
 
+The default emergency stop file in a generated plan is `.autofish-live\STOP.txt`. Create it to abort before the next bounded helper action or during a wait period; remove it before a later supervised rerun.
+
 Print the next commands from the plan:
 
 ```powershell

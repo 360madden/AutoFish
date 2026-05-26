@@ -79,6 +79,7 @@ SIGNAL_NAMES = (
     "slash",
 )
 DEFAULT_CHROMALINK_BASE_URL = "http://127.0.0.1:7337"
+DEFAULT_STOP_FILE = ".autofish-live/STOP.txt"
 ADDON_COORD_RE = re.compile(r"\b([xyz])\s*=\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 ADDON_PLAYER_UNIT_RE = re.compile(r"\bplayerUnit\s*=\s*(\S+)", re.IGNORECASE)
 
@@ -888,7 +889,7 @@ def apply_session_plan_defaults(args: argparse.Namespace, *, include_session_def
     apply_default("pull_clicks", defaults.get("pullClicks"))
     apply_default("cast_wait_seconds", defaults.get("castWaitSeconds"))
     apply_default("post_pull_delay_ms", defaults.get("postPullDelayMs"))
-    apply_default("stop_file", defaults.get("stopFile"))
+    apply_default("stop_file", defaults.get("stopFile") or DEFAULT_STOP_FILE)
     if include_session_defaults:
         apply_default("max_casts", defaults.get("maxCasts"))
         apply_default("max_allowed_casts", defaults.get("maxAllowedCasts"))
@@ -908,6 +909,7 @@ def require_runtime_values(args: argparse.Namespace, names: tuple[str, ...], *, 
 
 
 def build_session_plan(args: argparse.Namespace) -> dict[str, Any]:
+    stop_file = args.stop_file or DEFAULT_STOP_FILE
     defaults: dict[str, Any] = {
         "key": args.key,
         "maxCasts": args.max_casts,
@@ -916,7 +918,7 @@ def build_session_plan(args: argparse.Namespace) -> dict[str, Any]:
         "castWaitSeconds": args.cast_wait_seconds,
         "postPullDelayMs": args.post_pull_delay_ms,
         "interCastDelayMs": args.inter_cast_delay_ms,
-        "stopFile": args.stop_file,
+        "stopFile": stop_file,
     }
     defaults = {key: value for key, value in defaults.items() if value is not None}
     plan: dict[str, Any] = {
@@ -985,6 +987,8 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
     helper = "python tools\\autofish-helper-py\\autofish_helper.py"
     plan_arg = quote_ps(plan_path)
     proof_root_arg = quote_ps(proof_root)
+    stop_file = defaults.get("stopFile") or DEFAULT_STOP_FILE
+    stop_file_arg = quote_ps(str(stop_file))
     one_cast_evidence = proof_root.rstrip("\\/") + "\\<one-cast-proof>\\manifest.json"
     lines = [
         "# AutoFish Session Plan Runbook",
@@ -994,6 +998,7 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         f"- fishable client point: `({point.get('x')},{point.get('y')})`",
         f"- profile: `{profile.get('id') or '-'}`",
         f"- key: `{defaults.get('key', '8')}`; max casts: `{defaults.get('maxCasts', 3)}`",
+        f"- emergency stop file: `{stop_file}`",
         "",
         "## 1. Review the plan",
         "",
@@ -1036,11 +1041,26 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         f"{helper} signal-proof bounded-session --session-plan {plan_arg} --confirm-input",
         "```",
         "",
+        "## Emergency stop",
+        "",
+        "Create the stop file before the next action should abort:",
+        "",
+        "```powershell",
+        f"New-Item -ItemType File -Force -Path {stop_file_arg}",
+        "```",
+        "",
+        "Clear it before a later supervised rerun:",
+        "",
+        "```powershell",
+        f"Remove-Item -Force -ErrorAction SilentlyContinue -Path {stop_file_arg}",
+        "```",
+        "",
         "Safety notes:",
         "",
         "- Do not use this plan after Rift restarts, the window is resized, or the fishable point changes.",
         "- Confirmed commands still require exact PID/HWND and foreground target.",
         "- Bounded-session confirmed mode requires a reviewed oneCast decision unless explicitly bypassed.",
+        "- The stop file is checked before each bounded action and during wait periods.",
         "- No command in this runbook sends movement.",
     ]
     return "\n".join(lines).rstrip() + "\n"
@@ -3671,7 +3691,7 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_create.add_argument("--cast-wait-seconds", type=float, help="Optional cast wait override; otherwise profile/default command pacing applies")
     session_plan_create.add_argument("--post-pull-delay-ms", type=int, help="Optional post-pull delay override; otherwise profile/default command pacing applies")
     session_plan_create.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Inter-cast delay default; default: 800")
-    session_plan_create.add_argument("--stop-file", help="Optional stop file path to include")
+    session_plan_create.add_argument("--stop-file", help=f"Stop file path to include; default: {DEFAULT_STOP_FILE}")
     session_plan_create.add_argument("--validate-target", action="store_true", help="Validate PID/HWND now and record target geometry without sending input")
     session_plan_create.add_argument("--output", default=".autofish-live/session-plan-latest.json", help="Output session plan JSON path")
     session_plan_create.set_defaults(func=run_session_plan_create)
