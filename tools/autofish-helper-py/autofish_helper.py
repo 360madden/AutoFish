@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 from ctypes import wintypes
+import hashlib
 import json
 import math
 import os
@@ -81,6 +82,7 @@ SIGNAL_NAMES = (
 )
 DEFAULT_CHROMALINK_BASE_URL = "http://127.0.0.1:7337"
 DEFAULT_STOP_FILE = ".autofish-live/STOP.txt"
+REVIEW_SCOPE_SCHEMA = "autofish.reviewScope.v1"
 ADDON_COORD_RE = re.compile(r"\b([xyz])\s*=\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 ADDON_PLAYER_UNIT_RE = re.compile(r"\bplayerUnit\s*=\s*(\S+)", re.IGNORECASE)
 
@@ -909,6 +911,69 @@ def require_runtime_values(args: argparse.Namespace, names: tuple[str, ...], *, 
         raise RuntimeError(f"{context} requires {flags}, either directly or through --session-plan.")
 
 
+def build_session_review_scope(plan: dict[str, Any]) -> dict[str, Any]:
+    target = plan.get("target") if isinstance(plan.get("target"), dict) else {}
+    point = plan.get("fishablePoint") if isinstance(plan.get("fishablePoint"), dict) else {}
+    profile = plan.get("profile") if isinstance(plan.get("profile"), dict) else {}
+    defaults = plan.get("defaults") if isinstance(plan.get("defaults"), dict) else {}
+    source = plan.get("source") if isinstance(plan.get("source"), dict) else None
+
+    scope: dict[str, Any] = {
+        "schema": REVIEW_SCOPE_SCHEMA,
+        "target": {
+            "pid": target.get("pid"),
+            "hwnd": target.get("hwnd"),
+        },
+        "fishablePoint": {
+            "x": point.get("x"),
+            "y": point.get("y"),
+            "coordinateSpace": point.get("coordinateSpace", "client"),
+        },
+        "profile": {
+            "id": profile.get("id"),
+            "root": profile.get("root"),
+        },
+        "defaults": {
+            "key": defaults.get("key"),
+            "maxCasts": defaults.get("maxCasts"),
+            "pullClicks": defaults.get("pullClicks"),
+            "castWaitSeconds": defaults.get("castWaitSeconds"),
+        },
+    }
+    if source:
+        scope["source"] = {
+            "type": source.get("type"),
+            "manifest": source.get("manifest"),
+            "candidateIndex": source.get("candidateIndex"),
+            "candidateName": source.get("candidateName"),
+        }
+    return scope
+
+
+def compute_review_scope_token(scope: dict[str, Any]) -> str:
+    payload = json.dumps(scope, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+    return f"afscope-{digest}"
+
+
+def attach_session_review_scope(plan: dict[str, Any]) -> dict[str, Any]:
+    scope = build_session_review_scope(plan)
+    plan["review"] = {
+        "schema": REVIEW_SCOPE_SCHEMA,
+        "scopeToken": compute_review_scope_token(scope),
+        "scope": scope,
+        "requiresScopedDecisions": True,
+    }
+    return plan
+
+
+def get_session_plan_review_token(session_plan_info: dict[str, Any] | None) -> str | None:
+    plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
+    review = plan.get("review") if isinstance(plan, dict) and isinstance(plan.get("review"), dict) else None
+    token = review.get("scopeToken") if isinstance(review, dict) else None
+    return str(token) if token else None
+
+
 def build_session_plan(args: argparse.Namespace) -> dict[str, Any]:
     stop_file = args.stop_file or DEFAULT_STOP_FILE
     defaults: dict[str, Any] = {
@@ -954,6 +1019,7 @@ def build_session_plan(args: argparse.Namespace) -> dict[str, Any]:
     }
     if args.validate_target:
         plan["targetValidation"] = validate_target(parse_hwnd(args.hwnd), int(args.pid), require_foreground=False)
+    attach_session_review_scope(plan)
     return plan
 
 
@@ -1030,6 +1096,7 @@ def build_session_plan_from_fan(args: argparse.Namespace) -> dict[str, Any]:
     }
     plan["safety"]["sourceCandidateIsPlanningOnly"] = True
     plan["safety"]["requiresReviewedFishableCandidateBeforeConfirmInput"] = True
+    attach_session_review_scope(plan)
     return plan
 
 
@@ -1080,6 +1147,9 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
     stop_file_arg = quote_ps(str(stop_file))
     one_cast_evidence = proof_root.rstrip("\\/") + "\\<one-cast-proof>\\manifest.json"
     fan_candidate_evidence = proof_root.rstrip("\\/") + "\\<candidate-reticle-proof>\\manifest.json"
+    review = plan.get("review") if isinstance(plan.get("review"), dict) else {}
+    scope_token = review.get("scopeToken")
+    scope_token_arg = quote_ps(str(scope_token)) if scope_token else None
     lines = [
         "# AutoFish Session Plan Runbook",
         "",
@@ -1090,6 +1160,8 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         f"- key: `{defaults.get('key', '8')}`; max casts: `{defaults.get('maxCasts', 3)}`",
         f"- emergency stop file: `{stop_file}`",
     ]
+    if scope_token:
+        lines.append(f"- review scope token: `{scope_token}`")
     if is_fan_candidate_plan:
         lines.append(
             f"- source: `fishabilityFanCandidate` index `{source.get('candidateIndex')}` name `{source.get('candidateName')}`"
@@ -1116,6 +1188,7 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
                 "  --decision fallback-only `",
                 "  --reason \"Reviewed fan candidate as fishable enough for one supervised one-cast proof.\" `",
                 f"  --evidence {quote_ps(fan_candidate_evidence)} `",
+                *([f"  --scope-token {scope_token_arg} `"] if scope_token_arg else []),
                 f"  --proof-root {proof_root_arg}",
                 "```",
                 "",
@@ -1142,6 +1215,7 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         "  --decision fallback-only `",
         "  --reason \"Reviewed one-cast proof is acceptable for a small supervised bounded session.\" `",
         f"  --evidence {quote_ps(one_cast_evidence)} `",
+        *([f"  --scope-token {scope_token_arg} `"] if scope_token_arg else []),
         f"  --proof-root {proof_root_arg}",
         "```",
         "",
@@ -1196,7 +1270,45 @@ def run_session_plan_runbook(args: argparse.Namespace) -> int:
     return 0
 
 
-def check_one_cast_review_gate(args: argparse.Namespace) -> dict[str, Any]:
+def decision_entry_scope_tokens(entry: dict[str, Any]) -> list[str]:
+    tokens: list[str] = []
+    scope_tokens = entry.get("scopeTokens")
+    if isinstance(scope_tokens, list):
+        tokens.extend(str(token) for token in scope_tokens if token)
+    scope_token = entry.get("scopeToken")
+    if scope_token:
+        tokens.append(str(scope_token))
+    return list(dict.fromkeys(tokens))
+
+
+def latest_signal_decision(register: dict[str, Any], signal: str) -> dict[str, Any] | None:
+    latest_by_signal = register.get("latestBySignal") if isinstance(register.get("latestBySignal"), dict) else {}
+    latest = latest_by_signal.get(signal)
+    return latest if isinstance(latest, dict) else None
+
+
+def latest_accepted_decision(
+    register: dict[str, Any],
+    *,
+    signal: str,
+    accepted_decisions: tuple[str, ...] = ("promote", "fallback-only"),
+    scope_token: str | None = None,
+) -> dict[str, Any] | None:
+    entries = register.get("entries") if isinstance(register.get("entries"), list) else []
+    for entry in reversed(entries):
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("signal") != signal:
+            continue
+        if entry.get("decision") not in accepted_decisions:
+            continue
+        if scope_token and scope_token not in decision_entry_scope_tokens(entry):
+            continue
+        return entry
+    return None
+
+
+def check_one_cast_review_gate(args: argparse.Namespace, session_plan_info: dict[str, Any] | None = None) -> dict[str, Any]:
     if getattr(args, "allow_unreviewed_one_cast", False):
         return {
             "required": False,
@@ -1207,8 +1319,12 @@ def check_one_cast_review_gate(args: argparse.Namespace) -> dict[str, Any]:
 
     register_path = Path(getattr(args, "decision_register", ".autofish-live/signal-proof-decisions.json"))
     register = load_decision_register(register_path)
-    latest_by_signal = register.get("latestBySignal") if isinstance(register.get("latestBySignal"), dict) else {}
-    latest = latest_by_signal.get("oneCast") if isinstance(latest_by_signal.get("oneCast"), dict) else None
+    scope_token = get_session_plan_review_token(session_plan_info)
+    latest = (
+        latest_accepted_decision(register, signal="oneCast", scope_token=scope_token)
+        if scope_token
+        else latest_signal_decision(register, "oneCast")
+    )
     decision = latest.get("decision") if latest else None
     passed = decision in ("promote", "fallback-only")
     gate = {
@@ -1217,13 +1333,16 @@ def check_one_cast_review_gate(args: argparse.Namespace) -> dict[str, Any]:
         "overridden": False,
         "register": str(register_path),
         "acceptedDecisions": ["promote", "fallback-only"],
+        "scopeToken": scope_token,
+        "requiresScopeMatch": bool(scope_token),
         "latestOneCastDecision": latest,
     }
     if not passed:
         gate["reason"] = (
             "Confirmed bounded-session requires a reviewed oneCast decision of promote or fallback-only in "
-            f"{register_path}. Run one-cast proof, record it with signal-proof decide --signal oneCast, "
-            "or intentionally bypass with --allow-unreviewed-one-cast."
+            f"{register_path}. Run one-cast proof, record it with signal-proof decide --signal oneCast"
+            + (f" --scope-token {scope_token}" if scope_token else "")
+            + ", or intentionally bypass with --allow-unreviewed-one-cast."
         )
     return gate
 
@@ -1267,8 +1386,12 @@ def check_fan_candidate_review_gate(
         return gate
 
     register = load_decision_register(Path(register_path))
-    latest_by_signal = register.get("latestBySignal") if isinstance(register.get("latestBySignal"), dict) else {}
-    latest = latest_by_signal.get("fishabilityCandidate") if isinstance(latest_by_signal.get("fishabilityCandidate"), dict) else None
+    scope_token = get_session_plan_review_token(session_plan_info)
+    latest = (
+        latest_accepted_decision(register, signal="fishabilityCandidate", scope_token=scope_token)
+        if scope_token
+        else latest_signal_decision(register, "fishabilityCandidate")
+    )
     decision = latest.get("decision") if latest else None
     passed = decision in ("promote", "fallback-only")
     gate.update(
@@ -1276,6 +1399,8 @@ def check_fan_candidate_review_gate(
             "passed": passed,
             "overridden": False,
             "acceptedDecisions": ["promote", "fallback-only"],
+            "scopeToken": scope_token,
+            "requiresScopeMatch": bool(scope_token),
             "latestFishabilityCandidateDecision": latest,
         }
     )
@@ -1283,8 +1408,9 @@ def check_fan_candidate_review_gate(
         gate["reason"] = (
             "Confirmed one-cast from a fishability-fan session plan requires a reviewed fishabilityCandidate "
             f"decision of promote or fallback-only in {register_path}. Run reticle skip-click/cancel proof for the "
-            "candidate, then record it with signal-proof decide --signal fishabilityCandidate, or intentionally "
-            "bypass with --allow-unreviewed-fan-candidate."
+            "candidate, then record it with signal-proof decide --signal fishabilityCandidate"
+            + (f" --scope-token {scope_token}" if scope_token else "")
+            + ", or intentionally bypass with --allow-unreviewed-fan-candidate."
         )
     return gate
 
@@ -1879,7 +2005,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
 
     try:
         manifest["reviewGate"] = (
-            check_one_cast_review_gate(args)
+            check_one_cast_review_gate(args, plan_defaults["sessionPlan"])
             if args.confirm_input
             else {
                 "required": False,
@@ -2164,7 +2290,6 @@ def render_fishability_fan_runbook(manifest_path: str) -> str:
             lines.extend(["", "Blocked: this candidate has no suggested reticle commands in the manifest.", ""])
             continue
         session_plan_path = f".autofish-live/session-plan-candidate-{index}.json"
-        candidate_evidence_path = f".autofish-live/<candidate-{index}-reticle-proof>/manifest.json"
         lines.extend(
             [
                 "",
@@ -2180,18 +2305,6 @@ def render_fishability_fan_runbook(manifest_path: str) -> str:
                 str(skip_click),
                 "```",
                 "",
-                "If reviewed as fishable, record that candidate decision:",
-                "",
-                "```powershell",
-                (
-                    "python tools\\autofish-helper-py\\autofish_helper.py signal-proof decide "
-                    "--signal fishabilityCandidate "
-                    "--decision fallback-only "
-                    "--reason \"Reviewed candidate reticle/game feedback as fishable enough for one supervised one-cast proof.\" "
-                    f"--evidence {quote_ps(candidate_evidence_path)}"
-                ),
-                "```",
-                "",
                 "If reviewed as fishable, create a one-cast session plan from this candidate:",
                 "",
                 "```powershell",
@@ -2201,6 +2314,15 @@ def render_fishability_fan_runbook(manifest_path: str) -> str:
                     f"--candidate-index {index} "
                     "--profile starter-pond "
                     f"--output {quote_ps(session_plan_path)}"
+                ),
+                "```",
+                "",
+                "Then print that session plan's scoped runbook and record the fishabilityCandidate decision with its review scope token:",
+                "",
+                "```powershell",
+                (
+                    "python tools\\autofish-helper-py\\autofish_helper.py session-plan runbook "
+                    f"--path {quote_ps(session_plan_path)}"
                 ),
                 "```",
                 "",
@@ -4026,7 +4148,10 @@ def run_signal_proof_decide(args: argparse.Namespace) -> int:
         "proofRoot": args.proof_root,
         "operator": args.operator,
         "notes": args.note or [],
+        "scopeTokens": args.scope_token or [],
     }
+    if args.scope_token:
+        entry["scopeToken"] = args.scope_token[-1]
     register["entries"].append(entry)
     register["latestBySignal"][args.signal] = entry
     register["updatedAtUtc"] = recorded_at
@@ -4309,6 +4434,7 @@ def build_parser() -> argparse.ArgumentParser:
     decide.add_argument("--decision", choices=SIGNAL_DECISIONS, required=True, help="Reviewed decision")
     decide.add_argument("--reason", required=True, help="Short human-reviewed reason for the decision")
     decide.add_argument("--evidence", action="append", help="Evidence path, manifest, summary, screenshot, or note; repeat as needed")
+    decide.add_argument("--scope-token", action="append", help="Session-plan review scope token this decision applies to; repeatable")
     decide.add_argument("--proof-root", default=".autofish-live", help="Proof root used for the decision; default: .autofish-live")
     decide.add_argument("--operator", help="Optional operator/reviewer name")
     decide.add_argument("--note", action="append", help="Extra note; repeat as needed")

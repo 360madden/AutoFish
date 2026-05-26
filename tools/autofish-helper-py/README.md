@@ -204,15 +204,7 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan-
   --manifest .autofish-live\<fishability-fan-proof>\manifest.json
 ```
 
-After one candidate is reviewed as fishable from reticle/game feedback, record the reviewed candidate decision and turn it into a local one-cast session plan:
-
-```powershell
-python tools\autofish-helper-py\autofish_helper.py signal-proof decide `
-  --signal fishabilityCandidate `
-  --decision fallback-only `
-  --reason "Reviewed fan candidate as fishable enough for one supervised one-cast proof." `
-  --evidence .autofish-live\<candidate-reticle-proof>\manifest.json
-```
+After one candidate is reviewed as fishable from reticle/game feedback, turn it into a local one-cast session plan:
 
 ```powershell
 python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
@@ -222,7 +214,14 @@ python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
   --output .autofish-live\session-plan-latest.json
 ```
 
-The created plan still marks the fan candidate as planning-only source evidence; confirmed one-cast input from that plan requires a reviewed `fishabilityCandidate` decision unless intentionally bypassed with `--allow-unreviewed-fan-candidate`. Run the generated session-plan dry-run before any confirmed one-cast proof.
+Then print the session-plan runbook and use its scoped `signal-proof decide --signal fishabilityCandidate --scope-token <token>` command before confirmed one-cast input:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan runbook `
+  --path .autofish-live\session-plan-latest.json
+```
+
+The created plan still marks the fan candidate as planning-only source evidence; confirmed one-cast input from that plan requires a reviewed `fishabilityCandidate` decision with the plan's review scope token unless intentionally bypassed with `--allow-unreviewed-fan-candidate`. Run the generated session-plan dry-run before any confirmed one-cast proof.
 
 ## ChromaLink coordinate proof
 

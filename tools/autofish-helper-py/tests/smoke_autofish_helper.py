@@ -225,8 +225,8 @@ def test_fishability_fan_runbook_render(helper) -> None:
         assert "Candidate 0" in markdown
         assert "reticle --pid 1234" in markdown
         assert "--skip-click --cancel-after-key" in markdown
-        assert "--signal fishabilityCandidate" in markdown
         assert "session-plan from-fan" in markdown
+        assert "session-plan runbook" in markdown
         assert "they send no left click and no movement" in markdown
 
 
@@ -273,6 +273,8 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert plan["profile"]["id"] == "starter-pond"
         assert plan["source"]["type"] == "fishabilityFanCandidate"
         assert plan["safety"]["requiresReviewedFishableCandidateBeforeConfirmInput"]
+        scope_token = plan["review"]["scopeToken"]
+        assert scope_token.startswith("afscope-")
         gate = helper.check_fan_candidate_review_gate(
             {"plan": plan},
             str(Path(tmp) / "missing-decisions.json"),
@@ -289,11 +291,94 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert bypassed_gate["passed"]
         assert bypassed_gate["overridden"]
 
+        decision_register = Path(tmp) / "decisions.json"
+        decision_register.write_text(
+            json.dumps(
+                {
+                    "schema": "autofish.signalProof.decisions.v1",
+                    "entries": [
+                        {
+                            "signal": "fishabilityCandidate",
+                            "decision": "fallback-only",
+                            "scopeTokens": [scope_token],
+                        }
+                    ],
+                    "latestBySignal": {
+                        "fishabilityCandidate": {
+                            "signal": "fishabilityCandidate",
+                            "decision": "fallback-only",
+                            "scopeTokens": ["different-token"],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        scoped_gate = helper.check_fan_candidate_review_gate(
+            {"plan": plan},
+            str(decision_register),
+            allow_unreviewed=False,
+        )
+        assert scoped_gate["passed"]
+        assert scoped_gate["requiresScopeMatch"]
+        assert scoped_gate["latestFishabilityCandidateDecision"]["scopeTokens"] == [scope_token]
+
         plan_path = Path(tmp) / "session-plan.json"
         plan_path.write_text(json.dumps(plan), encoding="utf-8")
         markdown = helper.render_session_plan_runbook(str(plan_path), ".autofish-live")
         assert "--signal fishabilityCandidate" in markdown
+        assert f"--scope-token '{scope_token}'" in markdown
         assert "Fan-derived plans also require" in markdown
+
+
+def test_scoped_one_cast_gate(helper) -> None:
+    with tempfile.TemporaryDirectory(prefix="autofish-helper-onecast-gate-") as tmp:
+        args = argparse.Namespace(
+            pid=1234,
+            hwnd="0x1234",
+            x=100,
+            y=50,
+            profile="starter-pond",
+            profile_root="profiles",
+            key="8",
+            max_casts=3,
+            max_allowed_casts=10,
+            pull_clicks=1,
+            cast_wait_seconds=None,
+            post_pull_delay_ms=None,
+            inter_cast_delay_ms=800,
+            stop_file=None,
+            validate_target=False,
+        )
+        plan = helper.build_session_plan(args)
+        scope_token = plan["review"]["scopeToken"]
+        register_path = Path(tmp) / "decisions.json"
+        register_path.write_text(
+            json.dumps(
+                {
+                    "schema": "autofish.signalProof.decisions.v1",
+                    "entries": [
+                        {"signal": "oneCast", "decision": "fallback-only", "scopeTokens": [scope_token]}
+                    ],
+                    "latestBySignal": {
+                        "oneCast": {
+                            "signal": "oneCast",
+                            "decision": "fallback-only",
+                            "scopeTokens": ["stale-token"],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        gate_args = argparse.Namespace(
+            allow_unreviewed_one_cast=False,
+            decision_register=str(register_path),
+        )
+        gate = helper.check_one_cast_review_gate(gate_args, {"plan": plan})
+        assert gate["passed"]
+        assert gate["requiresScopeMatch"]
+        assert gate["latestOneCastDecision"]["scopeTokens"] == [scope_token]
 
 
 def main() -> int:
@@ -305,6 +390,7 @@ def main() -> int:
     test_fishability_fan_suggested_commands(helper)
     test_fishability_fan_runbook_render(helper)
     test_session_plan_from_fan_candidate(helper)
+    test_scoped_one_cast_gate(helper)
     print("AutoFish Python helper smoke checks passed.")
     return 0
 
