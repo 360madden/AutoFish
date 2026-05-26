@@ -1026,6 +1026,16 @@ def session_plan_expected_client_size(session_plan_info: dict[str, Any] | None) 
     }
 
 
+def validate_current_target_from_session_plan(session_plan_info: dict[str, Any] | None) -> dict[str, Any]:
+    plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
+    target = plan.get("target") if isinstance(plan, dict) and isinstance(plan.get("target"), dict) else {}
+    pid = target.get("pid")
+    hwnd_text = target.get("hwnd")
+    if pid is None or not hwnd_text:
+        raise RuntimeError("Session plan target.pid or target.hwnd is missing.")
+    return validate_target(parse_hwnd(str(hwnd_text)), int(pid), require_foreground=False)
+
+
 def check_session_plan_target_freshness(
     session_plan_info: dict[str, Any] | None,
     current_target: dict[str, Any] | None = None,
@@ -1047,15 +1057,8 @@ def check_session_plan_target_freshness(
     }
 
     if current_target is None:
-        plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
-        target = plan.get("target") if isinstance(plan, dict) and isinstance(plan.get("target"), dict) else {}
-        pid = target.get("pid")
-        hwnd_text = target.get("hwnd")
-        if pid is None or not hwnd_text:
-            gate["reason"] = "Session plan cannot be target-freshness checked because target.pid or target.hwnd is missing."
-            return gate
         try:
-            current_target = validate_target(parse_hwnd(str(hwnd_text)), int(pid), require_foreground=False)
+            current_target = validate_current_target_from_session_plan(session_plan_info)
         except Exception as exc:
             gate["reason"] = f"Current target validation failed: {exc}"
             return gate
@@ -1083,6 +1086,82 @@ def check_session_plan_target_freshness(
             f"{expected['width']}x{expected['height']} but current target is {current_width}x{current_height}. "
             "Recreate the session plan and recalibrate the fishable client coordinate after window resize."
         )
+    return gate
+
+
+def check_session_plan_foreground_gate(
+    session_plan_info: dict[str, Any] | None,
+    current_target: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    gate: dict[str, Any] = {
+        "required": True,
+        "passed": False,
+    }
+    if current_target is None:
+        try:
+            current_target = validate_current_target_from_session_plan(session_plan_info)
+        except Exception as exc:
+            gate["reason"] = f"Current target validation failed: {exc}"
+            return gate
+
+    foreground_matches = bool(current_target.get("foregroundMatches"))
+    gate.update(
+        {
+            "passed": foreground_matches,
+            "foregroundWindow": current_target.get("foregroundWindow"),
+            "targetWindow": current_target.get("hwnd"),
+            "currentTarget": current_target,
+            "reason": (
+                "Target is foreground."
+                if foreground_matches
+                else "Target is not foreground; focus Rift before any confirmed live proof input."
+            ),
+        }
+    )
+    return gate
+
+
+def check_session_plan_readability_gate(
+    session_plan_info: dict[str, Any] | None,
+    current_target: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    gate: dict[str, Any] = {
+        "required": True,
+        "passed": False,
+        "preferredMinimumClientWidth": PREFERRED_READABLE_CLIENT_WIDTH,
+        "preferredMinimumClientHeight": PREFERRED_READABLE_CLIENT_HEIGHT,
+    }
+    if current_target is None:
+        try:
+            current_target = validate_current_target_from_session_plan(session_plan_info)
+        except Exception as exc:
+            gate["reason"] = f"Current target validation failed: {exc}"
+            return gate
+
+    current_width = positive_int_or_none(current_target.get("clientWidth"))
+    current_height = positive_int_or_none(current_target.get("clientHeight"))
+    is_minimized = bool(current_target.get("isMinimized"))
+    below_preferred = (
+        current_width is None
+        or current_height is None
+        or current_width < PREFERRED_READABLE_CLIENT_WIDTH
+        or current_height < PREFERRED_READABLE_CLIENT_HEIGHT
+    )
+    passed = not is_minimized and not below_preferred
+    gate.update(
+        {
+            "passed": passed,
+            "currentClientWidth": current_width,
+            "currentClientHeight": current_height,
+            "isMinimized": is_minimized,
+            "currentTarget": current_target,
+            "reason": (
+                "Target client size is readable for proof review."
+                if passed
+                else "Target client is minimized or below preferred proof-review size; restore/maximize Rift before live proof input."
+            ),
+        }
+    )
     return gate
 
 
@@ -1343,15 +1422,23 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
     )
     one_cast_gate = check_one_cast_review_gate(one_cast_gate_args, loaded)
     target_gate = check_session_plan_target_freshness(loaded)
+    current_target = target_gate.get("currentTarget") if isinstance(target_gate.get("currentTarget"), dict) else None
+    foreground_gate = check_session_plan_foreground_gate(loaded, current_target)
+    current_target = foreground_gate.get("currentTarget") if isinstance(foreground_gate.get("currentTarget"), dict) else current_target
+    readability_gate = check_session_plan_readability_gate(loaded, current_target)
     stop_file_gate = check_session_plan_stop_file_gate(loaded)
     ready_for_one_cast = bool(
         stop_file_gate.get("passed")
         and target_gate.get("passed")
+        and foreground_gate.get("passed")
+        and readability_gate.get("passed")
         and fishability_gate.get("passed")
     )
     ready_for_bounded_session = bool(
         stop_file_gate.get("passed")
         and target_gate.get("passed")
+        and foreground_gate.get("passed")
+        and readability_gate.get("passed")
         and one_cast_gate.get("passed")
     )
     report = {
@@ -1364,12 +1451,16 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         "gates": {
             "stopFileClear": stop_file_gate,
             "targetCurrent": target_gate,
+            "targetForeground": foreground_gate,
+            "clientReadable": readability_gate,
             "fishabilityCandidate": fishability_gate,
             "oneCast": one_cast_gate,
         },
         "readiness": {
             "stopFileClear": bool(stop_file_gate.get("passed")),
             "targetCurrent": bool(target_gate.get("passed")),
+            "targetForeground": bool(foreground_gate.get("passed")),
+            "clientReadable": bool(readability_gate.get("passed")),
             "confirmedOneCast": bool(fishability_gate.get("passed")),
             "confirmedBoundedSession": bool(one_cast_gate.get("passed")),
             "readyForOneCast": ready_for_one_cast,
@@ -1380,6 +1471,8 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
             "This command sends no game input.",
             "stopFileClear fails when the session plan stop file exists.",
             "targetCurrent compares the current Rift client size with the session plan targetValidation when a size was recorded.",
+            "targetForeground requires the exact target HWND to be the current foreground window.",
+            "clientReadable requires a restored, readable client size for proof review.",
             "confirmedOneCast covers fan-derived candidate review only; one-cast still requires exact PID/HWND and --confirm-input.",
             "confirmedBoundedSession requires a scoped reviewed oneCast decision.",
             "readyForOneCast and readyForBoundedSession are compound no-input readiness checks.",
@@ -1389,6 +1482,8 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
     readiness_name_by_flag = {
         "stop-file-clear": "stopFileClear",
         "target-current": "targetCurrent",
+        "target-foreground": "targetForeground",
+        "client-readable": "clientReadable",
         "confirmed-one-cast": "confirmedOneCast",
         "confirmed-bounded-session": "confirmedBoundedSession",
         "ready-one-cast": "readyForOneCast",
@@ -4590,6 +4685,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=(
             "stop-file-clear",
             "target-current",
+            "target-foreground",
+            "client-readable",
             "confirmed-one-cast",
             "confirmed-bounded-session",
             "ready-one-cast",

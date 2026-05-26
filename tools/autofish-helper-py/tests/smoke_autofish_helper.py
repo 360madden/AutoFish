@@ -367,6 +367,8 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         gate_report = json.loads(gate_output.getvalue())
         assert gate_report["schema"] == "autofish.sessionPlan.reviewGates.v1"
         assert gate_report["readiness"]["stopFileClear"]
+        assert "targetForeground" in gate_report["readiness"]
+        assert "clientReadable" in gate_report["readiness"]
         assert gate_report["readiness"]["confirmedOneCast"]
         assert not gate_report["readiness"]["confirmedBoundedSession"]
         assert not gate_report["readiness"]["readyForOneCast"]
@@ -497,6 +499,34 @@ def test_session_plan_target_freshness_gate(helper) -> None:
     unrecorded_gate = helper.check_session_plan_target_freshness({"plan": {"schema": "autofish.sessionPlan.v1"}})
     assert not unrecorded_gate["required"]
     assert unrecorded_gate["passed"]
+
+    ready_target = {
+        "hwnd": "0x1234",
+        "foregroundWindow": "0x1234",
+        "foregroundMatches": True,
+        "clientWidth": 1280,
+        "clientHeight": 720,
+        "isMinimized": False,
+    }
+    foreground_gate = helper.check_session_plan_foreground_gate({"plan": plan}, ready_target)
+    assert foreground_gate["required"]
+    assert foreground_gate["passed"]
+    readability_gate = helper.check_session_plan_readability_gate({"plan": plan}, ready_target)
+    assert readability_gate["required"]
+    assert readability_gate["passed"]
+
+    background_gate = helper.check_session_plan_foreground_gate(
+        {"plan": plan},
+        {**ready_target, "foregroundWindow": "0x9999", "foregroundMatches": False},
+    )
+    assert not background_gate["passed"]
+
+    tiny_gate = helper.check_session_plan_readability_gate(
+        {"plan": plan},
+        {**ready_target, "clientWidth": 640, "clientHeight": 360},
+    )
+    assert not tiny_gate["passed"]
+    assert tiny_gate["preferredMinimumClientWidth"] == helper.PREFERRED_READABLE_CLIENT_WIDTH
 
 
 def test_scoped_one_cast_gate(helper) -> None:

@@ -25,6 +25,8 @@ try {
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'stop-file-clear' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'target-current' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'target-foreground' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'client-readable' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'ready-one-cast' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'confirmed-bounded-session' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast --help | Out-Null

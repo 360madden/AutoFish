@@ -80,7 +80,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
 
-Add `--require stop-file-clear`, `--require target-current`, `--require confirmed-one-cast`, or `--require confirmed-bounded-session` for fail-closed scripts that should stop unless the requested gate is ready. Use `--require ready-one-cast` before confirmed one-cast input and `--require ready-bounded-session` before confirmed bounded-session input when you want the combined no-input pre-live gate bundle.
+Add `--require stop-file-clear`, `--require target-current`, `--require target-foreground`, `--require client-readable`, `--require confirmed-one-cast`, or `--require confirmed-bounded-session` for fail-closed scripts that should stop unless the requested gate is ready. Use `--require ready-one-cast` before confirmed one-cast input and `--require ready-bounded-session` before confirmed bounded-session input when you want the combined no-input pre-live gate bundle.
 
 Use `session-plan stop-file status/create/clear --path .autofish-live\session-plan-latest.json` instead of manually editing the stop file when operating from a session plan.
 
