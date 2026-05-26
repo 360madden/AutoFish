@@ -11,6 +11,7 @@ import tempfile
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 HELPER_PATH = REPO_ROOT / "tools" / "autofish-helper-py" / "autofish_helper.py"
+DOC_VALIDATOR_PATH = REPO_ROOT / "tools" / "autofish-helper-py" / "tests" / "validate_doc_commands.py"
 
 
 def load_helper():
@@ -20,6 +21,20 @@ def load_helper():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def load_doc_validator():
+    spec = importlib.util.spec_from_file_location("validate_doc_commands", DOC_VALIDATOR_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load doc command validator from {DOC_VALIDATOR_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def assert_helper_commands_valid(doc_validator, label: str, markdown: str) -> None:
+    failures = doc_validator.validate_markdown_text(label, markdown)
+    assert not failures, "\n".join(failures)
 
 
 def test_profile_defaults(helper) -> None:
@@ -90,7 +105,7 @@ def test_session_plan_defaults(helper) -> None:
         assert args.stop_file == ".autofish-live/STOP.txt"
 
 
-def test_runbook_render(helper) -> None:
+def test_runbook_render(helper, doc_validator) -> None:
     with tempfile.TemporaryDirectory(prefix="autofish-helper-runbook-") as tmp:
         plan_path = Path(tmp) / "session-plan.json"
         with contextlib.redirect_stdout(io.StringIO()):
@@ -115,12 +130,14 @@ def test_runbook_render(helper) -> None:
                 )
             )
         markdown = helper.render_session_plan_runbook(str(plan_path), ".autofish-live")
+        assert_helper_commands_valid(doc_validator, "generated-session-plan-runbook", markdown)
         assert "signal-proof one-cast --session-plan" in markdown
         assert "signal-proof bounded-session --session-plan" in markdown
         assert "--signal oneCast" in markdown
         assert "session-plan explain" in markdown
         assert "session-plan preflight" in markdown
         checklist = helper.render_session_plan_checklist(str(plan_path), ".autofish-live", ".autofish-live/signal-proof-decisions.json")
+        assert_helper_commands_valid(doc_validator, "generated-session-plan-checklist", checklist)
         assert "AutoFish Session Plan Checklist" in checklist
         assert "target-snapshot" in checklist
         assert "ready-one-cast" in checklist
@@ -788,9 +805,10 @@ def test_scoped_one_cast_gate(helper) -> None:
 
 def main() -> int:
     helper = load_helper()
+    doc_validator = load_doc_validator()
     test_profile_defaults(helper)
     test_session_plan_defaults(helper)
-    test_runbook_render(helper)
+    test_runbook_render(helper, doc_validator)
     test_direct_live_command_stop_file_defaults(helper)
     test_target_snapshot_invalid_hwnd(helper)
     test_stale_session_plan_refuses_plan_backed_proofs(helper)

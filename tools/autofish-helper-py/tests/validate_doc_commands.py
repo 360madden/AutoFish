@@ -140,18 +140,22 @@ def validate_invocation(tokens: list[str]) -> list[str]:
     return errors
 
 
+def validate_markdown_text(label: str, text: str) -> list[str]:
+    failures: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        for match in HELPER_COMMAND_RE.finditer(line):
+            tokens = command_tokens(match.group("tail"))
+            errors = validate_invocation(tokens)
+            for error in errors:
+                failures.append(f"{label}:{line_number}: {error}: {' '.join(tokens) or '<none>'}")
+    return failures
+
+
 def main() -> int:
     failures: list[str] = []
     for path in iter_doc_paths():
         relative_path = path.relative_to(REPO_ROOT)
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            for match in HELPER_COMMAND_RE.finditer(line):
-                tokens = command_tokens(match.group("tail"))
-                errors = validate_invocation(tokens)
-                for error in errors:
-                    failures.append(
-                        f"{relative_path}:{line_number}: {error}: {' '.join(tokens) or '<none>'}"
-                    )
+        failures.extend(validate_markdown_text(str(relative_path), path.read_text(encoding="utf-8")))
 
     if failures:
         print("Documented AutoFish helper command validation failed:", file=sys.stderr)
