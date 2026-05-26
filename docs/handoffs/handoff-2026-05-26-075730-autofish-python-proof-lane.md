@@ -97,6 +97,9 @@ python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
 python tools\autofish-helper-py\autofish_helper.py session-plan runbook `
   --path .autofish-live\session-plan-latest.json
 
+python tools\autofish-helper-py\autofish_helper.py session-plan checklist `
+  --path .autofish-live\session-plan-latest.json
+
 python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```

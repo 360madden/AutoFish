@@ -115,6 +115,13 @@ python tools\autofish-helper-py\autofish_helper.py session-plan runbook `
   --path .autofish-live\session-plan-latest.json
 ```
 
+For a shorter ordered operator view, print the checklist:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan checklist `
+  --path .autofish-live\session-plan-latest.json
+```
+
 ## Proof order
 
 Run proofs in this order so native/low-brittleness evidence is captured before fragile fallbacks.

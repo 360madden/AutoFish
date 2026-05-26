@@ -120,6 +120,11 @@ def test_runbook_render(helper) -> None:
         assert "--signal oneCast" in markdown
         assert "session-plan explain" in markdown
         assert "session-plan preflight" in markdown
+        checklist = helper.render_session_plan_checklist(str(plan_path), ".autofish-live", ".autofish-live/signal-proof-decisions.json")
+        assert "AutoFish Session Plan Checklist" in checklist
+        assert "target-snapshot" in checklist
+        assert "ready-one-cast" in checklist
+        assert "signal-proof bounded-session --session-plan" in checklist
         assert "session-plan stop-file create" in markdown
         assert "session-plan stop-file clear" in markdown
         assert ".autofish-live/STOP.txt" in markdown
@@ -451,6 +456,23 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert "session-plan gates" in markdown
         assert "session-plan explain" in markdown
         assert "session-plan preflight" in markdown
+        checklist = helper.render_session_plan_checklist(str(plan_path), ".autofish-live", str(decision_register))
+        assert "Fishability candidate has a scoped reviewed decision" in checklist
+        assert "--signal fishabilityCandidate" in checklist
+        with contextlib.redirect_stdout(io.StringIO()) as checklist_output:
+            assert (
+                helper.run_session_plan_checklist(
+                    argparse.Namespace(
+                        path=str(plan_path),
+                        proof_root=".autofish-live",
+                        decision_register=str(decision_register),
+                        max_plan_age_minutes=0,
+                        output=None,
+                    )
+                )
+                == 0
+            )
+        assert "AutoFish Session Plan Checklist" in checklist_output.getvalue()
         assert "--require ready-one-cast" in markdown
         assert "--require ready-bounded-session" in markdown
         assert "session-plan stop-file create" in markdown

@@ -73,6 +73,8 @@ python tools\autofish-helper-py\autofish_helper.py session-plan runbook `
   --path .autofish-live\session-plan-latest.json
 ```
 
+Use `session-plan checklist --path .autofish-live\session-plan-latest.json` when you want the shorter ordered operator checklist instead of the full runbook.
+
 Use the no-input gate check before live commands:
 
 ```powershell

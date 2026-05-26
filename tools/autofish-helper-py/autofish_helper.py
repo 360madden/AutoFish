@@ -1851,6 +1851,181 @@ def run_session_plan_preflight(args: argparse.Namespace) -> int:
     return 1 if session_plan_required_readiness_failures(report) else 0
 
 
+def checked_box(done: bool) -> str:
+    return "[x]" if done else "[ ]"
+
+
+def render_session_plan_checklist(
+    plan_path: str,
+    proof_root: str,
+    decision_register: str,
+    *,
+    max_plan_age_minutes: int | float | None = DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+) -> str:
+    loaded = load_session_plan(plan_path)
+    assert loaded is not None
+    plan = loaded["plan"]
+    target = plan.get("target") if isinstance(plan.get("target"), dict) else {}
+    source = plan.get("source") if isinstance(plan.get("source"), dict) else {}
+    report = build_session_plan_gate_report(
+        plan_path,
+        decision_register,
+        max_plan_age_minutes=max_plan_age_minutes,
+    )
+    readiness = report.get("readiness") if isinstance(report.get("readiness"), dict) else {}
+    helper = "python tools\\autofish-helper-py\\autofish_helper.py"
+    plan_arg = quote_ps(plan_path)
+    proof_root_arg = quote_ps(proof_root)
+    decision_register_arg = quote_ps(decision_register)
+    one_cast_evidence = quote_ps(proof_root.rstrip("\\/") + "\\<one-cast-proof>\\manifest.json")
+    summary_root = quote_ps(proof_root)
+    target_pid = target.get("pid")
+    target_hwnd = target.get("hwnd")
+    is_fan_candidate_plan = source.get("type") == "fishabilityFanCandidate"
+
+    lines = [
+        "# AutoFish Session Plan Checklist",
+        "",
+        f"- plan: `{plan_path}`",
+        f"- target: PID `{target_pid}`, HWND `{target_hwnd}`",
+        f"- sends game input: `no` (this checklist is only text; manually running confirmed proof commands sends bounded input)",
+        "",
+        "## Gate progress",
+        "",
+        f"{checked_box(bool(readiness.get('stopFileClear')))} Stop file is clear.",
+        f"{checked_box(bool(readiness.get('planFresh')))} Session plan is fresh.",
+        f"{checked_box(bool(readiness.get('targetCurrent')))} Target size gate passes, or this plan has no recorded target size.",
+        f"{checked_box(bool(readiness.get('targetForeground')))} Exact target HWND is foreground.",
+        f"{checked_box(bool(readiness.get('clientReadable')))} Client is restored/readable.",
+    ]
+    if is_fan_candidate_plan:
+        lines.append(f"{checked_box(bool(readiness.get('confirmedOneCast')))} Fishability candidate has a scoped reviewed decision.")
+    else:
+        lines.append(f"{checked_box(bool(readiness.get('confirmedOneCast')))} Fishability candidate gate is not required for this plan.")
+    lines.extend(
+        [
+            f"{checked_box(bool(readiness.get('readyForOneCast')))} Ready for one supervised one-cast proof.",
+            f"{checked_box(bool(readiness.get('confirmedBoundedSession')))} One-cast proof has a scoped reviewed decision.",
+            f"{checked_box(bool(readiness.get('readyForBoundedSession')))} Ready for one supervised bounded-session proof.",
+            "",
+            "## Ordered commands",
+            "",
+            "1. Verify current target without focusing/restoring/capturing:",
+            "",
+            "```powershell",
+            f"{helper} target-snapshot --pid {target_pid} --hwnd {target_hwnd} --require-readable",
+            "```",
+            "",
+            "2. Inspect stop-file state:",
+            "",
+            "```powershell",
+            f"{helper} session-plan stop-file status --path {plan_arg}",
+            "```",
+            "",
+            "3. Run readable fail-closed one-cast preflight:",
+            "",
+            "```powershell",
+            f"{helper} session-plan preflight --path {plan_arg} --decision-register {decision_register_arg} --require ready-one-cast",
+            "```",
+            "",
+        ]
+    )
+    if is_fan_candidate_plan:
+        lines.extend(
+            [
+                "4. If the fishability candidate gate is blocked, review candidate evidence and record the scoped decision:",
+                "",
+                "```powershell",
+                f"{helper} signal-proof decide `",
+                "  --signal fishabilityCandidate `",
+                "  --decision fallback-only `",
+                "  --reason \"Reviewed fan candidate as fishable enough for one supervised one-cast proof.\" `",
+                f"  --session-plan {plan_arg} `",
+                f"  --proof-root {proof_root_arg}",
+                "```",
+                "",
+            ]
+        )
+        next_step_number = 5
+    else:
+        next_step_number = 4
+
+    lines.extend(
+        [
+            f"{next_step_number}. Run the one-cast dry-run:",
+            "",
+            "```powershell",
+            f"{helper} signal-proof one-cast --session-plan {plan_arg} --dry-run",
+            "```",
+            "",
+            f"{next_step_number + 1}. Only while supervised, run one confirmed one-cast proof:",
+            "",
+            "```powershell",
+            f"{helper} signal-proof one-cast --session-plan {plan_arg} --confirm-input",
+            "```",
+            "",
+            f"{next_step_number + 2}. After reviewing the one-cast manifest/screenshots, record the scoped oneCast decision:",
+            "",
+            "```powershell",
+            f"{helper} signal-proof decide `",
+            "  --signal oneCast `",
+            "  --decision fallback-only `",
+            "  --reason \"Reviewed one-cast proof is acceptable for a small supervised bounded session.\" `",
+            f"  --evidence {one_cast_evidence} `",
+            f"  --session-plan {plan_arg} `",
+            f"  --proof-root {proof_root_arg}",
+            "```",
+            "",
+            f"{next_step_number + 3}. Run readable fail-closed bounded-session preflight:",
+            "",
+            "```powershell",
+            f"{helper} session-plan preflight --path {plan_arg} --decision-register {decision_register_arg} --require ready-bounded-session",
+            "```",
+            "",
+            f"{next_step_number + 4}. Run the bounded-session dry-run:",
+            "",
+            "```powershell",
+            f"{helper} signal-proof bounded-session --session-plan {plan_arg} --dry-run",
+            "```",
+            "",
+            f"{next_step_number + 5}. Only while supervised, run one confirmed bounded-session proof:",
+            "",
+            "```powershell",
+            f"{helper} signal-proof bounded-session --session-plan {plan_arg} --confirm-input",
+            "```",
+            "",
+            f"{next_step_number + 6}. Summarize proof manifests before any promotion decision:",
+            "",
+            "```powershell",
+            f"{helper} signal-proof summarize --proof-root {summary_root}",
+            "```",
+            "",
+            "## Current next action",
+            "",
+            session_plan_next_action(report),
+            "",
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def run_session_plan_checklist(args: argparse.Namespace) -> int:
+    markdown = render_session_plan_checklist(
+        args.path,
+        args.proof_root,
+        args.decision_register,
+        max_plan_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+    )
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown, encoding="utf-8")
+        print(json.dumps({"ok": True, "path": str(output_path)}, indent=2))
+    else:
+        print(markdown, end="")
+    return 0
+
+
 def quote_ps(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
@@ -5144,6 +5319,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     session_plan_preflight.add_argument("--output", help="Optional markdown output path")
     session_plan_preflight.set_defaults(func=run_session_plan_preflight)
+    session_plan_checklist = session_plan_sub.add_parser("checklist", help="Print ordered operator checklist from a session plan")
+    session_plan_checklist.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
+    session_plan_checklist.add_argument("--proof-root", default=".autofish-live", help="Proof root to use in suggested commands")
+    session_plan_checklist.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register path")
+    session_plan_checklist.add_argument(
+        "--max-plan-age-minutes",
+        type=float,
+        default=DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+        help=(
+            "Maximum session plan age for checklist gate status; use <=0 to disable. "
+            f"Default: {DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES}"
+        ),
+    )
+    session_plan_checklist.add_argument("--output", help="Optional markdown output path")
+    session_plan_checklist.set_defaults(func=run_session_plan_checklist)
     session_plan_stop_file = session_plan_sub.add_parser("stop-file", help="Create, clear, or inspect the stop file from a session plan")
     session_plan_stop_file_sub = session_plan_stop_file.add_subparsers(dest="stop_file_action", required=True)
     for action, help_text in (

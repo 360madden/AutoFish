@@ -127,6 +127,13 @@ python tools\autofish-helper-py\autofish_helper.py session-plan preflight `
   --require ready-one-cast
 ```
 
+To print an ordered operator checklist from the current plan:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan checklist `
+  --path .autofish-live\session-plan-latest.json
+```
+
 Dry-run first:
 
 ```powershell
