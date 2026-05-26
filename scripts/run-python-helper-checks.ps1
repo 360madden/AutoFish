@@ -38,6 +38,9 @@ try {
     python tools/autofish-helper-py/autofish_helper.py session-plan preflight --help | Select-String -Pattern 'ready-one-cast' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan checklist --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan checklist --help | Select-String -Pattern 'proof-root' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan doctor --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan doctor --help | Select-String -Pattern 'proof-root' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan doctor --help | Select-String -Pattern 'output-root' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan stop-file --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan stop-file create --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Out-Null

@@ -134,6 +134,17 @@ python tools\autofish-helper-py\autofish_helper.py session-plan checklist `
   --path .autofish-live\session-plan-latest.json
 ```
 
+To write one read-only operator triage bundle with gate status, the checklist, and the next action:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan doctor `
+  --path .autofish-live\session-plan-latest.json `
+  --proof-root .autofish-live `
+  --decision-register .autofish-live\signal-proof-decisions.json
+```
+
+`session-plan doctor` sends no game input. It writes `doctor.json` and `doctor.md` under `.autofish-live\session-plan-doctor-*` unless `--output-root` is supplied.
+
 Dry-run first:
 
 ```powershell

@@ -1893,6 +1893,134 @@ def run_session_plan_preflight(args: argparse.Namespace) -> int:
     return 1 if session_plan_required_readiness_failures(report) else 0
 
 
+def build_session_plan_doctor_report(
+    path: str,
+    decision_register: str,
+    proof_root: str,
+    *,
+    max_plan_age_minutes: int | float | None = DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+) -> dict[str, Any]:
+    gate_report = build_session_plan_gate_report(
+        path,
+        decision_register,
+        max_plan_age_minutes=max_plan_age_minutes,
+    )
+    gates = gate_report.get("gates") if isinstance(gate_report.get("gates"), dict) else {}
+    readiness = gate_report.get("readiness") if isinstance(gate_report.get("readiness"), dict) else {}
+    blocked_gates = [
+        name
+        for name in SESSION_PLAN_GATE_ORDER
+        if isinstance(gates.get(name), dict) and gates[name].get("passed") is not True
+    ]
+    passed_gates = [
+        name
+        for name in SESSION_PLAN_GATE_ORDER
+        if isinstance(gates.get(name), dict) and gates[name].get("passed") is True
+    ]
+    required_blocked_gates = [
+        name
+        for name in blocked_gates
+        if isinstance(gates.get(name), dict) and gates[name].get("required", True)
+    ]
+    checklist = render_session_plan_checklist(
+        path,
+        proof_root,
+        decision_register,
+        max_plan_age_minutes=max_plan_age_minutes,
+    )
+    explanation = render_session_plan_gate_explanation(gate_report)
+    next_action = session_plan_next_action(gate_report)
+    return {
+        "schema": "autofish.sessionPlan.doctor.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "path": path,
+        "proofRoot": proof_root,
+        "decisionRegister": decision_register,
+        "sendsGameInput": False,
+        "gateReport": gate_report,
+        "summary": {
+            "gateCount": len(gates),
+            "passedGateCount": len(passed_gates),
+            "blockedGateCount": len(blocked_gates),
+            "requiredBlockedGateCount": len(required_blocked_gates),
+            "blockedGateNames": blocked_gates,
+            "requiredBlockedGateNames": required_blocked_gates,
+            "readyForOneCast": bool(readiness.get("readyForOneCast")),
+            "readyForBoundedSession": bool(readiness.get("readyForBoundedSession")),
+        },
+        "nextAction": next_action,
+        "explanationMarkdown": explanation,
+        "checklistMarkdown": checklist,
+        "notes": [
+            "Doctor is read-only and sends no game input.",
+            "Use this as an operator triage artifact before running any confirmed proof command.",
+        ],
+    }
+
+
+def render_session_plan_doctor_markdown(report: dict[str, Any]) -> str:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    gate_report = report.get("gateReport") if isinstance(report.get("gateReport"), dict) else {}
+    gates = gate_report.get("gates") if isinstance(gate_report.get("gates"), dict) else {}
+    lines = [
+        "# AutoFish Session Plan Doctor",
+        "",
+        f"Generated: {report.get('generatedAtUtc')}",
+        f"Session plan: `{report.get('path')}`",
+        f"Proof root: `{report.get('proofRoot')}`",
+        f"Decision register: `{report.get('decisionRegister')}`",
+        f"Sends game input: `{str(report.get('sendsGameInput')).lower()}`",
+        "",
+        "## Health",
+        "",
+        f"- gates passed: {summary.get('passedGateCount', 0)}/{summary.get('gateCount', 0)}",
+        f"- blocked gates: {', '.join(summary.get('blockedGateNames', [])) or '-'}",
+        f"- required blocked gates: {', '.join(summary.get('requiredBlockedGateNames', [])) or '-'}",
+        f"- ready for one-cast: {summary.get('readyForOneCast')}",
+        f"- ready for bounded session: {summary.get('readyForBoundedSession')}",
+        "",
+        "## Gate table",
+        "",
+        "| Gate | Status | Reason |",
+        "| --- | --- | --- |",
+    ]
+    for gate_name in SESSION_PLAN_GATE_ORDER:
+        gate = gates.get(gate_name) if isinstance(gates.get(gate_name), dict) else None
+        label = SESSION_PLAN_GATE_LABELS.get(gate_name, gate_name)
+        lines.append(f"| {label} | {session_plan_gate_status(gate)} | {session_plan_gate_reason(gate)} |")
+    lines.extend(
+        [
+            "",
+            "## Next action",
+            "",
+            str(report.get("nextAction") or "-"),
+            "",
+            "## Checklist",
+            "",
+            str(report.get("checklistMarkdown") or "").strip(),
+            "",
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def run_session_plan_doctor(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"session-plan-doctor-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+    report = build_session_plan_doctor_report(
+        args.path,
+        args.decision_register,
+        args.proof_root,
+        max_plan_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+    )
+    json_path = output_root / "doctor.json"
+    markdown_path = output_root / "doctor.md"
+    json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    markdown_path.write_text(render_session_plan_doctor_markdown(report), encoding="utf-8")
+    print(json.dumps({"ok": True, "outputRoot": str(output_root), "doctor": str(json_path), "markdown": str(markdown_path)}, indent=2))
+    return 0
+
+
 def checked_box(done: bool) -> str:
     return "[x]" if done else "[ ]"
 
@@ -5825,6 +5953,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     session_plan_checklist.add_argument("--output", help="Optional markdown output path")
     session_plan_checklist.set_defaults(func=run_session_plan_checklist)
+    session_plan_doctor = session_plan_sub.add_parser(
+        "doctor",
+        help="Write a read-only session-plan health report with gates, checklist, and next action",
+    )
+    session_plan_doctor.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
+    session_plan_doctor.add_argument("--proof-root", default=".autofish-live", help="Proof root to use in checklist commands")
+    session_plan_doctor.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register path")
+    session_plan_doctor.add_argument(
+        "--max-plan-age-minutes",
+        type=float,
+        default=DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+        help=(
+            "Maximum session plan age for doctor gate status; use <=0 to disable. "
+            f"Default: {DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES}"
+        ),
+    )
+    session_plan_doctor.add_argument(
+        "--output-root",
+        help="Doctor output folder; default: .autofish-live/session-plan-doctor-*",
+    )
+    session_plan_doctor.set_defaults(func=run_session_plan_doctor)
     session_plan_stop_file = session_plan_sub.add_parser("stop-file", help="Create, clear, or inspect the stop file from a session plan")
     session_plan_stop_file_sub = session_plan_stop_file.add_subparsers(dest="stop_file_action", required=True)
     for action, help_text in (

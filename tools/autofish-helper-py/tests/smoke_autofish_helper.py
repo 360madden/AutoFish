@@ -43,6 +43,7 @@ def test_doc_command_validator_surface(helper, doc_validator) -> None:
     assert "session-plan" in surface
     assert "signal-proof" in surface
     assert "checklist" in surface["session-plan"]
+    assert "doctor" in surface["session-plan"]
     assert "stop-file" in surface["session-plan"]
     assert "clear" in surface["session-plan"]["stop-file"]
     assert "one-cast" in surface["signal-proof"]
@@ -160,6 +161,68 @@ def test_runbook_render(helper, doc_validator) -> None:
         assert "session-plan stop-file clear" in markdown
         assert ".autofish-live/STOP.txt" in markdown
         assert "No command in this runbook sends movement" in markdown
+
+
+def test_session_plan_doctor_report(helper, doc_validator) -> None:
+    with tempfile.TemporaryDirectory(prefix="autofish-helper-session-doctor-") as tmp:
+        plan_path = Path(tmp) / "session-plan.json"
+        with contextlib.redirect_stdout(io.StringIO()):
+            helper.run_session_plan_create(
+                argparse.Namespace(
+                    pid=1234,
+                    hwnd="0x1234",
+                    x=100,
+                    y=200,
+                    profile="starter-pond",
+                    profile_root="profiles",
+                    key="8",
+                    max_casts=3,
+                    max_allowed_casts=10,
+                    pull_clicks=1,
+                    cast_wait_seconds=None,
+                    post_pull_delay_ms=None,
+                    inter_cast_delay_ms=800,
+                    stop_file=None,
+                    validate_target=False,
+                    output=str(plan_path),
+                )
+            )
+        decision_register = Path(tmp) / "decisions.json"
+        report = helper.build_session_plan_doctor_report(
+            str(plan_path),
+            str(decision_register),
+            ".autofish-live",
+            max_plan_age_minutes=0,
+        )
+        assert report["schema"] == "autofish.sessionPlan.doctor.v1"
+        assert not report["sendsGameInput"]
+        assert report["summary"]["gateCount"] >= 1
+        assert "gateReport" in report
+        assert "checklistMarkdown" in report
+        assert "nextAction" in report
+        markdown = helper.render_session_plan_doctor_markdown(report)
+        assert "AutoFish Session Plan Doctor" in markdown
+        assert "Gate table" in markdown
+        assert "Checklist" in markdown
+        assert_helper_commands_valid(doc_validator, "generated-session-plan-doctor", markdown)
+
+        output_root = Path(tmp) / "doctor-out"
+        with contextlib.redirect_stdout(io.StringIO()) as doctor_output:
+            assert (
+                helper.run_session_plan_doctor(
+                    argparse.Namespace(
+                        path=str(plan_path),
+                        proof_root=".autofish-live",
+                        decision_register=str(decision_register),
+                        max_plan_age_minutes=0,
+                        output_root=str(output_root),
+                    )
+                )
+                == 0
+            )
+        result = json.loads(doctor_output.getvalue())
+        assert Path(result["doctor"]).exists()
+        assert Path(result["markdown"]).exists()
 
 
 def test_direct_live_command_stop_file_defaults(helper) -> None:
@@ -1070,6 +1133,7 @@ def main() -> int:
     test_profile_defaults(helper)
     test_session_plan_defaults(helper)
     test_runbook_render(helper, doc_validator)
+    test_session_plan_doctor_report(helper, doc_validator)
     test_direct_live_command_stop_file_defaults(helper)
     test_red_reticle_click_guard(helper)
     test_red_reticle_guard_summary(helper)
