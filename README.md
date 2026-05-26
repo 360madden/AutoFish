@@ -29,6 +29,7 @@ Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` be
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof reticle` for cursor/reticle/pixel crops.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan` for dry-run screen-space candidate probe planning without input.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof chromalink` for read-only ChromaLink world-state/player-coordinate freshness proof.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof facing-delta` for guarded operational facing estimation from fresh coordinates plus one tiny confirmed movement pulse.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof slash` for bounded `/autofish` command output screenshots.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof log` for read-only current log checks.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof layout` for fixed hotbar/bag region proof.
@@ -46,6 +47,8 @@ Current reviewed proof result: `docs/live-validation/2026-05-25-historical-signa
 Fishability probing plan: `docs/development/fishability-probe-plan.md`. This is the preferred direction over visual water detection: probe candidate points and classify them from game feedback. Coordinate-backed micro-step facing remains blocked until a reliable player coordinate source is proven.
 
 ChromaLink coordinate provider plan: `docs/development/chromalink-readonly-coordinate-provider.md`. AutoFish may consume ChromaLink as a read-only provider through its published local HTTP bridge, but must not modify ChromaLink from this repo. ChromaLink coordinates require fresh `/health` and fresh `player.position` world-state proof before use.
+
+Facing calibration plan: `docs/development/facing-delta-calibration.md`. This estimates an operational player-facing vector from fresh before/after coordinates and one tiny explicitly confirmed forward movement pulse. It is not native actor facing/yaw.
 
 ## Live-development workflow
 

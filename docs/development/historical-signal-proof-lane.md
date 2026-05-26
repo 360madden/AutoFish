@@ -49,6 +49,8 @@ Water detection should be reframed as fishability probing. The plan is documente
 
 ChromaLink is now documented as a read-only coordinate-provider candidate in `docs/development/chromalink-readonly-coordinate-provider.md`. AutoFish can query ChromaLink's published local HTTP bridge, but must not modify ChromaLink from this repo and must require fresh `player.position` proof before treating coordinates as live truth.
 
+Operational facing is now a proof lane, not an assumption. `docs/development/facing-delta-calibration.md` and `signal-proof facing-delta` estimate facing from fresh ChromaLink coordinates before/after one tiny confirmed forward movement pulse. Treat the result as a fan-planning hint, not native actor-facing/yaw.
+
 Immediate live order:
 
 1. `/autofish invproof before|after|diff` for native inventory deltas.
@@ -113,6 +115,8 @@ Current color-proof caveat: large-window sampling has proven visually yellow val
 Implemented fishability planning slice: `tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan` creates a dry-run screen-space fan of candidate probe points, validates the exact PID/HWND, and optionally captures no-input crops. It does not send movement, fishing key, or clicks. Candidate points are planning evidence only until game feedback classifies them.
 
 Implemented ChromaLink proof slice: `tools/autofish-helper-py/autofish_helper.py signal-proof chromalink` queries `/health`, `/ready`, and `/api/v1/riftreader/world-state` read-only, records `chromalinkWorldState` evidence, and classifies whether fresh `player.position` is available. It sends no game input and does not modify ChromaLink.
+
+Implemented facing proof slice: `tools/autofish-helper-py/autofish_helper.py signal-proof facing-delta` validates exact PID/HWND, requires fresh ChromaLink before-position, and can send one tiny confirmed movement pulse to compute an operational X/Y facing vector from coordinate delta. The dry-run sends no movement and is the required first gate.
 
 Implemented sixth slice: `tools/autofish-helper-py/autofish_helper.py signal-proof summarize` scans proof manifests and writes `summary.json` plus `summary.md` review buckets so stale methods are classified consistently before promotion.
 

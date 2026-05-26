@@ -250,6 +250,30 @@ Interpretation:
 
 ChromaLink is the correct read-only provider candidate for player coordinates because its addon reads `Inspect.Unit.Detail("player").coordX`, `coordY`, and `coordZ`. AutoFish must still fail closed until ChromaLink reports fresh `/health`, fresh world-state, `navigation.playerPositionAvailable=true`, and `player.position.fresh=true`. ChromaLink does not currently expose heading/facing/yaw, so any future facing estimate must be computed from fresh coordinate deltas and labeled as operational inference.
 
+## Facing-delta calibration follow-up
+
+Evidence:
+
+- `.autofish-live/facing-delta-dryrun-latest/manifest.json`
+- `.autofish-live/signal-proof-summary-after-facing-delta-latest/summary.md`
+- `.autofish-live/signal-proof-decisions.json`
+
+Result:
+
+- AutoFish now has a guarded `signal-proof facing-delta` command.
+- The dry-run validated exact Rift PID `89748`, HWND `0x2CD0D30`.
+- The target was foreground, non-minimized, and `1920x1009`.
+- ChromaLink timed out, so fresh before-position was unavailable.
+- No movement was sent.
+
+Reviewed decision:
+
+- `facingDelta`: `needs-more-evidence`
+
+Interpretation:
+
+This is the intended path for deriving a usable player-facing hint without native facing/yaw: fresh coordinates before a tiny forward pulse, one explicitly confirmed movement pulse, fresh coordinates after, then normalized X/Y delta. Because ChromaLink was not fresh, AutoFish stopped before movement. Once ChromaLink is fresh, rerun `facing-delta --dry-run` before using `--confirm-movement`.
+
 ## `/log` proof
 
 Result:

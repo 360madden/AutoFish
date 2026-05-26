@@ -87,6 +87,8 @@ ChromaLink is the current read-only coordinate-provider candidate. Its addon-sid
 
 Do not treat ChromaLink reachability as coordinate truth. AutoFish must require fresh `/health`, fresh world-state, `navigation.playerPositionAvailable=true`, and `player.position.fresh=true` before using the coordinates for any fishability/facing proof.
 
+The facing-delta calibration path is documented in `docs/development/facing-delta-calibration.md`. It computes an operational X/Y facing vector from fresh before/after coordinates around one tiny confirmed forward movement pulse. Use that vector as a fan-planning hint only; it is not native Rift actor facing/yaw.
+
 Therefore, coordinate-backed fan probing is blocked on all of the following:
 
 1. reliable current player coordinates,

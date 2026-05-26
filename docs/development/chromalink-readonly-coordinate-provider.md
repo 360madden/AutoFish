@@ -87,3 +87,5 @@ Future micro-step facing inference remains blocked until all of the following ar
 3. The movement pulse is tiny and bounded.
 4. AutoFish records before/after coordinates and rejects stale data.
 5. The result is labeled computed/operational facing, not native Rift actor facing.
+
+The AutoFish-side calibration command now exists as `signal-proof facing-delta`; see `docs/development/facing-delta-calibration.md`. It still fails closed unless fresh ChromaLink coordinates are available before movement.

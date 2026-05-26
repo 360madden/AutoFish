@@ -63,7 +63,7 @@ DEFAULT_LOG_TERMS = (
     "bait",
 )
 SIGNAL_DECISIONS = ("promote", "fallback-only", "retire", "needs-more-evidence")
-SIGNAL_NAMES = ("reticle", "fishabilityFan", "chromalinkWorldState", "log", "layout", "audio", "inventory", "slash")
+SIGNAL_NAMES = ("reticle", "fishabilityFan", "chromalinkWorldState", "facingDelta", "log", "layout", "audio", "inventory", "slash")
 DEFAULT_CHROMALINK_BASE_URL = "http://127.0.0.1:7337"
 
 
@@ -330,6 +330,13 @@ def focus_target(hwnd: int) -> None:
     time.sleep(0.20)
 
 
+def focus_visible_target_without_restore(hwnd: int) -> None:
+    if user32.IsIconic(hwnd):
+        raise RuntimeError("Target is minimized; restore/focus Rift manually before movement proof to avoid changing the saved window size.")
+    user32.SetForegroundWindow(hwnd)
+    time.sleep(0.20)
+
+
 def get_cursor_state() -> dict[str, Any]:
     info = CURSORINFO()
     info.cbSize = ctypes.sizeof(CURSORINFO)
@@ -369,6 +376,16 @@ def press_key_once(key: str, hold_ms: int) -> dict[str, Any]:
     user32.keybd_event(vk, 0, 0, None)
     time.sleep(max(hold_ms, 0) / 1000.0)
     user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, None)
+    return {"key": key, "virtualKey": f"0x{vk:02X}", "holdMs": hold_ms}
+
+
+def hold_key_safely(key: str, hold_ms: int) -> dict[str, Any]:
+    vk = virtual_key_for(key)
+    user32.keybd_event(vk, 0, 0, None)
+    try:
+        time.sleep(max(hold_ms, 0) / 1000.0)
+    finally:
+        user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, None)
     return {"key": key, "virtualKey": f"0x{vk:02X}", "holdMs": hold_ms}
 
 
@@ -1418,6 +1435,93 @@ def classify_chromalink_world_state(health: dict[str, Any], ready: dict[str, Any
     }
 
 
+def query_chromalink_world_state(base_url: str, *, timeout_seconds: float) -> dict[str, Any]:
+    health = fetch_json(chromalink_url(base_url, "/health"), timeout_seconds=timeout_seconds)
+    ready = fetch_json(chromalink_url(base_url, "/ready"), timeout_seconds=timeout_seconds)
+    world = fetch_json(chromalink_url(base_url, "/api/v1/riftreader/world-state"), timeout_seconds=timeout_seconds)
+    classification = classify_chromalink_world_state(health, ready, world)
+    return {
+        "observedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "health": health,
+        "ready": ready,
+        "worldState": world,
+        "classification": classification,
+    }
+
+
+def wait_for_chromalink_position(
+    base_url: str,
+    *,
+    timeout_seconds: float,
+    wait_seconds: float,
+    poll_interval_ms: int,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + max(0.0, float(wait_seconds))
+    attempts: list[dict[str, Any]] = []
+    while True:
+        attempt = query_chromalink_world_state(base_url, timeout_seconds=timeout_seconds)
+        attempt["index"] = len(attempts) + 1
+        attempts.append(attempt)
+        classification = attempt["classification"]
+        if classification.get("coordinateReady") or time.monotonic() >= deadline:
+            return {
+                "attempts": attempts,
+                "summary": classification,
+                "coordinateReady": bool(classification.get("coordinateReady")),
+                "position": classification.get("playerPosition"),
+            }
+        time.sleep(max(0.05, poll_interval_ms / 1000.0))
+
+
+def compute_facing_delta(before: dict[str, Any], after: dict[str, Any], *, min_distance: float) -> dict[str, Any]:
+    dx = float(after["x"]) - float(before["x"])
+    dy = float(after["y"]) - float(before["y"])
+    dz = float(after["z"]) - float(before["z"])
+    distance_xy = math.hypot(dx, dy)
+    distance_xyz = math.sqrt((dx * dx) + (dy * dy) + (dz * dz))
+    if distance_xy > 0:
+        unit_x = dx / distance_xy
+        unit_y = dy / distance_xy
+        angle_degrees = math.degrees(math.atan2(unit_y, unit_x))
+        if angle_degrees < 0:
+            angle_degrees += 360.0
+    else:
+        unit_x = 0.0
+        unit_y = 0.0
+        angle_degrees = None
+
+    usable = distance_xy >= min_distance
+    if usable:
+        classification = "usable-coordinate-delta"
+    elif distance_xyz > 0:
+        classification = "vertical-or-too-small-delta"
+    else:
+        classification = "no-coordinate-delta"
+
+    return {
+        "classification": classification,
+        "usable": usable,
+        "minDistance": min_distance,
+        "delta": {
+            "x": round(dx, 6),
+            "y": round(dy, 6),
+            "z": round(dz, 6),
+            "distanceXY": round(distance_xy, 6),
+            "distanceXYZ": round(distance_xyz, 6),
+        },
+        "operationalFacing": {
+            "basis": "coordinate-delta-after-forward-pulse",
+            "worldVectorXY": {
+                "x": round(unit_x, 6),
+                "y": round(unit_y, 6),
+            },
+            "angleDegreesMath": round(angle_degrees, 3) if angle_degrees is not None else None,
+            "angleConvention": "0 degrees = +X, 90 degrees = +Y; coordinate-system semantic north is unknown.",
+            "isNativeActorFacing": False,
+        },
+    }
+
+
 def run_signal_proof_chromalink(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-chromalink-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -1470,18 +1574,9 @@ def run_signal_proof_chromalink(args: argparse.Namespace) -> int:
         attempt_index = 0
         while True:
             attempt_index += 1
-            health = fetch_json(chromalink_url(base_url, "/health"), timeout_seconds=args.timeout_seconds)
-            ready = fetch_json(chromalink_url(base_url, "/ready"), timeout_seconds=args.timeout_seconds)
-            world = fetch_json(chromalink_url(base_url, "/api/v1/riftreader/world-state"), timeout_seconds=args.timeout_seconds)
-            classification = classify_chromalink_world_state(health, ready, world)
-            attempt = {
-                "index": attempt_index,
-                "observedAtUtc": datetime.now(timezone.utc).isoformat(),
-                "health": health,
-                "ready": ready,
-                "worldState": world,
-                "classification": classification,
-            }
+            attempt = query_chromalink_world_state(base_url, timeout_seconds=args.timeout_seconds)
+            attempt["index"] = attempt_index
+            classification = attempt["classification"]
             manifest["attempts"].append(attempt)
             manifest["summary"] = classification
             manifest["decision"]["classification"] = classification["classification"]
@@ -1502,6 +1597,187 @@ def run_signal_proof_chromalink(args: argparse.Namespace) -> int:
         print(json.dumps(result, indent=2))
         if args.require_fresh and not ok:
             return 1
+        return 0
+    except Exception as exc:
+        manifest["error"] = str(exc)
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+
+
+def run_signal_proof_facing_delta(args: argparse.Namespace) -> int:
+    hwnd = parse_hwnd(args.hwnd)
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-facing-delta-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+    base_url = normalize_base_url(args.base_url)
+    mode = "confirm-movement" if args.confirm_movement else "dry-run"
+    movement_key = str(args.movement_key)
+
+    manifest: dict[str, Any] = {
+        "schema": "autofish.signalProof.facingDelta.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "mode": mode,
+        "safety": {
+            "sendsInput": bool(args.confirm_movement),
+            "sendsMovement": bool(args.confirm_movement),
+            "sendsFishingKey": False,
+            "clickCount": 0,
+            "movementPulseCount": 1 if args.confirm_movement else 0,
+            "requiresExactPidHwnd": True,
+            "requiresForegroundForMovement": True,
+            "requiresFreshChromaLinkBeforeMovement": True,
+            "modifiesChromaLink": False,
+            "usesChromaLinkAsReadOnlyProvider": True,
+            "isNativeActorFacing": False,
+            "blocksReloadKeyByDefault": True,
+            "doesNotRestoreMinimizedWindow": True,
+        },
+        "request": {
+            "pid": args.pid,
+            "hwnd": hwnd_hex(hwnd),
+            "baseUrl": base_url,
+            "movementKey": movement_key,
+            "holdMs": args.hold_ms,
+            "maxHoldMs": args.max_hold_ms,
+            "postMoveSettleMs": args.post_move_settle_ms,
+            "timeoutSeconds": args.timeout_seconds,
+            "waitFreshSeconds": args.wait_fresh_seconds,
+            "pollIntervalMs": args.poll_interval_ms,
+            "minDistance": args.min_distance,
+            "focusIfVisible": bool(args.focus_if_visible),
+        },
+        "target": None,
+        "before": None,
+        "movement": None,
+        "after": None,
+        "result": None,
+        "decision": {
+            "classification": "unproven",
+            "notes": [
+                "This estimates operational facing from ChromaLink coordinate delta after a tiny forward movement pulse.",
+                "It does not prove native Rift actor facing/yaw.",
+                "ChromaLink is consumed read-only and must be fresh before any movement is sent.",
+            ],
+        },
+    }
+
+    try:
+        if len(movement_key) != 1:
+            raise RuntimeError("--movement-key must be exactly one character.")
+        if movement_key == "-":
+            raise RuntimeError("'-' is blocked because this local setup binds it to reloadui.")
+        if args.hold_ms < 1:
+            raise RuntimeError("--hold-ms must be at least 1.")
+        if args.max_hold_ms < 1:
+            raise RuntimeError("--max-hold-ms must be at least 1.")
+        if args.hold_ms > args.max_hold_ms:
+            raise RuntimeError(f"--hold-ms {args.hold_ms} exceeds --max-hold-ms {args.max_hold_ms}.")
+        if args.min_distance < 0:
+            raise RuntimeError("--min-distance must be non-negative.")
+
+        if args.focus_if_visible:
+            focus_visible_target_without_restore(hwnd)
+        target = validate_target(hwnd, args.pid, require_foreground=bool(args.confirm_movement))
+        if args.confirm_movement and target.get("isMinimized"):
+            raise RuntimeError("Target is minimized; restore/focus Rift manually before movement proof.")
+        manifest["target"] = target
+
+        before = wait_for_chromalink_position(
+            base_url,
+            timeout_seconds=args.timeout_seconds,
+            wait_seconds=args.wait_fresh_seconds,
+            poll_interval_ms=args.poll_interval_ms,
+        )
+        manifest["before"] = before
+        if not before["coordinateReady"]:
+            manifest["decision"]["classification"] = "blocked-no-fresh-before-position"
+            write_manifest(output_root, manifest)
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "outputRoot": str(output_root),
+                        "manifest": str(output_root / "manifest.json"),
+                        "classification": manifest["decision"]["classification"],
+                        "reason": "Fresh ChromaLink before-position is required.",
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
+        if args.dry_run:
+            manifest["movement"] = {
+                "wouldSendMovement": True,
+                "movementKey": movement_key,
+                "holdMs": args.hold_ms,
+                "reason": "Dry run only; no movement input sent.",
+            }
+            manifest["decision"]["classification"] = "dry-run-ready-for-confirmed-movement"
+            write_manifest(output_root, manifest)
+            print(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "outputRoot": str(output_root),
+                        "manifest": str(output_root / "manifest.json"),
+                        "classification": manifest["decision"]["classification"],
+                        "beforePosition": before["position"],
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
+        movement_started = datetime.now(timezone.utc).isoformat()
+        movement_action = hold_key_safely(movement_key, args.hold_ms)
+        movement_action["sentAtUtc"] = movement_started
+        movement_action["completedAtUtc"] = datetime.now(timezone.utc).isoformat()
+        movement_action["kind"] = "tiny-forward-pulse"
+        manifest["movement"] = movement_action
+        time.sleep(max(0, args.post_move_settle_ms) / 1000.0)
+
+        after = wait_for_chromalink_position(
+            base_url,
+            timeout_seconds=args.timeout_seconds,
+            wait_seconds=args.wait_fresh_seconds,
+            poll_interval_ms=args.poll_interval_ms,
+        )
+        manifest["after"] = after
+        if not after["coordinateReady"]:
+            manifest["decision"]["classification"] = "blocked-no-fresh-after-position"
+            write_manifest(output_root, manifest)
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "outputRoot": str(output_root),
+                        "manifest": str(output_root / "manifest.json"),
+                        "classification": manifest["decision"]["classification"],
+                        "reason": "Fresh ChromaLink after-position is required.",
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
+        result = compute_facing_delta(before["position"], after["position"], min_distance=args.min_distance)
+        manifest["result"] = result
+        manifest["decision"]["classification"] = result["classification"]
+        write_manifest(output_root, manifest)
+        print(
+            json.dumps(
+                {
+                    "ok": bool(result["usable"]),
+                    "outputRoot": str(output_root),
+                    "manifest": str(output_root / "manifest.json"),
+                    "classification": result["classification"],
+                    "delta": result["delta"],
+                    "operationalFacing": result["operationalFacing"],
+                },
+                indent=2,
+            )
+        )
         return 0
     except Exception as exc:
         manifest["error"] = str(exc)
@@ -1938,6 +2214,14 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
         if summary.get("classification") in ("bridge-down-or-unreachable", "provider-health-not-fresh", "world-state-not-fresh"):
             return "provider-blocked-rerun-freshness"
         return "needs-fresh-player-position"
+    if signal == "facingDelta":
+        if summary.get("usable"):
+            return "operational-facing-candidate-review"
+        if summary.get("sendsMovement") and summary.get("classification") in ("no-coordinate-delta", "vertical-or-too-small-delta"):
+            return "movement-delta-too-small-review"
+        if summary.get("classification", "").startswith("blocked-"):
+            return "blocked-rerun-prerequisites"
+        return "needs-confirmed-movement"
     if signal == "log":
         if summary.get("matchedLineCount", 0) > 0:
             return "fallback-candidate-review"
@@ -2060,6 +2344,25 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "controlAvailable": navigation.get("controlAvailable"),
             }
         )
+    elif signal == "facingDelta":
+        safety = manifest.get("safety") if isinstance(manifest.get("safety"), dict) else {}
+        result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
+        before = manifest.get("before") if isinstance(manifest.get("before"), dict) else {}
+        after = manifest.get("after") if isinstance(manifest.get("after"), dict) else {}
+        delta = result.get("delta") if isinstance(result.get("delta"), dict) else {}
+        facing = result.get("operationalFacing") if isinstance(result.get("operationalFacing"), dict) else {}
+        summary.update(
+            {
+                "classification": result.get("classification") or (manifest.get("decision") or {}).get("classification"),
+                "usable": bool(result.get("usable")),
+                "sendsMovement": bool(safety.get("sendsMovement")),
+                "beforeCoordinateReady": bool(before.get("coordinateReady")),
+                "afterCoordinateReady": bool(after.get("coordinateReady")),
+                "delta": delta,
+                "operationalFacing": facing,
+                "movement": manifest.get("movement"),
+            }
+        )
     elif signal == "log":
         log_end = manifest.get("logEnd") if isinstance(manifest.get("logEnd"), dict) else {}
         aggregate = log_end.get("aggregateScan") if isinstance(log_end.get("aggregateScan"), dict) else {}
@@ -2171,6 +2474,18 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             if position:
                 lines.append(f"- player position: x={position.get('x')} y={position.get('y')} z={position.get('z')} ageMs={position.get('ageMs')}")
             lines.append(f"- heading/facing/control available: {summary.get('headingAvailable')}/{summary.get('facingAvailable')}/{summary.get('controlAvailable')}")
+        elif summary["signal"] == "facingDelta":
+            lines.append(f"- classification: {summary.get('classification')}")
+            lines.append(f"- usable: {summary.get('usable')}")
+            lines.append(f"- sends movement: {summary.get('sendsMovement')}")
+            lines.append(f"- before/after coordinate ready: {summary.get('beforeCoordinateReady')}/{summary.get('afterCoordinateReady')}")
+            delta = summary.get("delta") if isinstance(summary.get("delta"), dict) else {}
+            if delta:
+                lines.append(f"- delta: dx={delta.get('x')} dy={delta.get('y')} dz={delta.get('z')} distanceXY={delta.get('distanceXY')}")
+            facing = summary.get("operationalFacing") if isinstance(summary.get("operationalFacing"), dict) else {}
+            if facing:
+                vector = facing.get("worldVectorXY") if isinstance(facing.get("worldVectorXY"), dict) else {}
+                lines.append(f"- operational facing vector: x={vector.get('x')} y={vector.get('y')} angle={facing.get('angleDegreesMath')}")
         elif summary["signal"] == "log":
             lines.append(f"- appended chars: {summary.get('appendedCharacterCount', 0)}")
             lines.append(f"- matched lines: {summary.get('matchedLineCount', 0)}")
@@ -2337,6 +2652,25 @@ def build_parser() -> argparse.ArgumentParser:
     chromalink.add_argument("--hwnd", help="Optional expected Rift HWND to validate and record without input; requires --pid")
     chromalink.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-chromalink-*.")
     chromalink.set_defaults(func=run_signal_proof_chromalink)
+
+    facing = signal_sub.add_parser("facing-delta", help="Estimate operational facing from fresh ChromaLink coordinate delta after a tiny confirmed movement pulse")
+    facing.add_argument("--pid", type=int, required=True, help="Expected Rift process ID")
+    facing.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
+    facing.add_argument("--base-url", default=DEFAULT_CHROMALINK_BASE_URL, help=f"ChromaLink HTTP bridge base URL; default: {DEFAULT_CHROMALINK_BASE_URL}")
+    facing.add_argument("--timeout-seconds", type=float, default=2.0, help="HTTP timeout per ChromaLink endpoint; default: 2")
+    facing.add_argument("--wait-fresh-seconds", type=float, default=2.0, help="Wait this long for fresh before/after player.position; default: 2")
+    facing.add_argument("--poll-interval-ms", type=int, default=250, help="ChromaLink poll interval while waiting for freshness; default: 250")
+    facing.add_argument("--movement-key", default="w", help="Single-character forward movement key; default: w")
+    facing.add_argument("--hold-ms", type=int, default=120, help="Movement key hold duration for --confirm-movement; default: 120")
+    facing.add_argument("--max-hold-ms", type=int, default=250, help="Safety cap for movement key hold duration; default: 250")
+    facing.add_argument("--post-move-settle-ms", type=int, default=800, help="Delay after movement before reading after-position; default: 800")
+    facing.add_argument("--min-distance", type=float, default=0.01, help="Minimum X/Y coordinate delta required to mark facing usable; default: 0.01")
+    facing.add_argument("--focus-if-visible", action="store_true", help="Try SetForegroundWindow without restoring minimized Rift before validation")
+    facing_mode = facing.add_mutually_exclusive_group(required=True)
+    facing_mode.add_argument("--dry-run", action="store_true", help="Validate exact target and fresh before-position only; send no movement")
+    facing_mode.add_argument("--confirm-movement", action="store_true", help="Allow one tiny movement-key pulse after exact foreground and fresh-coordinate gates pass")
+    facing.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-facing-delta-*.")
+    facing.set_defaults(func=run_signal_proof_facing_delta)
 
     log = signal_sub.add_parser("log", help="Capture and scan newly appended Rift log text without sending input")
     log.add_argument("--log-path", required=True, help="Path to the Rift log file to watch")

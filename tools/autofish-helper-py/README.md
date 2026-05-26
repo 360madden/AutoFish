@@ -124,6 +124,32 @@ Use `--require-fresh` for scripts that should fail closed unless fresh coordinat
 python tools\autofish-helper-py\autofish_helper.py signal-proof chromalink --require-fresh
 ```
 
+## Facing delta calibration
+
+Use ChromaLink coordinates plus one tiny confirmed forward movement pulse to estimate **operational** player facing. This does not prove native Rift actor-facing/yaw.
+
+Dry-run first:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof facing-delta `
+  --pid <CURRENT_RIFT_PID> `
+  --hwnd <CURRENT_RIFT_HWND> `
+  --dry-run
+```
+
+Only after ChromaLink is fresh and the dry-run is ready, allow one bounded movement pulse:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof facing-delta `
+  --pid <CURRENT_RIFT_PID> `
+  --hwnd <CURRENT_RIFT_HWND> `
+  --confirm-movement `
+  --movement-key w `
+  --hold-ms 120
+```
+
+Confirmed mode requires exact PID/HWND, foreground target, non-minimized target, fresh ChromaLink before-position, and a movement hold within the safety cap. It sends no fishing key and no mouse clicks. The result is a normalized X/Y coordinate-delta vector plus a math angle; treat it as an operational facing hint only.
+
 ## Log proof harness
 
 The `/log` family of historical signals is read-only and must prove current usefulness before runtime use:
