@@ -124,6 +124,8 @@ Implemented seventh slice: `/autofish api`, `/autofish apicompact`, `/autofish a
 
 Implemented eighth slice: `tools/autofish-helper-py/autofish_helper.py signal-proof slash` sends only explicitly confirmed, bounded slash commands and captures full-client screenshots after each one. By default it refuses non-`/autofish` commands and refuses command text containing `-` because that key triggers reloadui on this setup.
 
+Implemented ninth slice: `/autofish proof` prints a compact screenshot-friendly state pack with coordinates, combat/secure/castbar status, inventory free-slot summary, fishing candidates, fail-closed observation flags, and focused cursor/tooltip/interaction API values. It is addon-side diagnostic output only; it does not promote native water or actor-facing truth.
+
 Target Python commands:
 
 ```text

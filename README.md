@@ -190,6 +190,7 @@ Confirmed live:
 Implemented offline, pending live reload/proof:
 
 - `/autofish coords` direct coordinate probe prints player `coordX/coordY/coordZ` from `Inspect.Unit.Detail` for screenshot-friendly cross-checks against ChromaLink and facing-delta runs.
+- `/autofish proof` compact screenshot-friendly state pack prints coordinates, combat/secure/castbar state, inventory slots, fishing candidates, observation flags, and focused cursor/tooltip/interaction API values for helper review.
 
 Current blocker:
 

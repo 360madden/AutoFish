@@ -37,10 +37,23 @@ The repository now contains a prepared Rift addon shell that is intended to veri
 Slash commands:
 
 - `/autofish status`
+- `/autofish coords`
 - `/autofish bags`
 - `/autofish inventory`
+- `/autofish invproof before|after|diff|status|clear`
 - `/autofish pole`
+- `/autofish abilities`
+- `/autofish api`
+- `/autofish apicompact`
+- `/autofish apis`
+- `/autofish signals`
+- `/autofish events`
+- `/autofish proof`
+- `/autofish observe`
+- `/autofish trace start|status|stop`
 - `/autofish snapshot`
+
+`/autofish proof` is the compact screenshot-friendly state pack. It prints coordinates, combat/secure/castbar state, inventory free-slot summary, fishing candidates, observation flags, and focused cursor/tooltip/interaction API values in a few chat lines for helper review. It is diagnostic only and does not claim native water/facing truth.
 
 For the current offline-only phase, treat these commands as documented/prepared rather than already live-verified.
 

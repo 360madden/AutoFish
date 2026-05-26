@@ -1674,6 +1674,86 @@ function AutoFishLive.PrintApiCompact()
   Console.Write("  Inspect.Currency keys=" .. formatCompactTableKeys(Inspect and Inspect.Currency, 5), "#CCCCCC")
 end
 
+function AutoFishLive.PrintProofPack()
+  local snapshot = AutoFishLive.Refresh("slash.proof", true)
+  local observation = state.currentObservation or buildObservationSnapshot(snapshot)
+  local player = snapshot.player or {}
+  local coord = player.coord or {}
+  local inventory = snapshot.inventory or {}
+  local fishing = snapshot.fishing or {}
+  local castbar = snapshot.castbar or {}
+  local apiSignals = collectFocusedApiSignalSnapshot()
+  local cursor = apiSignals.cursor or {}
+  local tooltip = apiSignals.tooltip or {}
+  local interaction = apiSignals.interaction or {}
+  local pole = fishing.equippedPole or fishing.inventoryPole
+  local zoneText = trimText(player.locationName or player.zone or "unknown", 30)
+
+  Console.Write(
+    string.format(
+      "proof stamp version=%s refresh=%s time=%.2f",
+      tostring(addonVersion or "?"),
+      tostring(state.session and state.session.refreshCount or "?"),
+      toNumber(snapshot.capturedAt) or 0),
+    "#FFFF88")
+  Console.Write(
+    string.format(
+      "proof coords x=%s y=%s z=%s unit=%s zone=%s",
+      formatCoordValue(coord.x),
+      formatCoordValue(coord.y),
+      formatCoordValue(coord.z),
+      tostring(player.playerUnit or "?"),
+      zoneText),
+    "#00CC88")
+  Console.Write(
+    string.format(
+      "proof state player=%s combat=%s secure=%s castbar=%s ability=%s remain=%s",
+      tostring(player.available and true or false),
+      tostring(player.combat and true or false),
+      tostring(snapshot.secureMode and true or false),
+      tostring(castbar.active and true or false),
+      trimText(castbar.abilityName or "-", 26),
+      tostring(castbar.remaining or "?")),
+    "#66CCFF")
+  Console.Write(
+    string.format(
+      "proof inventory items=%s bags=%s knownSlots=%s usedSlots=%s freeSlots=%s",
+      tostring(inventory.itemCount or 0),
+      tostring(inventory.bagCount or 0),
+      tostring(inventory.knownContainerSlots or 0),
+      tostring(inventory.knownUsedSlots or 0),
+      tostring(inventory.estimatedFreeSlots ~= nil and inventory.estimatedFreeSlots or "?")),
+    "#66CCFF")
+  Console.Write(
+    string.format(
+      "proof fishing pole=%s baitCandidates=%s lureAbilities=%s trackFish=%s",
+      trimText(candidateText(pole), 42),
+      tostring(type(fishing.baitCandidates) == "table" and #fishing.baitCandidates or 0),
+      tostring(type(fishing.lureAbilityCandidates) == "table" and #fishing.lureAbilityCandidates or 0),
+      tostring(type(fishing.trackFishBuff) == "table")),
+    "#CCCCCC")
+  Console.Write(
+    string.format(
+      "proof observation near_water=%s can_cast=%s line_cast=%s bite=%s loot=%s confidence=%.2f",
+      tostring(observation.near_water and true or false),
+      tostring(observation.can_cast and true or false),
+      tostring(observation.line_cast and true or false),
+      tostring(observation.bite_detected and true or false),
+      tostring(observation.loot_window_open and true or false),
+      toNumber(observation.confidence) or 0),
+    "#CCCCCC")
+  Console.Write(
+    string.format(
+      "proof api cursor=%s held=%s tooltip=%s shown=%s interaction=%s",
+      tostring(cursor.type or "?"),
+      tostring(cursor.held or "?"),
+      tostring(tooltip.type or "?"),
+      tostring(tooltip.shown or "?"),
+      tostring(interaction.summary or "?")),
+    "#CCCCCC")
+  Console.Write("proof note: screenshot-friendly state only; no native water/facing claim.", "#FFAA44")
+end
+
 function AutoFishLive.PrintObservation()
   local snapshot = AutoFishLive.Refresh("slash.observation", true)
   local observation = state.currentObservation or buildObservationSnapshot(snapshot)
@@ -1852,6 +1932,7 @@ function AutoFishLive.PrintHelp()
   Console.Write("  /autofish apis      - list use/action-related API table keys", "#CCCCCC")
   Console.Write("  /autofish signals   - show cursor, tooltip, and interaction API values", "#CCCCCC")
   Console.Write("  /autofish events    - list useful event table keys for feedback probes", "#CCCCCC")
+  Console.Write("  /autofish proof     - compact screenshot-friendly state pack for helper review", "#CCCCCC")
   Console.Write("  /autofish observe   - show fail-closed bridge observation mapping", "#CCCCCC")
   Console.Write("  /autofish trace     - start/status/stop a bounded manual one-cast/API trace", "#CCCCCC")
   Console.Write("  /autofish snapshot  - refresh the saved snapshot without extra output", "#CCCCCC")
@@ -1930,6 +2011,11 @@ function AutoFishLive.OnSlashCommand(handle, args)
 
   if command == "events" then
     AutoFishLive.PrintApiEvents()
+    return
+  end
+
+  if command == "proof" or command == "proofpack" or command == "liveproof" then
+    AutoFishLive.PrintProofPack()
     return
   end
 
