@@ -1878,6 +1878,37 @@ def generate_fan_candidates(
     return candidates, geometry
 
 
+def build_reticle_candidate_commands(
+    *,
+    pid: int,
+    hwnd: int,
+    x: int,
+    y: int,
+    key: str,
+    watch_seconds: float,
+) -> dict[str, Any]:
+    helper = "python tools\\autofish-helper-py\\autofish_helper.py"
+    base = (
+        f"{helper} signal-proof reticle "
+        f"--pid {pid} "
+        f"--hwnd {quote_ps(hwnd_hex(hwnd))} "
+        f"--x {x} "
+        f"--y {y} "
+        f"--key {quote_ps(str(key))}"
+    )
+    return {
+        "reticleDryRun": f"{base} --dry-run",
+        "reticleSkipClickCancel": (
+            f"{base} --watch-seconds {watch_seconds:g} --confirm-input --skip-click --cancel-after-key"
+        ),
+        "notes": [
+            "Run the dry-run command first.",
+            "The skip-click command sends one cursor move and one fishing keypress, captures the reticle, then presses Escape; it sends no left click.",
+            "Only run confirmed commands while supervised and after exact PID/HWND/foreground are current.",
+        ],
+    }
+
+
 def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
     hwnd = parse_hwnd(args.hwnd)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-fishability-fan-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -1885,6 +1916,10 @@ def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
 
     if not args.dry_run:
         raise RuntimeError("fishability-fan currently supports --dry-run only; no probe input is implemented.")
+    if args.key == "-":
+        raise RuntimeError("Refusing to generate '-' reticle probe commands because it triggers reloadui on this setup.")
+    if args.probe_watch_seconds < 0 or args.probe_watch_seconds > 10:
+        raise RuntimeError("--probe-watch-seconds must be between 0 and 10.")
 
     manifest: dict[str, Any] = {
         "schema": "autofish.signalProof.fishabilityFan.v1",
@@ -1913,6 +1948,8 @@ def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
             "maxPoints": args.max_points,
             "cropSize": args.crop_size,
             "captureCrops": not args.no_capture_crops,
+            "key": args.key,
+            "probeWatchSeconds": args.probe_watch_seconds,
         },
         "target": None,
         "geometry": None,
@@ -1990,6 +2027,16 @@ def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
             client_height=height,
         )
         manifest["geometry"] = geometry
+        for candidate in candidates:
+            if candidate["inBounds"]:
+                candidate["suggestedCommands"] = build_reticle_candidate_commands(
+                    pid=args.pid,
+                    hwnd=hwnd,
+                    x=int(candidate["clientX"]),
+                    y=int(candidate["clientY"]),
+                    key=args.key,
+                    watch_seconds=float(args.probe_watch_seconds),
+                )
         manifest["candidates"] = candidates
         if using_operator_size:
             manifest["decision"]["notes"].append(
@@ -3796,6 +3843,8 @@ def build_parser() -> argparse.ArgumentParser:
     fan.add_argument("--forward-y", type=int, required=True, help="Client Y of an operator-calibrated forward point")
     fan.add_argument("--client-width", type=int, help="Planning-only client width to use when the target is minimized/unavailable; requires --client-height and --no-capture-crops")
     fan.add_argument("--client-height", type=int, help="Planning-only client height to use when the target is minimized/unavailable; requires --client-width and --no-capture-crops")
+    fan.add_argument("--key", default="8", help="Fishing key to use in suggested per-candidate reticle commands; default: 8")
+    fan.add_argument("--probe-watch-seconds", type=float, default=2.0, help="Watch duration for suggested skip-click reticle probe commands; default: 2")
     fan.add_argument("--distance-px", type=int, action="append", help="Forward distance in pixels; repeatable. Defaults: 180, 280, 380")
     fan.add_argument("--lateral-px", type=int, action="append", help="Right/left lateral offset in pixels; repeatable. Defaults: -120, 0, 120")
     fan.add_argument("--max-points", type=int, default=9, help="Maximum candidate points to generate; default: 9")

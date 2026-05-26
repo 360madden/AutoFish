@@ -195,7 +195,7 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan 
   --dry-run
 ```
 
-This writes a `fishabilityFan` manifest with candidate client points and optional no-input crops. It does not press the fishing key, click, move, or classify water. Future confirmed probing must classify points from game feedback such as castbar start, chat/system errors, item events, inventory deltas, or progression events. Coordinate-backed micro-step facing requires a reliable before/after player coordinate source; use `/autofish coords` as the direct addon-side cross-check and ChromaLink as the helper-side bridge when fresh.
+This writes a `fishabilityFan` manifest with candidate client points, optional no-input crops, and per-candidate suggested reticle commands. It does not press the fishing key, click, move, or classify water. Use the suggested dry-run command first, then the suggested `--skip-click --cancel-after-key` command only while supervised to capture a candidate reticle without sending a left click. Future confirmed probing must classify points from game feedback such as castbar start, chat/system errors, item events, inventory deltas, or progression events. Coordinate-backed micro-step facing requires a reliable before/after player coordinate source; use `/autofish coords` as the direct addon-side cross-check and ChromaLink as the helper-side bridge when fresh.
 
 ## ChromaLink coordinate proof
 

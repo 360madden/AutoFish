@@ -160,12 +160,41 @@ def test_direct_live_command_stop_file_defaults(helper) -> None:
     assert bounded_session.stop_file == helper.DEFAULT_STOP_FILE
 
 
+def test_fishability_fan_suggested_commands(helper) -> None:
+    candidates, _geometry = helper.generate_fan_candidates(
+        origin_x=100,
+        origin_y=100,
+        forward_x=100,
+        forward_y=0,
+        distances=[50],
+        laterals=[0],
+        max_points=1,
+        client_width=300,
+        client_height=300,
+    )
+    assert candidates[0]["inBounds"]
+
+    commands = helper.build_reticle_candidate_commands(
+        pid=1234,
+        hwnd=0x1234,
+        x=candidates[0]["clientX"],
+        y=candidates[0]["clientY"],
+        key="8",
+        watch_seconds=2.0,
+    )
+    assert "--dry-run" in commands["reticleDryRun"]
+    assert "--confirm-input --skip-click --cancel-after-key" in commands["reticleSkipClickCancel"]
+    assert "--x 100" in commands["reticleDryRun"]
+    assert "--y 50" in commands["reticleDryRun"]
+
+
 def main() -> int:
     helper = load_helper()
     test_profile_defaults(helper)
     test_session_plan_defaults(helper)
     test_runbook_render(helper)
     test_direct_live_command_stop_file_defaults(helper)
+    test_fishability_fan_suggested_commands(helper)
     print("AutoFish Python helper smoke checks passed.")
     return 0
 

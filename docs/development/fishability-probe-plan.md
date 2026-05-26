@@ -25,7 +25,7 @@ It intentionally sends no input:
 - no click,
 - no unattended loop.
 
-The command records candidate client coordinates, fan geometry, exact PID/HWND target context, and optional no-input crop captures so the operator can review the plan before any future bounded probing.
+The command records candidate client coordinates, fan geometry, exact PID/HWND target context, optional no-input crop captures, and per-candidate suggested reticle proof commands so the operator can review the plan before any future bounded probing.
 
 Example:
 
@@ -41,6 +41,13 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan 
 ```
 
 The output is planning evidence only. It does not classify water or fishability.
+
+Each in-bounds candidate includes suggested reticle commands:
+
+1. run the candidate `reticleDryRun` command first,
+2. only after review, run the candidate `reticleSkipClickCancel` command while supervised.
+
+The skip-click/cancel command sends one cursor move and one fishing-key press, captures the reticle for a short watch window, presses Escape, and sends no left click.
 
 If the Rift window is minimized, Windows can report a `0x0` client rect. Do not force a restore just to plan geometry. Use the last verified client size and disable crops:
 
