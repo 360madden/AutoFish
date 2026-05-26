@@ -101,6 +101,8 @@ python tools\autofish-helper-py\autofish_helper.py session-plan create `
 
 Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, the fishable coordinate changes, or the plan is stale. `session-plan gates`, plan-backed `one-cast`, and plan-backed `bounded-session` include a `planFresh`/age gate that defaults to a 240-minute maximum age; override with `--max-plan-age-minutes <minutes>` or use `<=0` only for intentional offline diagnostics. When a plan has `targetValidation.clientWidth/clientHeight` from `--validate-target` or a fishability-fan manifest, `session-plan gates`, `one-cast`, and `bounded-session` now compare that size with the current Rift target before allowing plan-backed live input. Live-input commands also recompute client-to-screen coordinates immediately before each cursor move/click, so a same-size window move does not reuse stale screen coordinates.
 
+Plan-backed `one-cast` and `bounded-session` manifests expose a normalized `reviewGates` object so summaries can consistently report `planFresh`, `targetCurrent`, `fishabilityCandidate`, and `oneCast` gate status. Older top-level gate fields remain for compatibility.
+
 By default, a session plan includes `.autofish-live\STOP.txt` as the emergency stop file. Use `session-plan stop-file create --path <plan>` to stop before the next bounded action or during a wait period, `session-plan stop-file clear --path <plan>` before a later supervised rerun, and `session-plan stop-file status --path <plan>` to inspect it without changing it.
 
 To print the exact next commands from a plan:

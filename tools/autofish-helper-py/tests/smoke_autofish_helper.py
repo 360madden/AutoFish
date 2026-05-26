@@ -223,6 +223,14 @@ def test_stale_session_plan_refuses_plan_backed_proofs(helper) -> None:
         with contextlib.redirect_stderr(io.StringIO()) as one_cast_error:
             assert helper.run_signal_proof_one_cast(one_cast) == 1
         assert "too old" in one_cast_error.getvalue()
+        one_cast_manifest = json.loads((Path(tmp) / "one-cast-out" / "manifest.json").read_text(encoding="utf-8"))
+        assert "reviewGates" in one_cast_manifest
+        assert not one_cast_manifest["reviewGates"]["planFresh"]["passed"]
+        one_cast_summary = helper.summarize_signal_proof_manifest(
+            Path(tmp) / "one-cast-out" / "manifest.json",
+            one_cast_manifest,
+        )
+        assert "planFresh" in one_cast_summary["failedReviewGateNames"]
 
         bounded_session = parser.parse_args(
             [
@@ -240,6 +248,15 @@ def test_stale_session_plan_refuses_plan_backed_proofs(helper) -> None:
         with contextlib.redirect_stderr(io.StringIO()) as bounded_error:
             assert helper.run_signal_proof_bounded_session(bounded_session) == 1
         assert "too old" in bounded_error.getvalue()
+        bounded_manifest = json.loads((Path(tmp) / "bounded-session-out" / "manifest.json").read_text(encoding="utf-8"))
+        assert "reviewGates" in bounded_manifest
+        assert bounded_manifest["sessionPlanAgeGate"] == bounded_manifest["reviewGates"]["planFresh"]
+        assert not bounded_manifest["reviewGates"]["planFresh"]["passed"]
+        bounded_summary = helper.summarize_signal_proof_manifest(
+            Path(tmp) / "bounded-session-out" / "manifest.json",
+            bounded_manifest,
+        )
+        assert "planFresh" in bounded_summary["failedReviewGateNames"]
 
 
 def test_fishability_fan_suggested_commands(helper) -> None:

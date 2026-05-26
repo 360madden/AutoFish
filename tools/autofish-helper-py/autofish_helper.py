@@ -2183,6 +2183,45 @@ def check_fan_candidate_review_gate(
     return gate
 
 
+def normalized_manifest_review_gates(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    gates = manifest.get("reviewGates") if isinstance(manifest.get("reviewGates"), dict) else {}
+    normalized: dict[str, dict[str, Any]] = {
+        str(name): gate
+        for name, gate in gates.items()
+        if isinstance(gate, dict)
+    }
+
+    legacy_age_gate = manifest.get("sessionPlanAgeGate")
+    if "planFresh" not in normalized and isinstance(legacy_age_gate, dict):
+        normalized["planFresh"] = legacy_age_gate
+
+    legacy_review_gate = manifest.get("reviewGate")
+    if isinstance(legacy_review_gate, dict):
+        schema = str(manifest.get("schema") or "")
+        legacy_name = "oneCast" if schema.endswith("boundedSession.v1") else "fishabilityCandidate"
+        normalized.setdefault(legacy_name, legacy_review_gate)
+
+    legacy_target_gate = manifest.get("targetGate")
+    if "targetCurrent" not in normalized and isinstance(legacy_target_gate, dict):
+        normalized["targetCurrent"] = legacy_target_gate
+
+    return normalized
+
+
+def summarize_review_gates(manifest: dict[str, Any]) -> dict[str, Any]:
+    gates = normalized_manifest_review_gates(manifest)
+    required = sorted(name for name, gate in gates.items() if gate.get("required", True))
+    failed = sorted(name for name, gate in gates.items() if gate.get("passed") is not True)
+    overridden = sorted(name for name, gate in gates.items() if gate.get("overridden") is True)
+    return {
+        "reviewGateNames": sorted(gates.keys()),
+        "requiredReviewGateNames": required,
+        "failedReviewGateNames": failed,
+        "overriddenReviewGateNames": overridden,
+        "allReviewGatesPassed": bool(gates) and not failed,
+    }
+
+
 def read_text_from_offset(path: Path, offset: int, max_bytes: int) -> tuple[str, int, bool]:
     current_size = path.stat().st_size
     start = offset if offset <= current_size else 0
@@ -2777,6 +2816,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
         "sessionPlanAgeGate": None,
         "reviewGate": None,
         "targetGate": None,
+        "reviewGates": {},
         "target": None,
         "captures": [],
         "casts": [],
@@ -2795,13 +2835,14 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
     }
 
     try:
-        manifest["sessionPlanAgeGate"] = check_session_plan_age_gate(
+        manifest["reviewGates"]["planFresh"] = check_session_plan_age_gate(
             plan_defaults["sessionPlan"],
             max_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
         )
+        manifest["sessionPlanAgeGate"] = manifest["reviewGates"]["planFresh"]
         if not manifest["sessionPlanAgeGate"].get("passed"):
             raise RuntimeError(str(manifest["sessionPlanAgeGate"].get("reason") or "Session plan age gate failed."))
-        manifest["reviewGate"] = (
+        manifest["reviewGates"]["oneCast"] = (
             check_one_cast_review_gate(args, plan_defaults["sessionPlan"])
             if args.confirm_input
             else {
@@ -2810,6 +2851,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                 "reason": "Dry-run sends no input.",
             }
         )
+        manifest["reviewGate"] = manifest["reviewGates"]["oneCast"]
         if args.confirm_input and not manifest["reviewGate"].get("passed"):
             raise RuntimeError(str(manifest["reviewGate"].get("reason") or "One-cast review gate failed."))
 
@@ -2817,6 +2859,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
             current = validate_target(hwnd, args.pid, require_foreground=require_foreground)
             target_gate = check_session_plan_target_freshness(plan_defaults["sessionPlan"], current)
             manifest["targetGate"] = target_gate
+            manifest["reviewGates"]["targetCurrent"] = target_gate
             if not target_gate.get("passed"):
                 raise RuntimeError(str(target_gate.get("reason") or "Session plan target freshness gate failed."))
             return current
@@ -4557,7 +4600,8 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
         result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
         safety = manifest.get("safety") if isinstance(manifest.get("safety"), dict) else {}
         profile = manifest.get("profile") if isinstance(manifest.get("profile"), dict) else None
-        review_gate = manifest.get("reviewGate") if isinstance(manifest.get("reviewGate"), dict) else {}
+        review_gates = normalized_manifest_review_gates(manifest)
+        review_gate = review_gates.get("fishabilityCandidate") or {}
         summary.update(
             {
                 "classification": result.get("classification"),
@@ -4584,6 +4628,7 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "reviewGatePassed": bool(review_gate.get("passed")),
                 "reviewGateOverridden": bool(review_gate.get("overridden")),
                 "target": manifest.get("target"),
+                **summarize_review_gates(manifest),
             }
         )
     elif signal == "boundedSession":
@@ -4593,6 +4638,8 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
         result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
         safety = manifest.get("safety") if isinstance(manifest.get("safety"), dict) else {}
         profile = manifest.get("profile") if isinstance(manifest.get("profile"), dict) else None
+        review_gates = normalized_manifest_review_gates(manifest)
+        review_gate = review_gates.get("oneCast") or {}
         completed_casts = [
             cast
             for cast in casts
@@ -4626,7 +4673,11 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "castWaitSeconds": request.get("castWaitSeconds"),
                 "profileId": profile.get("id") if profile else None,
                 "profilePath": profile.get("path") if profile else None,
+                "reviewGateRequired": bool(review_gate.get("required")),
+                "reviewGatePassed": bool(review_gate.get("passed")),
+                "reviewGateOverridden": bool(review_gate.get("overridden")),
                 "target": manifest.get("target"),
+                **summarize_review_gates(manifest),
             }
         )
     elif signal == "fishabilityFan":
