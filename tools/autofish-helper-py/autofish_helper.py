@@ -85,6 +85,7 @@ DEFAULT_STOP_FILE = ".autofish-live/STOP.txt"
 REVIEW_SCOPE_SCHEMA = "autofish.reviewScope.v1"
 ADDON_COORD_RE = re.compile(r"\b([xyz])\s*=\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 ADDON_PLAYER_UNIT_RE = re.compile(r"\bplayerUnit\s*=\s*(\S+)", re.IGNORECASE)
+HCURSOR = getattr(wintypes, "HCURSOR", wintypes.HANDLE)
 
 
 class POINT(ctypes.Structure):
@@ -104,7 +105,7 @@ class CURSORINFO(ctypes.Structure):
     _fields_ = [
         ("cbSize", wintypes.DWORD),
         ("flags", wintypes.DWORD),
-        ("hCursor", wintypes.HCURSOR),
+        ("hCursor", HCURSOR),
         ("ptScreenPos", POINT),
     ]
 
