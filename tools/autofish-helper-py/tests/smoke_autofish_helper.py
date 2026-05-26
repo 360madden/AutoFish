@@ -165,6 +165,33 @@ def test_direct_live_command_stop_file_defaults(helper) -> None:
     assert bounded_session.max_plan_age_minutes == helper.DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES
 
 
+def test_target_snapshot_invalid_hwnd(helper) -> None:
+    parser = helper.build_parser()
+    args = parser.parse_args(
+        [
+            "target-snapshot",
+            "--pid",
+            "1234",
+            "--hwnd",
+            "0x1",
+            "--require-foreground",
+            "--require-readable",
+        ]
+    )
+    report = helper.build_target_snapshot_report(args)
+    assert report["schema"] == "autofish.targetSnapshot.v1"
+    assert not report["safety"]["sendsInput"]
+    assert not report["safety"]["focusesWindow"]
+    assert not report["readiness"]["exactTarget"]
+    assert not report["readiness"]["targetSnapshotReady"]
+    assert report["gates"]["exactTarget"]["required"]
+    with contextlib.redirect_stdout(io.StringIO()) as snapshot_output:
+        assert helper.run_target_snapshot(args) == 1
+    snapshot_report = json.loads(snapshot_output.getvalue())
+    assert snapshot_report["schema"] == "autofish.targetSnapshot.v1"
+    assert not snapshot_report["readiness"]["targetSnapshotReady"]
+
+
 def test_stale_session_plan_refuses_plan_backed_proofs(helper) -> None:
     with tempfile.TemporaryDirectory(prefix="autofish-helper-stale-plan-") as tmp:
         plan_path = Path(tmp) / "stale-session-plan.json"
@@ -726,6 +753,7 @@ def main() -> int:
     test_session_plan_defaults(helper)
     test_runbook_render(helper)
     test_direct_live_command_stop_file_defaults(helper)
+    test_target_snapshot_invalid_hwnd(helper)
     test_stale_session_plan_refuses_plan_backed_proofs(helper)
     test_fishability_fan_suggested_commands(helper)
     test_fishability_fan_runbook_render(helper)

@@ -39,6 +39,15 @@ Suggested target discovery:
   -Capture
 ```
 
+No-input Python target snapshot before plan creation/reuse:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py target-snapshot `
+  --pid <pid> `
+  --hwnd <hwnd> `
+  --require-readable
+```
+
 Coordinate-source cross-check before any facing/movement proof:
 
 ```text

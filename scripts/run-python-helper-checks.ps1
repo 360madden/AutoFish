@@ -18,6 +18,8 @@ try {
     }
 
     Write-Host 'Checking helper command help surfaces...'
+    python tools/autofish-helper-py/autofish_helper.py target-snapshot --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py target-snapshot --help | Select-String -Pattern 'require-readable' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan from-fan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan explain --help | Out-Null

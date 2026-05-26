@@ -27,6 +27,7 @@ Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` be
 
 - `/autofish invproof before|after|diff` for native inventory/catch deltas, including raw slot-level add/remove/change diagnostics.
 - `/autofish coords` for a direct addon-side player `coordX/coordY/coordZ` readout from `Inspect.Unit.Detail`, useful as a ChromaLink/facing cross-check.
+- `python tools/autofish-helper-py/autofish_helper.py target-snapshot` for no-input PID/HWND/client-size/foreground/readability validation before creating or reusing plans.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof reticle` for cursor/reticle/pixel crops.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast` for one bounded Python-native cast/click/wait/pull proof at a calibrated fishable point.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session` for a supervised bounded multi-cast proof after one-cast evidence is reviewed.

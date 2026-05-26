@@ -77,6 +77,15 @@ No live command should send input without an explicit target PID/HWND and either
 
 Use `one-cast` after the reticle proof has identified a current fishable client coordinate. This is the Python-native replacement path for the older PowerShell prototype script.
 
+Before creating or reusing a session plan, verify the exact target without focusing, restoring, capturing, or sending input:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py target-snapshot `
+  --pid <CURRENT_RIFT_PID> `
+  --hwnd <CURRENT_RIFT_HWND> `
+  --require-readable
+```
+
 To avoid long repeated command lines, create a local session plan after confirming current PID/HWND and fishable client X/Y:
 
 ```powershell

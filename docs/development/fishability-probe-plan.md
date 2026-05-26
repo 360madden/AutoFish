@@ -82,6 +82,8 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
 
 Use `session-plan explain --path .autofish-live\session-plan-latest.json` for a no-input operator summary when a gate is blocked. Use `session-plan preflight --path .autofish-live\session-plan-latest.json --require ready-one-cast` when scripts should print the same readable summary and fail closed.
 
+Before creating or reusing a plan, `target-snapshot --pid <pid> --hwnd <hwnd> --require-readable` can validate exact PID/HWND, client size, foreground state, and readability without focusing, capturing, or sending input.
+
 Add `--require stop-file-clear`, `--require plan-fresh`, `--require target-current`, `--require target-foreground`, `--require client-readable`, `--require confirmed-one-cast`, or `--require confirmed-bounded-session` for fail-closed scripts that should stop unless the requested gate is ready. Use `--require ready-one-cast` before confirmed one-cast input and `--require ready-bounded-session` before confirmed bounded-session input when you want the combined no-input pre-live gate bundle. `planFresh` defaults to a 240-minute maximum age; use `--max-plan-age-minutes <minutes>` to tighten it, or `<=0` only for intentional offline diagnostics.
 
 Use `session-plan stop-file status/create/clear --path .autofish-live\session-plan-latest.json` instead of manually editing the stop file when operating from a session plan.

@@ -365,6 +365,123 @@ def validated_client_to_screen(
     return target, screen_x, screen_y
 
 
+def target_is_readable(target: dict[str, Any] | None) -> bool:
+    if not isinstance(target, dict):
+        return False
+    width = positive_int_or_none(target.get("clientWidth"))
+    height = positive_int_or_none(target.get("clientHeight"))
+    return bool(
+        width is not None
+        and height is not None
+        and width >= PREFERRED_READABLE_CLIENT_WIDTH
+        and height >= PREFERRED_READABLE_CLIENT_HEIGHT
+        and not target.get("isMinimized")
+        and target.get("clientOriginAvailable") is True
+    )
+
+
+def build_target_snapshot_report(args: argparse.Namespace) -> dict[str, Any]:
+    hwnd = parse_hwnd(args.hwnd)
+    report: dict[str, Any] = {
+        "schema": "autofish.targetSnapshot.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "request": {
+            "pid": int(args.pid),
+            "hwnd": hwnd_hex(hwnd),
+            "requireForeground": bool(args.require_foreground),
+            "requireReadable": bool(args.require_readable),
+        },
+        "safety": {
+            "sendsInput": False,
+            "focusesWindow": False,
+            "restoresWindow": False,
+            "capturesScreen": False,
+        },
+        "target": None,
+        "gates": {},
+        "readiness": {
+            "exactTarget": False,
+            "targetForeground": False,
+            "clientReadable": False,
+            "targetSnapshotReady": False,
+        },
+    }
+
+    try:
+        target = validate_target(hwnd, int(args.pid), require_foreground=False)
+    except Exception as exc:
+        report["gates"]["exactTarget"] = {
+            "required": True,
+            "passed": False,
+            "reason": str(exc),
+        }
+        report["gates"]["targetForeground"] = {
+            "required": bool(args.require_foreground),
+            "passed": False,
+            "reason": "Exact target validation failed.",
+        }
+        report["gates"]["clientReadable"] = {
+            "required": bool(args.require_readable),
+            "passed": False,
+            "reason": "Exact target validation failed.",
+        }
+        report["error"] = str(exc)
+        return report
+
+    readable = target_is_readable(target)
+    foreground_matches = bool(target.get("foregroundMatches"))
+    report["target"] = target
+    report["gates"]["exactTarget"] = {
+        "required": True,
+        "passed": True,
+        "reason": "Target HWND is valid and belongs to the expected PID.",
+    }
+    report["gates"]["targetForeground"] = {
+        "required": bool(args.require_foreground),
+        "passed": foreground_matches,
+        "reason": (
+            "Target is foreground."
+            if foreground_matches
+            else "Target is not foreground; focus Rift before any confirmed live proof input."
+        ),
+    }
+    report["gates"]["clientReadable"] = {
+        "required": bool(args.require_readable),
+        "passed": readable,
+        "reason": (
+            "Target client is restored and at or above the preferred proof-capture size."
+            if readable
+            else "Target client is minimized, unreadable, below preferred proof-capture size, or has no client origin."
+        ),
+        "preferredMinimumClientWidth": PREFERRED_READABLE_CLIENT_WIDTH,
+        "preferredMinimumClientHeight": PREFERRED_READABLE_CLIENT_HEIGHT,
+    }
+    target_snapshot_ready = bool(
+        report["gates"]["exactTarget"].get("passed")
+        and (foreground_matches or not args.require_foreground)
+        and (readable or not args.require_readable)
+    )
+    report["readiness"] = {
+        "exactTarget": True,
+        "targetForeground": foreground_matches,
+        "clientReadable": readable,
+        "targetSnapshotReady": target_snapshot_ready,
+    }
+    return report
+
+
+def run_target_snapshot(args: argparse.Namespace) -> int:
+    report = build_target_snapshot_report(args)
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        print(json.dumps({"ok": bool(report["readiness"]["targetSnapshotReady"]), "path": str(output_path)}, indent=2))
+    else:
+        print(json.dumps(report, indent=2))
+    return 0 if report["readiness"]["targetSnapshotReady"] else 1
+
+
 def focus_target(hwnd: int) -> None:
     if user32.IsIconic(hwnd):
         raise RuntimeError("Target is minimized; restore/maximize Rift manually before live input to avoid changing the saved window size.")
@@ -4889,6 +5006,14 @@ def run_signal_proof_decide(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AutoFish helper diagnostics")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    target_snapshot = subparsers.add_parser("target-snapshot", help="No-input PID/HWND foreground/readability snapshot")
+    target_snapshot.add_argument("--pid", type=int, required=True, help="Expected Rift process ID")
+    target_snapshot.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex")
+    target_snapshot.add_argument("--require-foreground", action="store_true", help="Fail unless the target HWND is foreground")
+    target_snapshot.add_argument("--require-readable", action="store_true", help="Fail unless the target client is restored and at least 960x540")
+    target_snapshot.add_argument("--output", help="Optional JSON output path")
+    target_snapshot.set_defaults(func=run_target_snapshot)
 
     session_plan = subparsers.add_parser("session-plan", help="Create or inspect local live-proof session plans")
     session_plan_sub = session_plan.add_subparsers(dest="session_plan_command", required=True)
