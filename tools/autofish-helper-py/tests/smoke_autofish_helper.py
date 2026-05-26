@@ -123,11 +123,49 @@ def test_runbook_render(helper) -> None:
         assert "No command in this runbook sends movement" in markdown
 
 
+def test_direct_live_command_stop_file_defaults(helper) -> None:
+    parser = helper.build_parser()
+    one_cast = parser.parse_args(
+        [
+            "signal-proof",
+            "one-cast",
+            "--pid",
+            "1234",
+            "--hwnd",
+            "0x1234",
+            "--x",
+            "100",
+            "--y",
+            "200",
+            "--dry-run",
+        ]
+    )
+    assert one_cast.stop_file == helper.DEFAULT_STOP_FILE
+
+    bounded_session = parser.parse_args(
+        [
+            "signal-proof",
+            "bounded-session",
+            "--pid",
+            "1234",
+            "--hwnd",
+            "0x1234",
+            "--x",
+            "100",
+            "--y",
+            "200",
+            "--dry-run",
+        ]
+    )
+    assert bounded_session.stop_file == helper.DEFAULT_STOP_FILE
+
+
 def main() -> int:
     helper = load_helper()
     test_profile_defaults(helper)
     test_session_plan_defaults(helper)
     test_runbook_render(helper)
+    test_direct_live_command_stop_file_defaults(helper)
     print("AutoFish Python helper smoke checks passed.")
     return 0
 

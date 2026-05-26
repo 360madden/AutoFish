@@ -162,7 +162,7 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
   --confirm-input
 ```
 
-Dry-run first with `--dry-run`. Confirmed mode is one supervised cast attempt only: no movement and no loop. It refuses minimized Rift windows; restore/maximize Rift manually before live input.
+Dry-run first with `--dry-run`. Confirmed mode is one supervised cast attempt only: no movement and no loop. It refuses minimized Rift windows; restore/maximize Rift manually before live input. The default stop file is `.autofish-live\STOP.txt`; create it to abort before the next bounded action or during the wait.
 
 ### 2c. Supervised bounded session proof
 
@@ -178,11 +178,10 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session 
   --max-casts 3 `
   --cast-wait-seconds 18 `
   --pull-clicks 1 `
-  --stop-file .autofish-live\STOP.txt `
   --confirm-input
 ```
 
-Dry-run first with `--dry-run`. This remains supervised proof only: explicit cast cap, no movement, no minimized-window restore, and stop-file interruption before the next action.
+Dry-run first with `--dry-run`. This remains supervised proof only: explicit cast cap, no movement, no minimized-window restore, and default stop-file interruption before the next action.
 
 Confirmed bounded sessions require a reviewed `oneCast` decision of `promote` or `fallback-only` in `.autofish-live\signal-proof-decisions.json`. Record that with `signal-proof decide --signal oneCast` after reviewing the one-cast manifest/screenshots. Bypass with `--allow-unreviewed-one-cast` only for an explicitly supervised experiment.
 

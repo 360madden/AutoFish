@@ -3751,7 +3751,7 @@ def build_parser() -> argparse.ArgumentParser:
     one_cast.add_argument("--post-key-delay-ms", type=int, help="Delay after keypress before capture; default: 350")
     one_cast.add_argument("--post-click-delay-ms", type=int, help="Delay after confirm click before capture; default: 800")
     one_cast.add_argument("--post-pull-delay-ms", type=int, help="Delay after each pull/loot click before capture; default: profile lootTimeoutMs or 1200")
-    one_cast.add_argument("--stop-file", help="If this file exists before/during the run, abort before the next action")
+    one_cast.add_argument("--stop-file", default=DEFAULT_STOP_FILE, help=f"If this file exists before/during the run, abort before the next action; default: {DEFAULT_STOP_FILE}")
     one_cast.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-one-cast-*.")
     one_cast.set_defaults(func=run_signal_proof_one_cast)
 
@@ -3783,7 +3783,7 @@ def build_parser() -> argparse.ArgumentParser:
     bounded_session.add_argument("--capture-each-cast", action="store_true", help="Capture after hover/key/confirm in addition to each cast completion")
     bounded_session.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register used to require reviewed oneCast proof before confirmed sessions")
     bounded_session.add_argument("--allow-unreviewed-one-cast", action="store_true", help="Bypass the oneCast decision gate intentionally; still requires --confirm-input and all target gates")
-    bounded_session.add_argument("--stop-file", help="If this file exists before/during the run, abort before the next action")
+    bounded_session.add_argument("--stop-file", default=DEFAULT_STOP_FILE, help=f"If this file exists before/during the run, abort before the next action; default: {DEFAULT_STOP_FILE}")
     bounded_session.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-bounded-session-*.")
     bounded_session.set_defaults(func=run_signal_proof_bounded_session)
 
