@@ -84,6 +84,15 @@ python tools\autofish-helper-py\autofish_helper.py doctor `
 
 Top-level `doctor` sends no game input. It writes `doctor.json` and `doctor.md` under `.autofish-live\autofish-doctor-*`, combining proof-root health with session-plan health when the plan exists.
 
+For fail-closed scripts, repeat `--fail-on` with the conditions that should return exit code `1` after still writing the doctor artifacts:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py doctor `
+  --fail-on invalid-manifest `
+  --fail-on weak-decision-evidence `
+  --fail-on not-ready-one-cast
+```
+
 ## Bounded one-cast proof
 
 Use `one-cast` after the reticle proof has identified a current fishable client coordinate. This is the Python-native replacement path for the older PowerShell prototype script.

@@ -80,6 +80,14 @@ SIGNAL_NAMES = (
     "inventory",
     "slash",
 )
+AUTOFISH_DOCTOR_FAIL_ON_CHOICES = (
+    "invalid-manifest",
+    "weak-decision-evidence",
+    "missing-session-plan",
+    "session-not-loaded",
+    "not-ready-one-cast",
+    "not-ready-bounded-session",
+)
 DEFAULT_CHROMALINK_BASE_URL = "http://127.0.0.1:7337"
 DEFAULT_STOP_FILE = ".autofish-live/STOP.txt"
 DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES = 240
@@ -5868,6 +5876,7 @@ def build_autofish_doctor_report(
     session_plan: str,
     *,
     max_plan_age_minutes: int | float | None = DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+    fail_on: list[str] | None = None,
 ) -> dict[str, Any]:
     signal_report = build_signal_proof_doctor_report(proof_root, decision_register)
     session_plan_path = Path(session_plan)
@@ -5906,7 +5915,7 @@ def build_autofish_doctor_report(
     else:
         next_actions.append("Create a session plan after current PID/HWND and a fishable client coordinate are confirmed.")
 
-    return {
+    report = {
         "schema": "autofish.doctor.v1",
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
         "sendsGameInput": False,
@@ -5931,6 +5940,35 @@ def build_autofish_doctor_report(
             "It combines signal-proof health with session-plan health when a session plan exists.",
         ],
     }
+    failures = autofish_doctor_failures(report, fail_on or [])
+    report["failOn"] = list(fail_on or [])
+    report["failed"] = bool(failures)
+    report["failures"] = failures
+    return report
+
+
+def autofish_doctor_failures(report: dict[str, Any], fail_on: list[str]) -> list[dict[str, Any]]:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    failures: list[dict[str, Any]] = []
+    rules = [str(rule) for rule in fail_on or []]
+
+    def add(rule: str, reason: str) -> None:
+        failures.append({"rule": rule, "reason": reason})
+
+    if "invalid-manifest" in rules and int(summary.get("invalidProofManifestCount") or 0) > 0:
+        add("invalid-manifest", f"{summary.get('invalidProofManifestCount')} invalid proof manifest(s) found.")
+    if "weak-decision-evidence" in rules and int(summary.get("weakDecisionEvidenceCount") or 0) > 0:
+        add("weak-decision-evidence", f"{summary.get('weakDecisionEvidenceCount')} weak decision evidence entries found.")
+    if "missing-session-plan" in rules and not summary.get("sessionPlanExists"):
+        add("missing-session-plan", "Session plan file does not exist.")
+    if "session-not-loaded" in rules and not summary.get("sessionPlanLoaded"):
+        add("session-not-loaded", "Session plan is missing or could not be loaded.")
+    if "not-ready-one-cast" in rules and not summary.get("sessionPlanReadyForOneCast"):
+        add("not-ready-one-cast", "Session plan is not ready for confirmed one-cast input.")
+    if "not-ready-bounded-session" in rules and not summary.get("sessionPlanReadyForBoundedSession"):
+        add("not-ready-bounded-session", "Session plan is not ready for confirmed bounded-session input.")
+
+    return failures
 
 
 def render_autofish_doctor_markdown(report: dict[str, Any]) -> str:
@@ -5954,9 +5992,22 @@ def render_autofish_doctor_markdown(report: dict[str, Any]) -> str:
         f"- session plan loaded: {summary.get('sessionPlanLoaded')}",
         f"- session ready for one-cast: {summary.get('sessionPlanReadyForOneCast')}",
         f"- session ready for bounded session: {summary.get('sessionPlanReadyForBoundedSession')}",
+        f"- fail-closed rules: {', '.join(report.get('failOn') or []) or '-'}",
+        f"- fail-closed status: {'failed' if report.get('failed') else 'passed'}",
     ]
     if session_status.get("error"):
         lines.append(f"- session plan error: `{session_status.get('error')}`")
+
+    lines.extend(["", "## Fail-closed checks", ""])
+    failures = report.get("failures") if isinstance(report.get("failures"), list) else []
+    if failures:
+        for failure in failures:
+            if isinstance(failure, dict):
+                lines.append(f"- `{failure.get('rule')}`: {failure.get('reason')}")
+            else:
+                lines.append(f"- {failure}")
+    else:
+        lines.append("-")
 
     lines.extend(["", "## Next actions", ""])
     for index, action in enumerate(report.get("nextActions") or [], start=1):
@@ -5992,13 +6043,26 @@ def run_autofish_doctor(args: argparse.Namespace) -> int:
         args.decision_register,
         args.session_plan,
         max_plan_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+        fail_on=getattr(args, "fail_on", None) or [],
     )
     json_path = output_root / "doctor.json"
     markdown_path = output_root / "doctor.md"
     json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     markdown_path.write_text(render_autofish_doctor_markdown(report), encoding="utf-8")
-    print(json.dumps({"ok": True, "outputRoot": str(output_root), "doctor": str(json_path), "markdown": str(markdown_path)}, indent=2))
-    return 0
+    print(
+        json.dumps(
+            {
+                "ok": not bool(report.get("failed")),
+                "outputRoot": str(output_root),
+                "doctor": str(json_path),
+                "markdown": str(markdown_path),
+                "failed": bool(report.get("failed")),
+                "failures": report.get("failures") or [],
+            },
+            indent=2,
+        )
+    )
+    return 1 if report.get("failed") else 0
 
 
 def run_signal_proof_decide(args: argparse.Namespace) -> int:
@@ -6055,6 +6119,12 @@ def build_parser() -> argparse.ArgumentParser:
             "Maximum session plan age for included session-plan doctor gates; use <=0 to disable. "
             f"Default: {DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES}"
         ),
+    )
+    doctor.add_argument(
+        "--fail-on",
+        action="append",
+        choices=AUTOFISH_DOCTOR_FAIL_ON_CHOICES,
+        help="Return exit code 1 if this read-only health condition is present; repeatable",
     )
     doctor.add_argument("--output-root", help="Doctor output folder; default: .autofish-live/autofish-doctor-*")
     doctor.set_defaults(func=run_autofish_doctor)

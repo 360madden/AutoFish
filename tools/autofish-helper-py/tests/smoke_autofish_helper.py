@@ -269,6 +269,7 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
         assert "AutoFish Doctor" in markdown
         assert "Signal proof doctor" in markdown
         assert "Session plan doctor" in markdown
+        assert "fail-closed status: passed" in markdown
         assert_helper_commands_valid(doc_validator, "generated-autofish-doctor", markdown)
 
         missing_report = helper.build_autofish_doctor_report(
@@ -276,9 +277,12 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
             str(decision_register),
             str(Path(tmp) / "missing-session-plan.json"),
             max_plan_age_minutes=0,
+            fail_on=["missing-session-plan"],
         )
         assert not missing_report["summary"]["sessionPlanExists"]
         assert missing_report["sessionPlanDoctor"] is None
+        assert missing_report["failed"]
+        assert missing_report["failures"][0]["rule"] == "missing-session-plan"
         assert "Create a session plan" in " ".join(missing_report["nextActions"])
 
         output_root = Path(tmp) / "doctor-out"
@@ -290,6 +294,7 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
                         decision_register=str(decision_register),
                         session_plan=str(plan_path),
                         max_plan_age_minutes=0,
+                        fail_on=[],
                         output_root=str(output_root),
                     )
                 )
@@ -298,6 +303,27 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
         result = json.loads(doctor_output.getvalue())
         assert Path(result["doctor"]).exists()
         assert Path(result["markdown"]).exists()
+
+        fail_output_root = Path(tmp) / "doctor-fail-out"
+        with contextlib.redirect_stdout(io.StringIO()) as fail_output:
+            assert (
+                helper.run_autofish_doctor(
+                    argparse.Namespace(
+                        proof_root=str(proof_root),
+                        decision_register=str(decision_register),
+                        session_plan=str(Path(tmp) / "missing-session-plan.json"),
+                        max_plan_age_minutes=0,
+                        fail_on=["missing-session-plan"],
+                        output_root=str(fail_output_root),
+                    )
+                )
+                == 1
+            )
+        fail_result = json.loads(fail_output.getvalue())
+        assert not fail_result["ok"]
+        assert fail_result["failed"]
+        assert fail_result["failures"][0]["rule"] == "missing-session-plan"
+        assert Path(fail_result["doctor"]).exists()
 
 
 def test_direct_live_command_stop_file_defaults(helper) -> None:
