@@ -5154,6 +5154,13 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- actions: {summary.get('actionCount', 0)} ({', '.join(str(name) for name in summary.get('actionNames', [])) or '-'})")
             lines.append(f"- captures: {summary.get('captureCount', 0)} ({', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'})")
             lines.append(f"- click count: {summary.get('clickCount')}; pull clicks: {summary.get('pullClicks')}; wait seconds: {summary.get('castWaitSeconds')}")
+            failed_gates = summary.get("failedReviewGateNames", [])
+            overridden_gates = summary.get("overriddenReviewGateNames", [])
+            if failed_gates or overridden_gates:
+                lines.append(
+                    f"- review gates failed: {', '.join(failed_gates) or '-'}; "
+                    f"overridden: {', '.join(overridden_gates) or '-'}"
+                )
             if summary.get("redReticleClickGuardCount", 0):
                 lines.append(
                     "- red-reticle guard: "
@@ -5175,6 +5182,13 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- captures: {summary.get('captureCount', 0)} ({', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'})")
             lines.append(f"- max clicks: {summary.get('maxClickCount')}; pull clicks: {summary.get('pullClicks')}; wait seconds: {summary.get('castWaitSeconds')}")
             lines.append(f"- one-cast review gate required/passed/overridden: {summary.get('reviewGateRequired')}/{summary.get('reviewGatePassed')}/{summary.get('reviewGateOverridden')}")
+            failed_gates = summary.get("failedReviewGateNames", [])
+            overridden_gates = summary.get("overriddenReviewGateNames", [])
+            if failed_gates or overridden_gates:
+                lines.append(
+                    f"- review gates failed: {', '.join(failed_gates) or '-'}; "
+                    f"overridden: {', '.join(overridden_gates) or '-'}"
+                )
             if summary.get("redReticleClickGuardCount", 0):
                 lines.append(
                     "- red-reticle guard: "

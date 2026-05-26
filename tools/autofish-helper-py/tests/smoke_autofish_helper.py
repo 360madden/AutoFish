@@ -279,6 +279,7 @@ def test_red_reticle_guard_summary(helper) -> None:
         }
     )
     assert "red-reticle guard: failed 1/1" in markdown
+    assert "review gates failed: redReticleClickGuard" in markdown
     assert "blocked-red-reticle-review" in markdown
 
     bounded_summary = helper.summarize_signal_proof_manifest(
