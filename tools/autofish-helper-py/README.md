@@ -204,6 +204,18 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan-
   --manifest .autofish-live\<fishability-fan-proof>\manifest.json
 ```
 
+After one candidate is reviewed as fishable from reticle/game feedback, turn it into a local one-cast session plan:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
+  --manifest .autofish-live\<fishability-fan-proof>\manifest.json `
+  --candidate-index <index> `
+  --profile starter-pond `
+  --output .autofish-live\session-plan-latest.json
+```
+
+The created plan still marks the fan candidate as planning-only source evidence; run the generated session-plan dry-run before any confirmed one-cast proof.
+
 ## ChromaLink coordinate proof
 
 ChromaLink can be used as a **read-only** coordinate provider when its local bridge is fresh. AutoFish must not modify ChromaLink from this repo.

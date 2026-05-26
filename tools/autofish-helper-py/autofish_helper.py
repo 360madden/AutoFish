@@ -965,6 +965,92 @@ def run_session_plan_create(args: argparse.Namespace) -> int:
     return 0
 
 
+def select_fan_candidate(manifest: dict[str, Any], *, candidate_index: int | None, candidate_name: str | None) -> dict[str, Any]:
+    candidates = manifest.get("candidates") if isinstance(manifest.get("candidates"), list) else []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        candidate_index_value = candidate.get("index")
+        if candidate_index is not None and candidate_index_value is not None and int(candidate_index_value) == int(candidate_index):
+            return candidate
+        if candidate_name is not None and str(candidate.get("name") or "") == str(candidate_name):
+            return candidate
+
+    selector = f"index {candidate_index}" if candidate_index is not None else f"name {candidate_name}"
+    raise RuntimeError(f"Fishability fan manifest has no candidate with {selector}.")
+
+
+def build_session_plan_from_fan(args: argparse.Namespace) -> dict[str, Any]:
+    manifest_path = Path(args.manifest)
+    manifest = load_json_object(manifest_path)
+    schema = str(manifest.get("schema") or "")
+    if schema != "autofish.signalProof.fishabilityFan.v1":
+        raise RuntimeError(f"Unsupported fishability fan manifest schema in {manifest_path}: {schema or '<missing>'}")
+
+    candidate = select_fan_candidate(
+        manifest,
+        candidate_index=getattr(args, "candidate_index", None),
+        candidate_name=getattr(args, "candidate_name", None),
+    )
+    if candidate.get("inBounds") is not True:
+        raise RuntimeError("Refusing to create a session plan from an out-of-bounds fishability fan candidate.")
+
+    request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
+    pid = request.get("pid")
+    hwnd = request.get("hwnd")
+    if pid is None or hwnd is None:
+        raise RuntimeError("Fishability fan manifest is missing request.pid or request.hwnd.")
+
+    create_args = argparse.Namespace(
+        pid=int(pid),
+        hwnd=str(hwnd),
+        x=int(candidate["clientX"]),
+        y=int(candidate["clientY"]),
+        profile=args.profile,
+        profile_root=args.profile_root,
+        key=args.key or request.get("key") or "8",
+        max_casts=args.max_casts,
+        max_allowed_casts=args.max_allowed_casts,
+        pull_clicks=args.pull_clicks,
+        cast_wait_seconds=args.cast_wait_seconds,
+        post_pull_delay_ms=args.post_pull_delay_ms,
+        inter_cast_delay_ms=args.inter_cast_delay_ms,
+        stop_file=args.stop_file,
+        validate_target=args.validate_target,
+    )
+    plan = build_session_plan(create_args)
+    plan["source"] = {
+        "type": "fishabilityFanCandidate",
+        "manifest": str(manifest_path),
+        "candidateIndex": candidate.get("index"),
+        "candidateName": candidate.get("name"),
+        "classification": candidate.get("plannedClassification"),
+        "requiresReticleOrGameFeedbackReview": True,
+    }
+    plan["safety"]["sourceCandidateIsPlanningOnly"] = True
+    plan["safety"]["requiresReviewedFishableCandidateBeforeConfirmInput"] = True
+    return plan
+
+
+def run_session_plan_from_fan(args: argparse.Namespace) -> int:
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plan = build_session_plan_from_fan(args)
+    output_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "path": str(output_path),
+                "schema": plan["schema"],
+                "source": plan.get("source"),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def run_session_plan_show(args: argparse.Namespace) -> int:
     loaded = load_session_plan(args.path)
     assert loaded is not None
@@ -1966,6 +2052,7 @@ def render_fishability_fan_runbook(manifest_path: str) -> str:
         if not dry_run or not skip_click:
             lines.extend(["", "Blocked: this candidate has no suggested reticle commands in the manifest.", ""])
             continue
+        session_plan_path = f".autofish-live/session-plan-candidate-{index}.json"
         lines.extend(
             [
                 "",
@@ -1979,6 +2066,18 @@ def render_fishability_fan_runbook(manifest_path: str) -> str:
                 "",
                 "```powershell",
                 str(skip_click),
+                "```",
+                "",
+                "If reviewed as fishable, create a one-cast session plan from this candidate:",
+                "",
+                "```powershell",
+                (
+                    "python tools\\autofish-helper-py\\autofish_helper.py session-plan from-fan "
+                    f"--manifest {quote_ps(str(path))} "
+                    f"--candidate-index {index} "
+                    "--profile starter-pond "
+                    f"--output {quote_ps(session_plan_path)}"
+                ),
                 "```",
                 "",
             ]
@@ -3836,6 +3935,24 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_create.add_argument("--validate-target", action="store_true", help="Validate PID/HWND now and record target geometry without sending input")
     session_plan_create.add_argument("--output", default=".autofish-live/session-plan-latest.json", help="Output session plan JSON path")
     session_plan_create.set_defaults(func=run_session_plan_create)
+    session_plan_from_fan = session_plan_sub.add_parser("from-fan", help="Create a session plan from a fishability-fan candidate")
+    session_plan_from_fan.add_argument("--manifest", required=True, help="Path to a fishability-fan manifest.json")
+    fan_selector = session_plan_from_fan.add_mutually_exclusive_group(required=True)
+    fan_selector.add_argument("--candidate-index", type=int, help="Candidate index from the fishability-fan manifest")
+    fan_selector.add_argument("--candidate-name", help="Candidate name from the fishability-fan manifest")
+    session_plan_from_fan.add_argument("--profile", help="Fishing profile id or JSON path to include in the plan")
+    session_plan_from_fan.add_argument("--profile-root", default="profiles", help="Profile folder for profile ids; default: profiles")
+    session_plan_from_fan.add_argument("--key", help="Fishing key default; default: manifest request key or 8")
+    session_plan_from_fan.add_argument("--max-casts", type=int, default=3, help="Bounded-session cast default; default: 3")
+    session_plan_from_fan.add_argument("--max-allowed-casts", type=int, default=10, help="Bounded-session safety cap default; default: 10")
+    session_plan_from_fan.add_argument("--pull-clicks", type=int, default=1, help="Pull/loot click default; default: 1")
+    session_plan_from_fan.add_argument("--cast-wait-seconds", type=float, help="Optional cast wait override; otherwise profile/default command pacing applies")
+    session_plan_from_fan.add_argument("--post-pull-delay-ms", type=int, help="Optional post-pull delay override; otherwise profile/default command pacing applies")
+    session_plan_from_fan.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Inter-cast delay default; default: 800")
+    session_plan_from_fan.add_argument("--stop-file", help=f"Stop file path to include; default: {DEFAULT_STOP_FILE}")
+    session_plan_from_fan.add_argument("--validate-target", action="store_true", help="Validate PID/HWND now and record target geometry without sending input")
+    session_plan_from_fan.add_argument("--output", default=".autofish-live/session-plan-latest.json", help="Output session plan JSON path")
+    session_plan_from_fan.set_defaults(func=run_session_plan_from_fan)
     session_plan_show = session_plan_sub.add_parser("show", help="Print a session plan JSON file")
     session_plan_show.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
     session_plan_show.set_defaults(func=run_session_plan_show)
