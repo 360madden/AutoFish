@@ -253,6 +253,7 @@ def test_red_reticle_guard_summary(helper) -> None:
         "request": {"pullClicks": 1, "castWaitSeconds": 18},
         "safety": {"clickCount": 0},
         "result": {"classification": "unproven", "completed": False, "liveInputSent": True},
+        "decision": {"classification": "evidence-only"},
         "reviewGates": {
             "redReticleClickGuard": {
                 "required": True,
@@ -305,6 +306,7 @@ def test_red_reticle_guard_summary(helper) -> None:
             "request": {"maxCasts": 3, "pullClicks": 1, "castWaitSeconds": 18},
             "safety": {"maxClickCount": 0},
             "result": {"classification": "unproven", "completed": False, "liveInputSent": True},
+            "decision": {"classification": "evidence-only"},
             "reviewGates": {
                 "redReticleClickGuard": {
                     "required": True,
@@ -317,6 +319,38 @@ def test_red_reticle_guard_summary(helper) -> None:
     assert bounded_summary["suggestedReview"] == "blocked-red-reticle-review"
     assert bounded_summary["redReticleClickGuardCount"] == 1
     assert bounded_summary["redReticleClickGuardFailedCount"] == 1
+
+
+def test_manifest_shape_validation_summary(helper) -> None:
+    invalid_manifest = {
+        "schema": "autofish.signalProof.oneCast.v1",
+        "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+        "mode": "confirm-input",
+        "request": {},
+        "safety": {},
+        "captures": [],
+        "actions": [],
+        "result": {},
+        "decision": {},
+    }
+    errors = helper.validate_signal_proof_manifest_shape(invalid_manifest)
+    assert "reviewGates is required for oneCast manifests" in errors
+
+    summary = helper.summarize_signal_proof_manifest(Path("invalid-one-cast") / "manifest.json", invalid_manifest)
+    assert not summary["manifestShapeValid"]
+    assert summary["suggestedReview"] == "invalid-manifest-rerun"
+
+    markdown = helper.render_signal_proof_markdown(
+        {
+            "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+            "proofRoot": ".autofish-live",
+            "manifestCount": 1,
+            "bySignal": {"oneCast": {"count": 1, "suggestedReviews": {summary["suggestedReview"]: 1}}},
+            "summaries": [summary],
+        }
+    )
+    assert "manifest validation errors" in markdown
+    assert "reviewGates is required for oneCast manifests" in markdown
 
 
 def test_target_snapshot_invalid_hwnd(helper) -> None:
@@ -945,6 +979,7 @@ def main() -> int:
     test_direct_live_command_stop_file_defaults(helper)
     test_red_reticle_click_guard(helper)
     test_red_reticle_guard_summary(helper)
+    test_manifest_shape_validation_summary(helper)
     test_target_snapshot_invalid_hwnd(helper)
     test_stale_session_plan_refuses_plan_backed_proofs(helper)
     test_fishability_fan_suggested_commands(helper)

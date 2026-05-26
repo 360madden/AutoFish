@@ -4722,6 +4722,113 @@ def signal_from_schema(schema: str) -> str:
     return "unknown"
 
 
+SIGNAL_PROOF_REQUIRED_FIELD_TYPES: dict[str, dict[str, type]] = {
+    "reticle": {
+        "request": dict,
+        "safety": dict,
+        "captures": list,
+        "actions": list,
+        "decision": dict,
+    },
+    "oneCast": {
+        "request": dict,
+        "safety": dict,
+        "captures": list,
+        "actions": list,
+        "result": dict,
+        "decision": dict,
+        "reviewGates": dict,
+    },
+    "boundedSession": {
+        "request": dict,
+        "safety": dict,
+        "captures": list,
+        "casts": list,
+        "result": dict,
+        "decision": dict,
+        "reviewGates": dict,
+    },
+    "fishabilityFan": {
+        "request": dict,
+        "safety": dict,
+        "candidates": list,
+        "captures": list,
+        "decision": dict,
+    },
+    "chromalinkWorldState": {
+        "request": dict,
+        "safety": dict,
+        "attempts": list,
+        "decision": dict,
+    },
+    "coordinateCrosscheck": {
+        "request": dict,
+        "safety": dict,
+        "result": dict,
+        "decision": dict,
+    },
+    "facingDelta": {
+        "request": dict,
+        "safety": dict,
+        "result": dict,
+        "decision": dict,
+    },
+    "log": {
+        "request": dict,
+        "safety": dict,
+        "logStart": dict,
+        "logEnd": dict,
+        "decision": dict,
+    },
+    "layout": {
+        "request": dict,
+        "safety": dict,
+        "captures": list,
+        "decision": dict,
+    },
+    "slash": {
+        "request": dict,
+        "safety": dict,
+        "captures": list,
+        "actions": list,
+        "decision": dict,
+    },
+    "audio": {
+        "request": dict,
+        "safety": dict,
+        "decision": dict,
+    },
+}
+
+
+def validate_signal_proof_manifest_shape(manifest: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    schema = manifest.get("schema")
+    if not isinstance(schema, str) or not schema:
+        errors.append("schema must be a non-empty string")
+        signal = "unknown"
+    else:
+        if not schema.startswith("autofish.signalProof."):
+            errors.append(f"schema must start with autofish.signalProof.; got {schema}")
+        signal = signal_from_schema(schema)
+
+    if signal == "unknown" or signal not in SIGNAL_PROOF_REQUIRED_FIELD_TYPES:
+        errors.append(f"unsupported signal-proof schema: {schema or '<missing>'}")
+
+    if not isinstance(manifest.get("generatedAtUtc"), str) or not manifest.get("generatedAtUtc"):
+        errors.append("generatedAtUtc must be a non-empty string")
+    if not isinstance(manifest.get("mode"), str) or not manifest.get("mode"):
+        errors.append("mode must be a non-empty string")
+
+    for field_name, expected_type in SIGNAL_PROOF_REQUIRED_FIELD_TYPES.get(signal, {}).items():
+        if field_name not in manifest:
+            errors.append(f"{field_name} is required for {signal} manifests")
+            continue
+        if not isinstance(manifest.get(field_name), expected_type):
+            errors.append(f"{field_name} must be {expected_type.__name__} for {signal} manifests")
+    return errors
+
+
 def load_signal_proof_manifests(proof_root: Path) -> list[tuple[Path, dict[str, Any]]]:
     manifests: list[tuple[Path, dict[str, Any]]] = []
     if proof_root.is_file() and proof_root.name == "manifest.json":
@@ -4752,6 +4859,8 @@ def nonzero_counts(counts: dict[str, Any]) -> dict[str, int]:
 
 
 def suggest_review(signal: str, summary: dict[str, Any]) -> str:
+    if summary.get("manifestValidationErrors"):
+        return "invalid-manifest-rerun"
     if signal in ("oneCast", "boundedSession") and summary.get("redReticleClickGuardFailedCount", 0) > 0:
         return "blocked-red-reticle-review"
     if summary.get("hasError"):
@@ -4832,6 +4941,7 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
 def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     schema = str(manifest.get("schema") or "unknown")
     signal = signal_from_schema(schema)
+    validation_errors = validate_signal_proof_manifest_shape(manifest)
     summary: dict[str, Any] = {
         "manifestPath": str(path),
         "outputRoot": str(path.parent),
@@ -4841,6 +4951,8 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
         "mode": manifest.get("mode"),
         "hasError": "error" in manifest,
         "error": manifest.get("error"),
+        "manifestShapeValid": not validation_errors,
+        "manifestValidationErrors": validation_errors,
     }
 
     if signal == "reticle":
@@ -5134,6 +5246,10 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
         lines.append(f"### {summary['signal']} - `{summary['manifestPath']}`")
         lines.append("")
         lines.append(f"- suggested review: `{summary['suggestedReview']}`")
+        if not summary.get("manifestShapeValid", True):
+            lines.append("- manifest validation errors:")
+            for error in summary.get("manifestValidationErrors", []):
+                lines.append(f"  - {error}")
         if summary.get("hasError"):
             lines.append(f"- error: `{summary.get('error')}`")
         if summary["signal"] == "reticle":
