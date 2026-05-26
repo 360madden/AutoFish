@@ -109,6 +109,57 @@ Classification:
 - slash-command output capture: `promote` as an evidence collection helper only.
 - compact API namespace proof: `needs-more-evidence` until candidate event namespaces produce useful values during a manual catch/loot/skill-up attempt.
 
+## Live proof-pack follow-up - 2026-05-26
+
+Evidence:
+
+- Operator-provided in-game screenshot after redeploying the latest `lua/AutoFish/Main.lua` to the detected Rift addon folders and reloading the UI.
+
+Result:
+
+- `/autofish help` now lists `/autofish proof`.
+- `/autofish proof` is live-verified as a working addon command.
+- The proof pack is compact enough to fit in one readable large-window screenshot.
+- The command printed current player coordinates from the addon path:
+  - `x=7266.05`
+  - `y=821.30`
+  - `z=2999.35`
+  - `zone=Sanctum`
+- The command printed current safe-state signals:
+  - `player=true`
+  - `combat=false`
+  - `secure=false`
+  - `castbar=false`
+- The command printed current inventory/fishing signals:
+  - `items=71`
+  - `bags=3`
+  - `freeSlots=4`
+  - pole candidate: `Beginner's Fishing Pole [inventory] ...`
+  - `baitCandidates=0`
+  - `lureAbilities=0`
+  - `trackFish=true`
+- The command printed fail-closed observation state:
+  - `near_water=false`
+  - `can_cast=false`
+  - `line_cast=false`
+  - `bite=false`
+  - `loot=false`
+  - `confidence=0.45`
+- The command printed focused API values:
+  - `cursor=nil`
+  - `held=nil`
+  - `tooltip=nil`
+  - `shown=nil`
+  - `interaction=none-active`
+
+Interpretation:
+
+- The deployed addon and live client are now on the expected proof-pack command surface.
+- The proof pack promotes `/autofish proof` as the preferred single-screenshot addon status capture before any live one-cast proof.
+- Native water/facing remains unproven; the proof pack correctly reports `near_water=false` and `can_cast=false` until fishability is proven through a calibrated reticle/game-feedback path.
+- The visible Track Fish buff and pole candidate are useful readiness evidence, but bait/lure is still unproven from native scans in this screenshot.
+- The next live helper gate is `signal-proof slash --default-proof-pack --dry-run`, followed by one confirmed `--default-proof-pack` capture only with exact current PID/HWND and foreground target.
+
 ## Reticle and cursor proof
 
 Evidence:

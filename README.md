@@ -181,7 +181,7 @@ Live addon diagnostics have started against a Rift client, but AutoFish is still
 
 Confirmed live:
 
-- `/autofish help`, `/autofish status`, `/autofish bags`, `/autofish inventory`, `/autofish invproof`, `/autofish pole`, `/autofish abilities`, `/autofish api`, `/autofish apicompact`, `/autofish apis`, `/autofish events`, `/autofish observe`, and `/autofish trace`
+- `/autofish help`, `/autofish status`, `/autofish bags`, `/autofish inventory`, `/autofish invproof`, `/autofish pole`, `/autofish abilities`, `/autofish api`, `/autofish apicompact`, `/autofish apis`, `/autofish events`, `/autofish proof`, `/autofish observe`, and `/autofish trace`
 - exact PID/HWND target preflight and capture via the Python helper/RiftReader helpers
 - player, combat/secure, inventory/free-slot, pole, Track Fish, ability scan, and castbar signals
 - read-only API/event table discovery for inventory, chat, cursor/interaction, and candidate progression namespaces
