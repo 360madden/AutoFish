@@ -69,6 +69,7 @@ SIGNAL_NAMES = (
     "oneCast",
     "boundedSession",
     "fishabilityFan",
+    "fishabilityCandidate",
     "chromalinkWorldState",
     "coordinateCrosscheck",
     "facingDelta",
@@ -1070,12 +1071,15 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
     target = plan.get("target") if isinstance(plan.get("target"), dict) else {}
     point = plan.get("fishablePoint") if isinstance(plan.get("fishablePoint"), dict) else {}
     defaults = plan.get("defaults") if isinstance(plan.get("defaults"), dict) else {}
+    source = plan.get("source") if isinstance(plan.get("source"), dict) else {}
+    is_fan_candidate_plan = source.get("type") == "fishabilityFanCandidate"
     helper = "python tools\\autofish-helper-py\\autofish_helper.py"
     plan_arg = quote_ps(plan_path)
     proof_root_arg = quote_ps(proof_root)
     stop_file = defaults.get("stopFile") or DEFAULT_STOP_FILE
     stop_file_arg = quote_ps(str(stop_file))
     one_cast_evidence = proof_root.rstrip("\\/") + "\\<one-cast-proof>\\manifest.json"
+    fan_candidate_evidence = proof_root.rstrip("\\/") + "\\<candidate-reticle-proof>\\manifest.json"
     lines = [
         "# AutoFish Session Plan Runbook",
         "",
@@ -1085,6 +1089,12 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         f"- profile: `{profile.get('id') or '-'}`",
         f"- key: `{defaults.get('key', '8')}`; max casts: `{defaults.get('maxCasts', 3)}`",
         f"- emergency stop file: `{stop_file}`",
+    ]
+    if is_fan_candidate_plan:
+        lines.append(
+            f"- source: `fishabilityFanCandidate` index `{source.get('candidateIndex')}` name `{source.get('candidateName')}`"
+        )
+    lines.extend([
         "",
         "## 1. Review the plan",
         "",
@@ -1092,6 +1102,26 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         f"{helper} session-plan show --path {plan_arg}",
         "```",
         "",
+    ])
+    if is_fan_candidate_plan:
+        lines.extend(
+            [
+                "## Fan-candidate review gate",
+                "",
+                "Before confirmed one-cast input, review the candidate reticle/game-feedback proof and record it:",
+                "",
+                "```powershell",
+                f"{helper} signal-proof decide `",
+                "  --signal fishabilityCandidate `",
+                "  --decision fallback-only `",
+                "  --reason \"Reviewed fan candidate as fishable enough for one supervised one-cast proof.\" `",
+                f"  --evidence {quote_ps(fan_candidate_evidence)} `",
+                f"  --proof-root {proof_root_arg}",
+                "```",
+                "",
+            ]
+        )
+    lines.extend([
         "## 2. One-cast dry-run",
         "",
         "```powershell",
@@ -1148,7 +1178,9 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         "- Bounded-session confirmed mode requires a reviewed oneCast decision unless explicitly bypassed.",
         "- The stop file is checked before each bounded action and during wait periods.",
         "- No command in this runbook sends movement.",
-    ]
+    ])
+    if is_fan_candidate_plan:
+        lines.append("- Fan-derived plans also require a reviewed fishabilityCandidate decision before confirmed one-cast input.")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -1192,6 +1224,67 @@ def check_one_cast_review_gate(args: argparse.Namespace) -> dict[str, Any]:
             "Confirmed bounded-session requires a reviewed oneCast decision of promote or fallback-only in "
             f"{register_path}. Run one-cast proof, record it with signal-proof decide --signal oneCast, "
             "or intentionally bypass with --allow-unreviewed-one-cast."
+        )
+    return gate
+
+
+def check_fan_candidate_review_gate(
+    session_plan_info: dict[str, Any] | None,
+    register_path: str,
+    allow_unreviewed: bool,
+) -> dict[str, Any]:
+    plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
+    if not isinstance(plan, dict):
+        return {
+            "required": False,
+            "passed": True,
+            "reason": "No session plan source requires a reviewed fishability candidate.",
+        }
+
+    source = plan.get("source") if isinstance(plan.get("source"), dict) else {}
+    safety = plan.get("safety") if isinstance(plan.get("safety"), dict) else {}
+    required = (
+        source.get("type") == "fishabilityFanCandidate"
+        or safety.get("requiresReviewedFishableCandidateBeforeConfirmInput") is True
+    )
+    gate: dict[str, Any] = {
+        "required": bool(required),
+        "passed": True,
+        "source": source,
+        "register": register_path,
+    }
+    if not required:
+        gate["reason"] = "Session plan was not created from a fishability-fan candidate."
+        return gate
+    if allow_unreviewed:
+        gate.update(
+            {
+                "passed": True,
+                "overridden": True,
+                "reason": "--allow-unreviewed-fan-candidate was supplied.",
+            }
+        )
+        return gate
+
+    register = load_decision_register(Path(register_path))
+    latest_by_signal = register.get("latestBySignal") if isinstance(register.get("latestBySignal"), dict) else {}
+    latest = latest_by_signal.get("fishabilityCandidate") if isinstance(latest_by_signal.get("fishabilityCandidate"), dict) else None
+    decision = latest.get("decision") if latest else None
+    passed = decision in ("promote", "fallback-only")
+    gate.update(
+        {
+            "passed": passed,
+            "overridden": False,
+            "acceptedDecisions": ["promote", "fallback-only"],
+            "latestFishabilityCandidateDecision": latest,
+        }
+    )
+    if not passed:
+        gate["reason"] = (
+            "Confirmed one-cast from a fishability-fan session plan requires a reviewed fishabilityCandidate "
+            f"decision of promote or fallback-only in {register_path}. Run reticle skip-click/cancel proof for the "
+            "candidate, then record it with signal-proof decide --signal fishabilityCandidate, or intentionally "
+            "bypass with --allow-unreviewed-fan-candidate."
         )
     return gate
 
@@ -1575,9 +1668,27 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
                 "Success still requires review of game feedback such as castbar, chat, inventory, or visible loot.",
             ],
         },
+        "reviewGates": {},
     }
 
     try:
+        manifest["reviewGates"]["fishabilityCandidate"] = (
+            check_fan_candidate_review_gate(
+                plan_defaults["sessionPlan"],
+                args.decision_register,
+                args.allow_unreviewed_fan_candidate,
+            )
+            if args.confirm_input
+            else {
+                "required": False,
+                "passed": True,
+                "reason": "Dry-run sends no input.",
+            }
+        )
+        if args.confirm_input and not manifest["reviewGates"]["fishabilityCandidate"].get("passed"):
+            raise RuntimeError(
+                str(manifest["reviewGates"]["fishabilityCandidate"].get("reason") or "Fishability candidate review gate failed.")
+            )
         if args.confirm_input:
             focus_target(hwnd)
         target = validate_target(hwnd, args.pid, require_foreground=args.confirm_input)
@@ -2053,6 +2164,7 @@ def render_fishability_fan_runbook(manifest_path: str) -> str:
             lines.extend(["", "Blocked: this candidate has no suggested reticle commands in the manifest.", ""])
             continue
         session_plan_path = f".autofish-live/session-plan-candidate-{index}.json"
+        candidate_evidence_path = f".autofish-live/<candidate-{index}-reticle-proof>/manifest.json"
         lines.extend(
             [
                 "",
@@ -2066,6 +2178,18 @@ def render_fishability_fan_runbook(manifest_path: str) -> str:
                 "",
                 "```powershell",
                 str(skip_click),
+                "```",
+                "",
+                "If reviewed as fishable, record that candidate decision:",
+                "",
+                "```powershell",
+                (
+                    "python tools\\autofish-helper-py\\autofish_helper.py signal-proof decide "
+                    "--signal fishabilityCandidate "
+                    "--decision fallback-only "
+                    "--reason \"Reviewed candidate reticle/game feedback as fishable enough for one supervised one-cast proof.\" "
+                    f"--evidence {quote_ps(candidate_evidence_path)}"
+                ),
                 "```",
                 "",
                 "If reviewed as fishable, create a one-cast session plan from this candidate:",
@@ -4010,6 +4134,8 @@ def build_parser() -> argparse.ArgumentParser:
     one_cast.add_argument("--post-click-delay-ms", type=int, help="Delay after confirm click before capture; default: 800")
     one_cast.add_argument("--post-pull-delay-ms", type=int, help="Delay after each pull/loot click before capture; default: profile lootTimeoutMs or 1200")
     one_cast.add_argument("--stop-file", default=DEFAULT_STOP_FILE, help=f"If this file exists before/during the run, abort before the next action; default: {DEFAULT_STOP_FILE}")
+    one_cast.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register used to require reviewed fishabilityCandidate proof for fan-derived session plans")
+    one_cast.add_argument("--allow-unreviewed-fan-candidate", action="store_true", help="Bypass the fishabilityCandidate decision gate for fan-derived session plans intentionally")
     one_cast.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-one-cast-*.")
     one_cast.set_defaults(func=run_signal_proof_one_cast)
 

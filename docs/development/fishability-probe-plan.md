@@ -56,7 +56,15 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan-
   --manifest .autofish-live\<fishability-fan-proof>\manifest.json
 ```
 
-After one candidate is reviewed as fishable, create a local session plan from the same manifest instead of retyping PID/HWND/X/Y:
+After one candidate is reviewed as fishable, record the reviewed candidate decision and create a local session plan from the same manifest instead of retyping PID/HWND/X/Y:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof decide `
+  --signal fishabilityCandidate `
+  --decision fallback-only `
+  --reason "Reviewed fan candidate as fishable enough for one supervised one-cast proof." `
+  --evidence .autofish-live\<candidate-reticle-proof>\manifest.json
+```
 
 ```powershell
 python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
@@ -66,7 +74,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan from-fan `
   --output .autofish-live\session-plan-latest.json
 ```
 
-The plan remains gated: it records the candidate as fan-planning source evidence and still requires dry-run/review before confirmed one-cast input.
+The plan remains gated: it records the candidate as fan-planning source evidence and confirmed one-cast input requires a reviewed `fishabilityCandidate` decision unless intentionally bypassed. Still run the session-plan dry-run before confirmed one-cast input.
 
 If the Rift window is minimized, Windows can report a `0x0` client rect. Do not force a restore just to plan geometry. Use the last verified client size and disable crops:
 

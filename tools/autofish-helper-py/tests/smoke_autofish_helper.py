@@ -225,6 +225,7 @@ def test_fishability_fan_runbook_render(helper) -> None:
         assert "Candidate 0" in markdown
         assert "reticle --pid 1234" in markdown
         assert "--skip-click --cancel-after-key" in markdown
+        assert "--signal fishabilityCandidate" in markdown
         assert "session-plan from-fan" in markdown
         assert "they send no left click and no movement" in markdown
 
@@ -272,6 +273,27 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert plan["profile"]["id"] == "starter-pond"
         assert plan["source"]["type"] == "fishabilityFanCandidate"
         assert plan["safety"]["requiresReviewedFishableCandidateBeforeConfirmInput"]
+        gate = helper.check_fan_candidate_review_gate(
+            {"plan": plan},
+            str(Path(tmp) / "missing-decisions.json"),
+            allow_unreviewed=False,
+        )
+        assert gate["required"]
+        assert not gate["passed"]
+
+        bypassed_gate = helper.check_fan_candidate_review_gate(
+            {"plan": plan},
+            str(Path(tmp) / "missing-decisions.json"),
+            allow_unreviewed=True,
+        )
+        assert bypassed_gate["passed"]
+        assert bypassed_gate["overridden"]
+
+        plan_path = Path(tmp) / "session-plan.json"
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        markdown = helper.render_session_plan_runbook(str(plan_path), ".autofish-live")
+        assert "--signal fishabilityCandidate" in markdown
+        assert "Fan-derived plans also require" in markdown
 
 
 def main() -> int:
