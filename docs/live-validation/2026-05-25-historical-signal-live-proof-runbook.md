@@ -84,6 +84,13 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --require client-readable
 ```
 
+If any gate blocks, print the no-input operator explanation before changing state:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan explain `
+  --path .autofish-live\session-plan-latest.json
+```
+
 Print the next commands from the plan:
 
 ```powershell

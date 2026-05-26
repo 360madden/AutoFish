@@ -20,6 +20,8 @@ try {
     Write-Host 'Checking helper command help surfaces...'
     python tools/autofish-helper-py/autofish_helper.py session-plan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan from-fan --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan explain --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan explain --help | Select-String -Pattern 'max-plan-age-minutes' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan stop-file --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan stop-file create --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Out-Null

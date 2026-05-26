@@ -118,6 +118,7 @@ def test_runbook_render(helper) -> None:
         assert "signal-proof one-cast --session-plan" in markdown
         assert "signal-proof bounded-session --session-plan" in markdown
         assert "--signal oneCast" in markdown
+        assert "session-plan explain" in markdown
         assert "session-plan stop-file create" in markdown
         assert "session-plan stop-file clear" in markdown
         assert ".autofish-live/STOP.txt" in markdown
@@ -353,6 +354,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert "--signal fishabilityCandidate" in markdown
         assert f"--session-plan '{plan_path}'" in markdown
         assert "session-plan gates" in markdown
+        assert "session-plan explain" in markdown
         assert "--require ready-one-cast" in markdown
         assert "--require ready-bounded-session" in markdown
         assert "session-plan stop-file create" in markdown
@@ -375,6 +377,23 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert gate_report["readiness"]["confirmedOneCast"]
         assert not gate_report["readiness"]["confirmedBoundedSession"]
         assert not gate_report["readiness"]["readyForOneCast"]
+        explanation = helper.render_session_plan_gate_explanation(gate_report)
+        assert "AutoFish Session Plan Gate Explanation" in explanation
+        assert "sends game input: `no`" in explanation
+        assert "## Next action" in explanation
+        with contextlib.redirect_stdout(io.StringIO()) as explain_output:
+            assert (
+                helper.run_session_plan_explain(
+                    argparse.Namespace(
+                        path=str(plan_path),
+                        decision_register=str(decision_register),
+                        max_plan_age_minutes=0,
+                        output=None,
+                    )
+                )
+                == 0
+            )
+        assert "AutoFish Session Plan Gate Explanation" in explain_output.getvalue()
         with contextlib.redirect_stdout(io.StringIO()):
             assert (
                 helper.run_session_plan_gates(

@@ -1481,23 +1481,64 @@ def run_session_plan_stop_file(args: argparse.Namespace) -> int:
     return 0
 
 
-def run_session_plan_gates(args: argparse.Namespace) -> int:
-    loaded = load_session_plan(args.path)
+READINESS_NAME_BY_FLAG = {
+    "stop-file-clear": "stopFileClear",
+    "plan-fresh": "planFresh",
+    "target-current": "targetCurrent",
+    "target-foreground": "targetForeground",
+    "client-readable": "clientReadable",
+    "confirmed-one-cast": "confirmedOneCast",
+    "confirmed-bounded-session": "confirmedBoundedSession",
+    "ready-one-cast": "readyForOneCast",
+    "ready-bounded-session": "readyForBoundedSession",
+}
+
+
+SESSION_PLAN_GATE_ORDER = (
+    "stopFileClear",
+    "planFresh",
+    "targetCurrent",
+    "targetForeground",
+    "clientReadable",
+    "fishabilityCandidate",
+    "oneCast",
+)
+
+
+SESSION_PLAN_GATE_LABELS = {
+    "stopFileClear": "Stop file clear",
+    "planFresh": "Plan fresh",
+    "targetCurrent": "Target size current",
+    "targetForeground": "Target foreground",
+    "clientReadable": "Client readable",
+    "fishabilityCandidate": "Fishability candidate reviewed",
+    "oneCast": "One-cast reviewed",
+}
+
+
+def build_session_plan_gate_report(
+    path: str,
+    decision_register: str,
+    *,
+    max_plan_age_minutes: int | float | None = DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+    required_readiness: list[str] | None = None,
+) -> dict[str, Any]:
+    loaded = load_session_plan(path)
     assert loaded is not None
     plan = loaded["plan"]
     one_cast_gate_args = argparse.Namespace(
         allow_unreviewed_one_cast=False,
-        decision_register=args.decision_register,
+        decision_register=decision_register,
     )
     fishability_gate = check_fan_candidate_review_gate(
         loaded,
-        args.decision_register,
+        decision_register,
         allow_unreviewed=False,
     )
     one_cast_gate = check_one_cast_review_gate(one_cast_gate_args, loaded)
     plan_age_gate = check_session_plan_age_gate(
         loaded,
-        max_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+        max_age_minutes=max_plan_age_minutes,
     )
     target_gate = check_session_plan_target_freshness(loaded)
     current_target = target_gate.get("currentTarget") if isinstance(target_gate.get("currentTarget"), dict) else None
@@ -1527,7 +1568,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         "path": loaded["path"],
         "review": plan.get("review") if isinstance(plan.get("review"), dict) else None,
         "source": plan.get("source") if isinstance(plan.get("source"), dict) else None,
-        "decisionRegister": args.decision_register,
+        "decisionRegister": decision_register,
         "gates": {
             "stopFileClear": stop_file_gate,
             "planFresh": plan_age_gate,
@@ -1548,7 +1589,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
             "readyForOneCast": ready_for_one_cast,
             "readyForBoundedSession": ready_for_bounded_session,
         },
-        "requiredReadiness": args.require or [],
+        "requiredReadiness": required_readiness or [],
         "notes": [
             "This command sends no game input.",
             "stopFileClear fails when the session plan stop file exists.",
@@ -1561,22 +1602,107 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
             "readyForOneCast and readyForBoundedSession are compound no-input readiness checks.",
         ],
     }
+    return report
+
+
+def run_session_plan_gates(args: argparse.Namespace) -> int:
+    report = build_session_plan_gate_report(
+        args.path,
+        args.decision_register,
+        max_plan_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+        required_readiness=args.require or [],
+    )
     print(json.dumps(report, indent=2))
-    readiness_name_by_flag = {
-        "stop-file-clear": "stopFileClear",
-        "plan-fresh": "planFresh",
-        "target-current": "targetCurrent",
-        "target-foreground": "targetForeground",
-        "client-readable": "clientReadable",
-        "confirmed-one-cast": "confirmedOneCast",
-        "confirmed-bounded-session": "confirmedBoundedSession",
-        "ready-one-cast": "readyForOneCast",
-        "ready-bounded-session": "readyForBoundedSession",
-    }
     for required in args.require or []:
-        readiness_name = readiness_name_by_flag[required]
+        readiness_name = READINESS_NAME_BY_FLAG[required]
         if report["readiness"].get(readiness_name) is not True:
             return 1
+    return 0
+
+
+def session_plan_gate_status(gate: dict[str, Any] | None) -> str:
+    if not isinstance(gate, dict):
+        return "missing"
+    if gate.get("passed") is True:
+        return "pass" if gate.get("required", True) else "not required"
+    return "blocked"
+
+
+def session_plan_gate_reason(gate: dict[str, Any] | None) -> str:
+    if not isinstance(gate, dict):
+        return "Gate data is missing."
+    reason = gate.get("reason")
+    if reason:
+        return str(reason)
+    return "Passed." if gate.get("passed") else "Blocked; inspect the gate JSON for details."
+
+
+def session_plan_next_action(report: dict[str, Any]) -> str:
+    gates = report.get("gates") if isinstance(report.get("gates"), dict) else {}
+    if not report.get("readiness", {}).get("stopFileClear") and isinstance(gates.get("stopFileClear"), dict):
+        return f"If safe to resume, clear the stop file: python tools\\autofish-helper-py\\autofish_helper.py session-plan stop-file clear --path {quote_ps(str(report.get('path')))}"
+    if not report.get("readiness", {}).get("planFresh"):
+        return "Recreate the session plan from the current PID/HWND, current fishable coordinate, and current window geometry."
+    if not report.get("readiness", {}).get("targetCurrent"):
+        return "Restore/resize Rift to the recorded client size, or recreate the session plan after recalibrating the fishable client coordinate."
+    if not report.get("readiness", {}).get("targetForeground"):
+        return "Bring the exact Rift HWND in the session plan to the foreground, then rerun session-plan gates."
+    if not report.get("readiness", {}).get("clientReadable"):
+        return "Restore or maximize Rift to a readable client size, then rerun session-plan gates."
+    if not report.get("readiness", {}).get("confirmedOneCast"):
+        return "Review the candidate reticle/game-feedback evidence and record a scoped fishabilityCandidate decision before one-cast input."
+    if report.get("readiness", {}).get("readyForOneCast") and not report.get("readiness", {}).get("confirmedBoundedSession"):
+        return "Run one supervised one-cast proof from the session plan, review its manifest/screenshots, then record a scoped oneCast decision."
+    if report.get("readiness", {}).get("readyForBoundedSession"):
+        return "All no-input bounded-session gates pass; run only the supervised bounded-session command when the operator is ready."
+    return "Inspect the gate table above, fix the first blocked gate, then rerun session-plan gates."
+
+
+def render_session_plan_gate_explanation(report: dict[str, Any]) -> str:
+    readiness = report.get("readiness") if isinstance(report.get("readiness"), dict) else {}
+    gates = report.get("gates") if isinstance(report.get("gates"), dict) else {}
+    lines = [
+        "# AutoFish Session Plan Gate Explanation",
+        "",
+        f"- plan: `{report.get('path')}`",
+        f"- generated: `{report.get('generatedAtUtc')}`",
+        f"- sends game input: `no`",
+        f"- ready for one-cast: `{'yes' if readiness.get('readyForOneCast') else 'no'}`",
+        f"- ready for bounded session: `{'yes' if readiness.get('readyForBoundedSession') else 'no'}`",
+        "",
+        "| Gate | Status | Reason |",
+        "| --- | --- | --- |",
+    ]
+    for gate_name in SESSION_PLAN_GATE_ORDER:
+        gate = gates.get(gate_name) if isinstance(gates, dict) else None
+        label = SESSION_PLAN_GATE_LABELS.get(gate_name, gate_name)
+        lines.append(f"| {label} | {session_plan_gate_status(gate)} | {session_plan_gate_reason(gate)} |")
+    lines.extend(
+        [
+            "",
+            "## Next action",
+            "",
+            session_plan_next_action(report),
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def run_session_plan_explain(args: argparse.Namespace) -> int:
+    report = build_session_plan_gate_report(
+        args.path,
+        args.decision_register,
+        max_plan_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+    )
+    markdown = render_session_plan_gate_explanation(report)
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown + "\n", encoding="utf-8")
+        print(json.dumps({"ok": True, "path": str(output_path)}, indent=2))
+    else:
+        print(markdown)
     return 0
 
 
@@ -1630,6 +1756,12 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         "",
         "```powershell",
         f"{helper} session-plan gates --path {plan_arg}",
+        "```",
+        "",
+        "Explain blocked gates in operator language:",
+        "",
+        "```powershell",
+        f"{helper} session-plan explain --path {plan_arg}",
         "```",
         "",
         "Fail closed if the current target client size no longer matches the plan:",
@@ -4765,6 +4897,20 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_show = session_plan_sub.add_parser("show", help="Print a session plan JSON file")
     session_plan_show.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
     session_plan_show.set_defaults(func=run_session_plan_show)
+    session_plan_explain = session_plan_sub.add_parser("explain", help="Explain session-plan readiness gates in operator language")
+    session_plan_explain.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
+    session_plan_explain.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register path")
+    session_plan_explain.add_argument(
+        "--max-plan-age-minutes",
+        type=float,
+        default=DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+        help=(
+            "Maximum session plan age for planFresh/ready-* gates; use <=0 to disable. "
+            f"Default: {DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES}"
+        ),
+    )
+    session_plan_explain.add_argument("--output", help="Optional markdown output path")
+    session_plan_explain.set_defaults(func=run_session_plan_explain)
     session_plan_stop_file = session_plan_sub.add_parser("stop-file", help="Create, clear, or inspect the stop file from a session plan")
     session_plan_stop_file_sub = session_plan_stop_file.add_subparsers(dest="stop_file_action", required=True)
     for action, help_text in (
