@@ -52,6 +52,7 @@ Slash commands:
 - `/autofish observe`
 - `/autofish trace start|status|stop`
 - `/autofish snapshot`
+- `/autofish help`
 
 `/autofish proof` is the compact screenshot-friendly state pack. It prints coordinates, combat/secure/castbar state, inventory free-slot summary, fishing candidates, observation flags, and focused cursor/tooltip/interaction API values in a few chat lines for helper review. It is diagnostic only and does not claim native water/facing truth.
 
