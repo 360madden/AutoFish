@@ -104,6 +104,7 @@ Decision:
 - `fallback-only` if it works only under this UI/graphics/window setup.
 - `retire` if crops/cursor handles do not separate invalid, valid, waiting, and bite-ready states.
 - Do not promote native hover APIs unless `/autofish trace` samples show non-nil/non-empty `Inspect.Cursor`, `Inspect.Tooltip`, or `Inspect.Interaction` values while the visual reticle or tooltip is active.
+- Treat `blueCyan` color stats as suspicious around water/highlights until manually reviewed; current proof shows the heuristic can be background-contaminated.
 
 ### 3. Current log proof
 

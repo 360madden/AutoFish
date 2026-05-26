@@ -144,6 +144,17 @@ Evidence:
 - `.autofish-live/signaltrace-counts-stop-status-live-latest/manifest.json`
 - `.autofish-live/signaltrace-counts-stop-status-live-latest/command-002-autofish-trace-status-full-client.bmp`
 - `.autofish-live/signal-proof-summary-after-signaltrace-latest/summary.md`
+- `.autofish-live/preflight-reticle-color-sweep-latest/g0-preflight-summary.json`
+- `.autofish-live/reticle-color-sweep-water-left-latest/manifest.json`
+- `.autofish-live/reticle-color-sweep-water-known-yellow-latest/manifest.json`
+- `.autofish-live/reticle-color-sweep-bright-water-right-latest/manifest.json`
+- `.autofish-live/reticle-color-sweep-far-water-center-latest/manifest.json`
+- `.autofish-live/reticle-color-sweep-far-water-left-latest/manifest.json`
+- `.autofish-live/reticle-color-sweep-land-shore-latest/manifest.json`
+- `.autofish-live/reticle-color-sweep-near-player-shore-latest/manifest.json`
+- `.autofish-live/reticle-color-sweep-near-water-edge-left-latest/manifest.json`
+- `.autofish-live/reticle-color-sweep-contact-sheet-latest/reticle-color-sweep-contact-sheet-8.jpg`
+- `.autofish-live/signal-proof-summary-after-color-sweep-latest/summary.md`
 
 Result:
 
@@ -170,6 +181,8 @@ Large-window follow-up:
 - `/autofish signals` was run while that yellow reticle/tooltip was still visible. The addon printed `Inspect.Cursor type=nil held=nil`, `Inspect.Tooltip type=nil shown=nil extra=nil`, and `Inspect.Interaction none-active`.
 - Escape cancellation was validated with the same exact PID/HWND: the crop changed from yellow reticle/cursor handle `0x3BF07A0` to normal water/cursor handle `0x630ED0`. `--cancel-after-key` was then added and live-validated so future skip-click proofs can automatically clear the targeting reticle unless the operator intentionally wants it left active.
 - A follow-up addon-side trace patch records `Inspect.Cursor`, `Inspect.Tooltip`, and `Inspect.Interaction` values in bounded `/autofish trace` samples. A live trace over a skip-click key-`8` reticle proof recorded `samples=13` with `cursor_non_nil=0`, `tooltip_non_nil=0`, and `interaction_active=0`.
+- A large-window color sweep then sampled eight client points with `--skip-click --cancel-after-key` and no left click. Clean water points produced visually yellow reticles; shore/land/too-far points produced visually red reticles. Within this run, yellow samples used OS cursor handle `0x3BF07A0`, while red/invalid samples used `0x39D40FA9`.
+- No true blue/cyan reticle was proven in this sweep. Some manifests suggested `blueCyan`, but manual review showed the heuristic was dominated by water/highlight background pixels rather than a blue/cyan targeting reticle.
 
 Reviewed status:
 
@@ -177,7 +190,8 @@ Reviewed status:
 - The large-window proof confirms the user's observation that key `8` can display a yellow cast reticle over water and that left click can start the fishing-pole cast animation.
 - The visible `Deep Water` tooltip is useful visual evidence, but the current native `Inspect.Tooltip` and `Inspect.Interaction` probes did not expose that tooltip/hover state to the addon during this run.
 - Native API hover detection is **not promoted**: the current local client exposed no useful cursor, tooltip, or interaction values while the visual yellow reticle was active.
-- Pixel/reticle color classification is now `fallback-only` for helper-side calibration/proof because the yellow visual state is repeatable, but promotion still requires repeated casts and clean separation of valid reticle, invalid reticle, cast-start, bite-ready, and post-loot states.
+- Pixel/reticle color classification is now `fallback-only` for helper-side calibration/proof because yellow valid-water and red invalid/too-far states are visually repeatable, but promotion still requires repeated casts and clean separation of valid reticle, invalid reticle, cast-start, bite-ready, and post-loot states.
+- Treat `blueCyan` color stats as manual-review-only until the color analyzer is tightened; current evidence shows water/background contamination can produce false blue/cyan suggestions.
 - Reticle/cursor should remain a fallback candidate until repeated clean crops distinguish valid reticle, cast-start, bite-ready, and invalid states.
 
 ## `/log` proof
