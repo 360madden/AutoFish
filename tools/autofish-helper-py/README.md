@@ -2,6 +2,12 @@
 
 This folder is the Python-first home for external AutoFish helper/runtime automation.
 
+Run helper-only smoke checks from the repo root:
+
+```powershell
+.\scripts\run-python-helper-checks.ps1
+```
+
 The Lua addon remains the in-game Rift addon layer. This helper is for same-PC desktop automation against the local Rift window:
 
 - exact PID/HWND validation,

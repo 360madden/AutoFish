@@ -139,6 +139,12 @@ dotnet build AutoFish.sln --configuration Release
 .\scripts\run-local-checks.ps1
 ```
 
+### Run Python helper checks only
+
+```powershell
+.\scripts\run-python-helper-checks.ps1
+```
+
 ### Launch the legacy helper GUI
 
 ```powershell
