@@ -40,6 +40,7 @@ def assert_helper_commands_valid(doc_validator, label: str, markdown: str) -> No
 def test_doc_command_validator_surface(helper, doc_validator) -> None:
     surface = doc_validator.build_command_surface(helper)
     assert "target-snapshot" in surface
+    assert "doctor" in surface
     assert "session-plan" in surface
     assert "signal-proof" in surface
     assert "checklist" in surface["session-plan"]
@@ -214,6 +215,80 @@ def test_session_plan_doctor_report(helper, doc_validator) -> None:
                         path=str(plan_path),
                         proof_root=".autofish-live",
                         decision_register=str(decision_register),
+                        max_plan_age_minutes=0,
+                        output_root=str(output_root),
+                    )
+                )
+                == 0
+            )
+        result = json.loads(doctor_output.getvalue())
+        assert Path(result["doctor"]).exists()
+        assert Path(result["markdown"]).exists()
+
+
+def test_autofish_doctor_bundle(helper, doc_validator) -> None:
+    with tempfile.TemporaryDirectory(prefix="autofish-helper-autofish-doctor-") as tmp:
+        proof_root = Path(tmp) / "proofs"
+        proof_root.mkdir()
+        plan_path = Path(tmp) / "session-plan.json"
+        with contextlib.redirect_stdout(io.StringIO()):
+            helper.run_session_plan_create(
+                argparse.Namespace(
+                    pid=1234,
+                    hwnd="0x1234",
+                    x=100,
+                    y=200,
+                    profile="starter-pond",
+                    profile_root="profiles",
+                    key="8",
+                    max_casts=3,
+                    max_allowed_casts=10,
+                    pull_clicks=1,
+                    cast_wait_seconds=None,
+                    post_pull_delay_ms=None,
+                    inter_cast_delay_ms=800,
+                    stop_file=None,
+                    validate_target=False,
+                    output=str(plan_path),
+                )
+            )
+        decision_register = Path(tmp) / "decisions.json"
+        report = helper.build_autofish_doctor_report(
+            str(proof_root),
+            str(decision_register),
+            str(plan_path),
+            max_plan_age_minutes=0,
+        )
+        assert report["schema"] == "autofish.doctor.v1"
+        assert not report["sendsGameInput"]
+        assert report["summary"]["sessionPlanExists"]
+        assert report["summary"]["sessionPlanLoaded"]
+        assert report["signalProofDoctor"]["schema"] == "autofish.signalProof.doctor.v1"
+        assert report["sessionPlanDoctor"]["schema"] == "autofish.sessionPlan.doctor.v1"
+        markdown = helper.render_autofish_doctor_markdown(report)
+        assert "AutoFish Doctor" in markdown
+        assert "Signal proof doctor" in markdown
+        assert "Session plan doctor" in markdown
+        assert_helper_commands_valid(doc_validator, "generated-autofish-doctor", markdown)
+
+        missing_report = helper.build_autofish_doctor_report(
+            str(proof_root),
+            str(decision_register),
+            str(Path(tmp) / "missing-session-plan.json"),
+            max_plan_age_minutes=0,
+        )
+        assert not missing_report["summary"]["sessionPlanExists"]
+        assert missing_report["sessionPlanDoctor"] is None
+        assert "Create a session plan" in " ".join(missing_report["nextActions"])
+
+        output_root = Path(tmp) / "doctor-out"
+        with contextlib.redirect_stdout(io.StringIO()) as doctor_output:
+            assert (
+                helper.run_autofish_doctor(
+                    argparse.Namespace(
+                        proof_root=str(proof_root),
+                        decision_register=str(decision_register),
+                        session_plan=str(plan_path),
                         max_plan_age_minutes=0,
                         output_root=str(output_root),
                     )
@@ -1176,6 +1251,7 @@ def main() -> int:
     test_session_plan_defaults(helper)
     test_runbook_render(helper, doc_validator)
     test_session_plan_doctor_report(helper, doc_validator)
+    test_autofish_doctor_bundle(helper, doc_validator)
     test_direct_live_command_stop_file_defaults(helper)
     test_red_reticle_click_guard(helper)
     test_red_reticle_guard_summary(helper)

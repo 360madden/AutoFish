@@ -5862,6 +5862,145 @@ def run_signal_proof_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
+def build_autofish_doctor_report(
+    proof_root: str,
+    decision_register: str,
+    session_plan: str,
+    *,
+    max_plan_age_minutes: int | float | None = DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+) -> dict[str, Any]:
+    signal_report = build_signal_proof_doctor_report(proof_root, decision_register)
+    session_plan_path = Path(session_plan)
+    session_report: dict[str, Any] | None = None
+    session_status: dict[str, Any] = {
+        "path": str(session_plan_path),
+        "exists": session_plan_path.exists(),
+        "loaded": False,
+        "error": None,
+    }
+    if session_plan_path.exists():
+        try:
+            session_report = build_session_plan_doctor_report(
+                str(session_plan_path),
+                decision_register,
+                proof_root,
+                max_plan_age_minutes=max_plan_age_minutes,
+            )
+            session_status["loaded"] = True
+        except Exception as exc:
+            session_status["error"] = str(exc)
+
+    signal_summary = signal_report.get("summary") if isinstance(signal_report.get("summary"), dict) else {}
+    session_summary = (
+        session_report.get("summary")
+        if isinstance(session_report, dict) and isinstance(session_report.get("summary"), dict)
+        else {}
+    )
+    next_actions = list(signal_report.get("nextActions") or [])
+    if session_report is not None:
+        session_next_action = session_report.get("nextAction")
+        if session_next_action:
+            next_actions.append(str(session_next_action))
+    elif session_status.get("error"):
+        next_actions.append("Recreate the session plan from current PID/HWND, current fishable coordinate, and current window geometry.")
+    else:
+        next_actions.append("Create a session plan after current PID/HWND and a fishable client coordinate are confirmed.")
+
+    return {
+        "schema": "autofish.doctor.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "sendsGameInput": False,
+        "proofRoot": proof_root,
+        "decisionRegister": decision_register,
+        "sessionPlan": str(session_plan_path),
+        "summary": {
+            "proofManifestCount": int(signal_summary.get("manifestCount") or 0),
+            "invalidProofManifestCount": int(signal_summary.get("invalidManifestCount") or 0),
+            "weakDecisionEvidenceCount": int(signal_summary.get("weakDecisionEvidenceCount") or 0),
+            "sessionPlanExists": bool(session_status.get("exists")),
+            "sessionPlanLoaded": bool(session_status.get("loaded")),
+            "sessionPlanReadyForOneCast": bool(session_summary.get("readyForOneCast")),
+            "sessionPlanReadyForBoundedSession": bool(session_summary.get("readyForBoundedSession")),
+        },
+        "signalProofDoctor": signal_report,
+        "sessionPlanStatus": session_status,
+        "sessionPlanDoctor": session_report,
+        "nextActions": next_actions,
+        "notes": [
+            "Top-level doctor is read-only and sends no game input.",
+            "It combines signal-proof health with session-plan health when a session plan exists.",
+        ],
+    }
+
+
+def render_autofish_doctor_markdown(report: dict[str, Any]) -> str:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    session_status = report.get("sessionPlanStatus") if isinstance(report.get("sessionPlanStatus"), dict) else {}
+    lines = [
+        "# AutoFish Doctor",
+        "",
+        f"Generated: {report.get('generatedAtUtc')}",
+        f"Proof root: `{report.get('proofRoot')}`",
+        f"Decision register: `{report.get('decisionRegister')}`",
+        f"Session plan: `{report.get('sessionPlan')}`",
+        f"Sends game input: `{str(report.get('sendsGameInput')).lower()}`",
+        "",
+        "## Overall health",
+        "",
+        f"- proof manifests: {summary.get('proofManifestCount', 0)}",
+        f"- invalid proof manifests: {summary.get('invalidProofManifestCount', 0)}",
+        f"- weak decision evidence entries: {summary.get('weakDecisionEvidenceCount', 0)}",
+        f"- session plan exists: {summary.get('sessionPlanExists')}",
+        f"- session plan loaded: {summary.get('sessionPlanLoaded')}",
+        f"- session ready for one-cast: {summary.get('sessionPlanReadyForOneCast')}",
+        f"- session ready for bounded session: {summary.get('sessionPlanReadyForBoundedSession')}",
+    ]
+    if session_status.get("error"):
+        lines.append(f"- session plan error: `{session_status.get('error')}`")
+
+    lines.extend(["", "## Next actions", ""])
+    for index, action in enumerate(report.get("nextActions") or [], start=1):
+        lines.append(f"{index}. {action}")
+    if not report.get("nextActions"):
+        lines.append("-")
+
+    signal_report = report.get("signalProofDoctor")
+    if isinstance(signal_report, dict):
+        lines.extend(["", "## Signal proof doctor", "", render_signal_proof_doctor_markdown(signal_report).strip()])
+
+    session_report = report.get("sessionPlanDoctor")
+    if isinstance(session_report, dict):
+        lines.extend(["", "## Session plan doctor", "", render_session_plan_doctor_markdown(session_report).strip()])
+    else:
+        lines.extend(
+            [
+                "",
+                "## Session plan doctor",
+                "",
+                f"No loadable session plan was found at `{report.get('sessionPlan')}`.",
+            ]
+        )
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def run_autofish_doctor(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"autofish-doctor-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+    report = build_autofish_doctor_report(
+        args.proof_root,
+        args.decision_register,
+        args.session_plan,
+        max_plan_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+    )
+    json_path = output_root / "doctor.json"
+    markdown_path = output_root / "doctor.md"
+    json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    markdown_path.write_text(render_autofish_doctor_markdown(report), encoding="utf-8")
+    print(json.dumps({"ok": True, "outputRoot": str(output_root), "doctor": str(json_path), "markdown": str(markdown_path)}, indent=2))
+    return 0
+
+
 def run_signal_proof_decide(args: argparse.Namespace) -> int:
     register_path = Path(args.register)
     register_path.parent.mkdir(parents=True, exist_ok=True)
@@ -5903,6 +6042,22 @@ def build_parser() -> argparse.ArgumentParser:
     target_snapshot.add_argument("--require-readable", action="store_true", help="Fail unless the target client is restored and at least 960x540")
     target_snapshot.add_argument("--output", help="Optional JSON output path")
     target_snapshot.set_defaults(func=run_target_snapshot)
+
+    doctor = subparsers.add_parser("doctor", help="Write one read-only operator health bundle for proofs and session plan")
+    doctor.add_argument("--proof-root", default=".autofish-live", help="Proof root to inspect; default: .autofish-live")
+    doctor.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register to inspect; default: .autofish-live/signal-proof-decisions.json")
+    doctor.add_argument("--session-plan", default=".autofish-live/session-plan-latest.json", help="Optional session plan path to include when present")
+    doctor.add_argument(
+        "--max-plan-age-minutes",
+        type=float,
+        default=DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+        help=(
+            "Maximum session plan age for included session-plan doctor gates; use <=0 to disable. "
+            f"Default: {DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES}"
+        ),
+    )
+    doctor.add_argument("--output-root", help="Doctor output folder; default: .autofish-live/autofish-doctor-*")
+    doctor.set_defaults(func=run_autofish_doctor)
 
     session_plan = subparsers.add_parser("session-plan", help="Create or inspect local live-proof session plans")
     session_plan_sub = session_plan.add_subparsers(dest="session_plan_command", required=True)

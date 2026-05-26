@@ -73,6 +73,17 @@ Color suggestions are conservative. Red/orange invalid reticles can include yell
 
 No live command should send input without an explicit target PID/HWND and either `--dry-run` or `--confirm-input`. The helper refuses to send `-` by default because this local setup binds it to `reloadui`.
 
+For a single read-only operator health bundle before choosing the next command, run:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py doctor `
+  --proof-root .autofish-live `
+  --decision-register .autofish-live\signal-proof-decisions.json `
+  --session-plan .autofish-live\session-plan-latest.json
+```
+
+Top-level `doctor` sends no game input. It writes `doctor.json` and `doctor.md` under `.autofish-live\autofish-doctor-*`, combining proof-root health with session-plan health when the plan exists.
+
 ## Bounded one-cast proof
 
 Use `one-cast` after the reticle proof has identified a current fishable client coordinate. This is the Python-native replacement path for the older PowerShell prototype script.
