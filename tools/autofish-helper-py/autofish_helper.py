@@ -1278,6 +1278,56 @@ def run_session_plan_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def build_session_plan_stop_file_report(path: str, action: str) -> dict[str, Any]:
+    loaded = load_session_plan(path)
+    assert loaded is not None
+    stop_file = Path(session_plan_stop_file_path(loaded))
+    exists_before = stop_file.exists()
+    mutated = False
+
+    if action == "create":
+        stop_file.parent.mkdir(parents=True, exist_ok=True)
+        if stop_file.exists() and not stop_file.is_file():
+            raise RuntimeError(f"Stop-file path exists but is not a regular file: {stop_file}")
+        stop_file.write_text(
+            f"AutoFish stop requested at {datetime.now(timezone.utc).isoformat()}\n",
+            encoding="utf-8",
+        )
+        mutated = True
+    elif action == "clear":
+        if stop_file.exists():
+            if not stop_file.is_file():
+                raise RuntimeError(f"Stop-file path exists but is not a regular file: {stop_file}")
+            stop_file.unlink()
+            mutated = True
+    elif action != "status":
+        raise RuntimeError(f"Unsupported stop-file action: {action}")
+
+    exists_after = stop_file.exists()
+    return {
+        "schema": "autofish.sessionPlan.stopFile.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "action": action,
+        "path": str(stop_file),
+        "planPath": loaded["path"],
+        "existsBefore": exists_before,
+        "existsAfter": exists_after,
+        "mutated": mutated,
+        "gate": check_session_plan_stop_file_gate(loaded),
+        "notes": [
+            "This command sends no game input.",
+            "create requests live proof interruption before the next bounded action.",
+            "clear only removes a regular stop-file path from the selected session plan.",
+        ],
+    }
+
+
+def run_session_plan_stop_file(args: argparse.Namespace) -> int:
+    report = build_session_plan_stop_file_report(args.path, args.stop_file_action)
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def run_session_plan_gates(args: argparse.Namespace) -> int:
     loaded = load_session_plan(args.path)
     assert loaded is not None
@@ -1369,7 +1419,6 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
     plan_arg = quote_ps(plan_path)
     proof_root_arg = quote_ps(proof_root)
     stop_file = defaults.get("stopFile") or DEFAULT_STOP_FILE
-    stop_file_arg = quote_ps(str(stop_file))
     one_cast_evidence = proof_root.rstrip("\\/") + "\\<one-cast-proof>\\manifest.json"
     fan_candidate_evidence = proof_root.rstrip("\\/") + "\\<candidate-reticle-proof>\\manifest.json"
     review = plan.get("review") if isinstance(plan.get("review"), dict) else {}
@@ -1484,13 +1533,13 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         "Create the stop file before the next action should abort:",
         "",
         "```powershell",
-        f"New-Item -ItemType File -Force -Path {stop_file_arg}",
+        f"{helper} session-plan stop-file create --path {plan_arg}",
         "```",
         "",
         "Clear it before a later supervised rerun:",
         "",
         "```powershell",
-        f"Remove-Item -Force -ErrorAction SilentlyContinue -Path {stop_file_arg}",
+        f"{helper} session-plan stop-file clear --path {plan_arg}",
         "```",
         "",
         "Safety notes:",
@@ -4522,6 +4571,16 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_show = session_plan_sub.add_parser("show", help="Print a session plan JSON file")
     session_plan_show.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
     session_plan_show.set_defaults(func=run_session_plan_show)
+    session_plan_stop_file = session_plan_sub.add_parser("stop-file", help="Create, clear, or inspect the stop file from a session plan")
+    session_plan_stop_file_sub = session_plan_stop_file.add_subparsers(dest="stop_file_action", required=True)
+    for action, help_text in (
+        ("status", "Print the current stop-file state without changing it"),
+        ("create", "Create or overwrite the stop file to request interruption"),
+        ("clear", "Delete the stop file before a supervised rerun"),
+    ):
+        stop_file_action = session_plan_stop_file_sub.add_parser(action, help=help_text)
+        stop_file_action.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
+        stop_file_action.set_defaults(func=run_session_plan_stop_file)
     session_plan_gates = session_plan_sub.add_parser("gates", help="Print scoped review gate status for a session plan")
     session_plan_gates.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
     session_plan_gates.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register path")

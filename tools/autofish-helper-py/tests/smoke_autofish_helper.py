@@ -118,7 +118,8 @@ def test_runbook_render(helper) -> None:
         assert "signal-proof one-cast --session-plan" in markdown
         assert "signal-proof bounded-session --session-plan" in markdown
         assert "--signal oneCast" in markdown
-        assert "New-Item -ItemType File -Force -Path" in markdown
+        assert "session-plan stop-file create" in markdown
+        assert "session-plan stop-file clear" in markdown
         assert ".autofish-live/STOP.txt" in markdown
         assert "No command in this runbook sends movement" in markdown
 
@@ -352,6 +353,8 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         assert "session-plan gates" in markdown
         assert "--require ready-one-cast" in markdown
         assert "--require ready-bounded-session" in markdown
+        assert "session-plan stop-file create" in markdown
+        assert "session-plan stop-file clear" in markdown
         assert "Fan-derived plans also require" in markdown
 
         with contextlib.redirect_stdout(io.StringIO()) as gate_output:
@@ -408,6 +411,42 @@ def test_session_plan_from_fan_candidate(helper) -> None:
                 == 1
             )
         stop_file.unlink()
+
+        with contextlib.redirect_stdout(io.StringIO()) as status_output:
+            assert (
+                helper.run_session_plan_stop_file(
+                    argparse.Namespace(path=str(plan_path), stop_file_action="status")
+                )
+                == 0
+            )
+        status_report = json.loads(status_output.getvalue())
+        assert status_report["schema"] == "autofish.sessionPlan.stopFile.v1"
+        assert not status_report["existsAfter"]
+        assert not status_report["mutated"]
+
+        with contextlib.redirect_stdout(io.StringIO()) as create_output:
+            assert (
+                helper.run_session_plan_stop_file(
+                    argparse.Namespace(path=str(plan_path), stop_file_action="create")
+                )
+                == 0
+            )
+        create_report = json.loads(create_output.getvalue())
+        assert create_report["existsAfter"]
+        assert create_report["mutated"]
+        assert stop_file.exists()
+
+        with contextlib.redirect_stdout(io.StringIO()) as clear_output:
+            assert (
+                helper.run_session_plan_stop_file(
+                    argparse.Namespace(path=str(plan_path), stop_file_action="clear")
+                )
+                == 0
+            )
+        clear_report = json.loads(clear_output.getvalue())
+        assert not clear_report["existsAfter"]
+        assert clear_report["mutated"]
+        assert not stop_file.exists()
 
         register_output = Path(tmp) / "recorded-decisions.json"
         with contextlib.redirect_stdout(io.StringIO()) as decide_output:

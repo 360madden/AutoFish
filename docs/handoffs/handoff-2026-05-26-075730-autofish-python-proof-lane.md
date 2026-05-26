@@ -24,6 +24,7 @@ The current implementation is not an unattended fishing loop yet. It is now a st
 
 ## Latest pushed commits in this lane
 
+- `e6b5252` - Add session plan readiness bundle
 - `219a2d7` - Refresh screen coordinates before input
 - `4e2e532` - Make cursor handle type portable
 - `ecde359` - Avoid setup-dotnet download in CI
@@ -59,7 +60,13 @@ It is included by default in:
 - `signal-proof one-cast`
 - `signal-proof bounded-session`
 
-Creating that file aborts before the next bounded helper action or during wait periods. Delete it before a later supervised rerun.
+Creating that file aborts before the next bounded helper action or during wait periods. Prefer the helper-managed commands so the path comes from the selected session plan:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py session-plan stop-file status --path .autofish-live\session-plan-latest.json
+python tools\autofish-helper-py\autofish_helper.py session-plan stop-file create --path .autofish-live\session-plan-latest.json
+python tools\autofish-helper-py\autofish_helper.py session-plan stop-file clear --path .autofish-live\session-plan-latest.json
+```
 
 ### Fishability fan to one-cast bridge
 
