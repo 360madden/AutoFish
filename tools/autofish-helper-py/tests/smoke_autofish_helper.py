@@ -265,6 +265,7 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
         assert report["summary"]["sessionPlanLoaded"]
         assert report["signalProofDoctor"]["schema"] == "autofish.signalProof.doctor.v1"
         assert report["sessionPlanDoctor"]["schema"] == "autofish.sessionPlan.doctor.v1"
+        assert report["nextAction"]
         markdown = helper.render_autofish_doctor_markdown(report)
         assert "AutoFish Doctor" in markdown
         assert "Signal proof doctor" in markdown
@@ -303,6 +304,7 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
         result = json.loads(doctor_output.getvalue())
         assert Path(result["doctor"]).exists()
         assert Path(result["markdown"]).exists()
+        assert result["nextAction"]
 
         fail_output_root = Path(tmp) / "doctor-fail-out"
         with contextlib.redirect_stdout(io.StringIO()) as fail_output:
@@ -324,6 +326,27 @@ def test_autofish_doctor_bundle(helper, doc_validator) -> None:
         assert fail_result["failed"]
         assert fail_result["failures"][0]["rule"] == "missing-session-plan"
         assert Path(fail_result["doctor"]).exists()
+
+        next_action_output_root = Path(tmp) / "doctor-next-action-out"
+        with contextlib.redirect_stdout(io.StringIO()) as next_action_output:
+            assert (
+                helper.run_autofish_doctor(
+                    argparse.Namespace(
+                        proof_root=str(proof_root),
+                        decision_register=str(decision_register),
+                        session_plan=str(Path(tmp) / "missing-session-plan.json"),
+                        max_plan_age_minutes=0,
+                        fail_on=[],
+                        next_action_only=True,
+                        output_root=str(next_action_output_root),
+                    )
+                )
+                == 0
+            )
+        next_action_text = next_action_output.getvalue().strip()
+        assert next_action_text
+        assert "{" not in next_action_text
+        assert (next_action_output_root / "doctor.json").exists()
 
 
 def test_direct_live_command_stop_file_defaults(helper) -> None:

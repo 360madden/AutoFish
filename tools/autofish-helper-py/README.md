@@ -93,6 +93,12 @@ python tools\autofish-helper-py\autofish_helper.py doctor `
   --fail-on not-ready-one-cast
 ```
 
+Use `--next-action-only` when a script or operator prompt needs just the first recommended action while still writing the full doctor artifacts:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py doctor --next-action-only
+```
+
 ## Bounded one-cast proof
 
 Use `one-cast` after the reticle proof has identified a current fishable client coordinate. This is the Python-native replacement path for the older PowerShell prototype script.

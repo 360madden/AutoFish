@@ -5934,6 +5934,7 @@ def build_autofish_doctor_report(
         "signalProofDoctor": signal_report,
         "sessionPlanStatus": session_status,
         "sessionPlanDoctor": session_report,
+        "nextAction": next_actions[0] if next_actions else None,
         "nextActions": next_actions,
         "notes": [
             "Top-level doctor is read-only and sends no game input.",
@@ -6049,19 +6050,23 @@ def run_autofish_doctor(args: argparse.Namespace) -> int:
     markdown_path = output_root / "doctor.md"
     json_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     markdown_path.write_text(render_autofish_doctor_markdown(report), encoding="utf-8")
-    print(
-        json.dumps(
-            {
-                "ok": not bool(report.get("failed")),
-                "outputRoot": str(output_root),
-                "doctor": str(json_path),
-                "markdown": str(markdown_path),
-                "failed": bool(report.get("failed")),
-                "failures": report.get("failures") or [],
-            },
-            indent=2,
+    if getattr(args, "next_action_only", False):
+        print(str(report.get("nextAction") or "No next action."))
+    else:
+        print(
+            json.dumps(
+                {
+                    "ok": not bool(report.get("failed")),
+                    "outputRoot": str(output_root),
+                    "doctor": str(json_path),
+                    "markdown": str(markdown_path),
+                    "failed": bool(report.get("failed")),
+                    "failures": report.get("failures") or [],
+                    "nextAction": report.get("nextAction"),
+                },
+                indent=2,
+            )
         )
-    )
     return 1 if report.get("failed") else 0
 
 
@@ -6126,6 +6131,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=AUTOFISH_DOCTOR_FAIL_ON_CHOICES,
         help="Return exit code 1 if this read-only health condition is present; repeatable",
     )
+    doctor.add_argument("--next-action-only", action="store_true", help="Print only the first recommended next action after writing doctor artifacts")
     doctor.add_argument("--output-root", help="Doctor output folder; default: .autofish-live/autofish-doctor-*")
     doctor.set_defaults(func=run_autofish_doctor)
 
