@@ -83,6 +83,10 @@ facing ~= normalize(position_after - position_before)
 
 Without a coordinate source, a forward step cannot produce a numeric facing vector. It can only provide visual/operator context.
 
+ChromaLink is the current read-only coordinate-provider candidate. Its addon-side source reads `Inspect.Unit.Detail("player").coordX`, `coordY`, and `coordZ`, and its desktop bridge can expose that as `player.position` through `/api/v1/riftreader/world-state` when the provider is fresh. See `docs/development/chromalink-readonly-coordinate-provider.md`.
+
+Do not treat ChromaLink reachability as coordinate truth. AutoFish must require fresh `/health`, fresh world-state, `navigation.playerPositionAvailable=true`, and `player.position.fresh=true` before using the coordinates for any fishability/facing proof.
+
 Therefore, coordinate-backed fan probing is blocked on all of the following:
 
 1. reliable current player coordinates,

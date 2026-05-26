@@ -18,6 +18,9 @@ from pathlib import Path
 import struct
 import sys
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import wave
 from datetime import datetime, timezone
 from typing import Any
@@ -60,7 +63,8 @@ DEFAULT_LOG_TERMS = (
     "bait",
 )
 SIGNAL_DECISIONS = ("promote", "fallback-only", "retire", "needs-more-evidence")
-SIGNAL_NAMES = ("reticle", "fishabilityFan", "log", "layout", "audio", "inventory", "slash")
+SIGNAL_NAMES = ("reticle", "fishabilityFan", "chromalinkWorldState", "log", "layout", "audio", "inventory", "slash")
+DEFAULT_CHROMALINK_BASE_URL = "http://127.0.0.1:7337"
 
 
 class POINT(ctypes.Structure):
@@ -1252,6 +1256,260 @@ def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
         return 1
 
 
+def normalize_base_url(base_url: str) -> str:
+    text = str(base_url or "").strip()
+    if not text:
+        raise RuntimeError("ChromaLink base URL cannot be empty.")
+    if not text.endswith("/"):
+        text += "/"
+    return text
+
+
+def chromalink_url(base_url: str, path: str) -> str:
+    return urllib.parse.urljoin(normalize_base_url(base_url), path.lstrip("/"))
+
+
+def fetch_json(url: str, *, timeout_seconds: float, max_bytes: int = 1_048_576) -> dict[str, Any]:
+    started = time.perf_counter()
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "AutoFish-helper/1 read-only",
+        },
+        method="GET",
+    )
+    result: dict[str, Any] = {
+        "url": url,
+        "status": None,
+        "ok": False,
+        "elapsedMs": None,
+        "bodyTruncated": False,
+        "json": None,
+        "parseError": None,
+        "error": None,
+    }
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            result["status"] = int(response.status)
+            body = response.read(max_bytes + 1)
+            result["ok"] = 200 <= int(response.status) < 300
+    except urllib.error.HTTPError as exc:
+        result["status"] = int(exc.code)
+        body = exc.read(max_bytes + 1)
+        result["error"] = str(exc)
+    except (TimeoutError, urllib.error.URLError, OSError) as exc:
+        result["elapsedMs"] = round((time.perf_counter() - started) * 1000.0, 2)
+        result["error"] = str(exc)
+        return result
+
+    result["elapsedMs"] = round((time.perf_counter() - started) * 1000.0, 2)
+    if len(body) > max_bytes:
+        body = body[:max_bytes]
+        result["bodyTruncated"] = True
+    text = body.decode("utf-8", errors="replace")
+    if not text.strip():
+        result["parseError"] = "Response body was empty."
+        return result
+    try:
+        result["json"] = json.loads(text)
+    except json.JSONDecodeError as exc:
+        result["parseError"] = str(exc)
+        result["bodyPreview"] = text[:400]
+    return result
+
+
+def get_object(value: Any, key: str) -> dict[str, Any]:
+    if isinstance(value, dict) and isinstance(value.get(key), dict):
+        return value[key]
+    return {}
+
+
+def is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def classify_chromalink_world_state(health: dict[str, Any], ready: dict[str, Any], world: dict[str, Any]) -> dict[str, Any]:
+    health_json = health.get("json") if isinstance(health.get("json"), dict) else {}
+    ready_json = ready.get("json") if isinstance(ready.get("json"), dict) else {}
+    world_json = world.get("json") if isinstance(world.get("json"), dict) else {}
+    navigation = get_object(world_json, "navigation")
+    player = get_object(world_json, "player")
+    position = get_object(player, "position")
+
+    health_ready_fresh = (
+        bool(health.get("ok"))
+        and health_json.get("ok") is True
+        and health_json.get("ready") is True
+        and health_json.get("fresh") is True
+        and health_json.get("stale") is not True
+    )
+    ready_ready_fresh = (
+        bool(ready.get("ok"))
+        and (not isinstance(ready_json, dict) or ready_json.get("ready", True) is not False)
+    )
+    world_ready_fresh = (
+        bool(world.get("ok"))
+        and world_json.get("ok") is True
+        and world_json.get("ready") is True
+        and world_json.get("fresh") is True
+        and world_json.get("stale") is not True
+    )
+    player_position_available = navigation.get("playerPositionAvailable") is True
+    player_position_present = all(is_number(position.get(axis)) for axis in ("x", "y", "z"))
+    player_position_fresh = position.get("fresh") is True
+    player_position_stale = position.get("stale") is True
+    coordinate_ready = (
+        health_ready_fresh
+        and ready_ready_fresh
+        and world_ready_fresh
+        and player_position_available
+        and player_position_present
+        and player_position_fresh
+        and not player_position_stale
+    )
+
+    if coordinate_ready:
+        classification = "fresh-player-position"
+    elif health.get("status") is None and world.get("status") is None and health.get("error") and world.get("error"):
+        classification = "bridge-down-or-unreachable"
+    elif not health_ready_fresh:
+        classification = "provider-health-not-fresh"
+    elif not world_ready_fresh:
+        classification = "world-state-not-fresh"
+    elif not player_position_available or not player_position_present:
+        classification = "player-position-missing"
+    elif not player_position_fresh or player_position_stale:
+        classification = "player-position-stale"
+    else:
+        classification = "needs-review"
+
+    return {
+        "classification": classification,
+        "coordinateReady": coordinate_ready,
+        "healthReadyFresh": health_ready_fresh,
+        "readyEndpointOk": bool(ready.get("ok")),
+        "worldReadyFresh": world_ready_fresh,
+        "playerPositionAvailable": player_position_available,
+        "playerPositionPresent": player_position_present,
+        "playerPositionFresh": player_position_fresh,
+        "playerPositionStale": player_position_stale,
+        "snapshotAgeSeconds": world_json.get("snapshotAgeSeconds"),
+        "playerPosition": {
+            "x": position.get("x"),
+            "y": position.get("y"),
+            "z": position.get("z"),
+            "observedAtUtc": position.get("observedAtUtc"),
+            "ageMs": position.get("ageMs"),
+            "fresh": position.get("fresh"),
+            "stale": position.get("stale"),
+        }
+        if player_position_present
+        else None,
+        "navigation": {
+            "playerPositionAvailable": navigation.get("playerPositionAvailable"),
+            "headingAvailable": navigation.get("headingAvailable"),
+            "facingAvailable": navigation.get("facingAvailable"),
+            "routeAvailable": navigation.get("routeAvailable"),
+            "controlAvailable": navigation.get("controlAvailable"),
+            "limitations": navigation.get("limitations") if isinstance(navigation.get("limitations"), list) else [],
+        },
+    }
+
+
+def run_signal_proof_chromalink(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-chromalink-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    base_url = normalize_base_url(args.base_url)
+    manifest: dict[str, Any] = {
+        "schema": "autofish.signalProof.chromalinkWorldState.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "mode": "read-only",
+        "safety": {
+            "sendsInput": False,
+            "sendsMovement": False,
+            "sendsFishingKey": False,
+            "clickCount": 0,
+            "modifiesChromaLink": False,
+            "usesChromaLinkAsReadOnlyProvider": True,
+            "usesPublishedHttpContract": True,
+            "requiresFreshPlayerPositionForCoordinateTruth": True,
+            "headingFacingYawExpected": False,
+        },
+        "request": {
+            "baseUrl": base_url,
+            "timeoutSeconds": args.timeout_seconds,
+            "waitSeconds": args.wait_seconds,
+            "pollIntervalMs": args.poll_interval_ms,
+            "requireFresh": bool(args.require_fresh),
+            "pid": args.pid,
+            "hwnd": args.hwnd,
+        },
+        "target": None,
+        "attempts": [],
+        "summary": None,
+        "decision": {
+            "classification": "unproven",
+            "notes": [
+                "ChromaLink is consumed read-only through its published local HTTP bridge.",
+                "Reachability is not enough; AutoFish requires fresh player.position before using coordinates as live truth.",
+                "ChromaLink world-state does not provide player heading/facing/yaw in the current contract.",
+            ],
+        },
+    }
+
+    try:
+        if (args.pid is None) != (args.hwnd is None):
+            raise RuntimeError("--pid and --hwnd must be supplied together when target validation is requested.")
+        if args.pid is not None and args.hwnd is not None:
+            manifest["target"] = validate_target(parse_hwnd(args.hwnd), int(args.pid), require_foreground=False)
+
+        deadline = time.monotonic() + max(0.0, float(args.wait_seconds))
+        attempt_index = 0
+        while True:
+            attempt_index += 1
+            health = fetch_json(chromalink_url(base_url, "/health"), timeout_seconds=args.timeout_seconds)
+            ready = fetch_json(chromalink_url(base_url, "/ready"), timeout_seconds=args.timeout_seconds)
+            world = fetch_json(chromalink_url(base_url, "/api/v1/riftreader/world-state"), timeout_seconds=args.timeout_seconds)
+            classification = classify_chromalink_world_state(health, ready, world)
+            attempt = {
+                "index": attempt_index,
+                "observedAtUtc": datetime.now(timezone.utc).isoformat(),
+                "health": health,
+                "ready": ready,
+                "worldState": world,
+                "classification": classification,
+            }
+            manifest["attempts"].append(attempt)
+            manifest["summary"] = classification
+            manifest["decision"]["classification"] = classification["classification"]
+            if classification["coordinateReady"] or time.monotonic() >= deadline:
+                break
+            time.sleep(max(0.05, args.poll_interval_ms / 1000.0))
+
+        write_manifest(output_root, manifest)
+        ok = bool(manifest["summary"] and manifest["summary"].get("coordinateReady"))
+        result = {
+            "ok": ok,
+            "outputRoot": str(output_root),
+            "manifest": str(output_root / "manifest.json"),
+            "classification": manifest["decision"]["classification"],
+            "coordinateReady": ok,
+            "playerPosition": manifest["summary"].get("playerPosition") if isinstance(manifest.get("summary"), dict) else None,
+        }
+        print(json.dumps(result, indent=2))
+        if args.require_fresh and not ok:
+            return 1
+        return 0
+    except Exception as exc:
+        manifest["error"] = str(exc)
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+
+
 def run_signal_proof_log(args: argparse.Namespace) -> int:
     log_path = Path(args.log_path)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-log-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -1674,6 +1932,12 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
         if summary.get("candidateCount", 0) > 0:
             return "planning-only-needs-game-feedback"
         return "needs-candidates"
+    if signal == "chromalinkWorldState":
+        if summary.get("coordinateReady"):
+            return "coordinate-source-candidate-review"
+        if summary.get("classification") in ("bridge-down-or-unreachable", "provider-health-not-fresh", "world-state-not-fresh"):
+            return "provider-blocked-rerun-freshness"
+        return "needs-fresh-player-position"
     if signal == "log":
         if summary.get("matchedLineCount", 0) > 0:
             return "fallback-candidate-review"
@@ -1773,6 +2037,27 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "movementCalibrationImplemented": bool(safety.get("movementCalibrationImplemented")),
                 "clientSizeSource": effective_client.get("source"),
                 "targetMinimized": bool(effective_client.get("targetMinimized")),
+            }
+        )
+    elif signal == "chromalinkWorldState":
+        chromalink_summary = manifest.get("summary") if isinstance(manifest.get("summary"), dict) else {}
+        attempts = manifest.get("attempts") if isinstance(manifest.get("attempts"), list) else []
+        player_position = chromalink_summary.get("playerPosition") if isinstance(chromalink_summary.get("playerPosition"), dict) else None
+        navigation = chromalink_summary.get("navigation") if isinstance(chromalink_summary.get("navigation"), dict) else {}
+        summary.update(
+            {
+                "classification": chromalink_summary.get("classification"),
+                "coordinateReady": bool(chromalink_summary.get("coordinateReady")),
+                "healthReadyFresh": bool(chromalink_summary.get("healthReadyFresh")),
+                "worldReadyFresh": bool(chromalink_summary.get("worldReadyFresh")),
+                "playerPositionAvailable": bool(chromalink_summary.get("playerPositionAvailable")),
+                "playerPositionFresh": bool(chromalink_summary.get("playerPositionFresh")),
+                "attemptCount": len(attempts),
+                "snapshotAgeSeconds": chromalink_summary.get("snapshotAgeSeconds"),
+                "playerPosition": player_position,
+                "headingAvailable": navigation.get("headingAvailable"),
+                "facingAvailable": navigation.get("facingAvailable"),
+                "controlAvailable": navigation.get("controlAvailable"),
             }
         )
     elif signal == "log":
@@ -1876,6 +2161,16 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- target minimized: {summary.get('targetMinimized')}")
             lines.append(f"- sends input: {summary.get('sendsInput')}")
             lines.append(f"- movement calibration implemented: {summary.get('movementCalibrationImplemented')}")
+        elif summary["signal"] == "chromalinkWorldState":
+            lines.append(f"- classification: {summary.get('classification')}")
+            lines.append(f"- coordinate ready: {summary.get('coordinateReady')}")
+            lines.append(f"- health fresh: {summary.get('healthReadyFresh')}; world fresh: {summary.get('worldReadyFresh')}")
+            lines.append(f"- player position available/fresh: {summary.get('playerPositionAvailable')}/{summary.get('playerPositionFresh')}")
+            lines.append(f"- attempts: {summary.get('attemptCount', 0)}; snapshot age seconds: {summary.get('snapshotAgeSeconds')}")
+            position = summary.get("playerPosition") if isinstance(summary.get("playerPosition"), dict) else {}
+            if position:
+                lines.append(f"- player position: x={position.get('x')} y={position.get('y')} z={position.get('z')} ageMs={position.get('ageMs')}")
+            lines.append(f"- heading/facing/control available: {summary.get('headingAvailable')}/{summary.get('facingAvailable')}/{summary.get('controlAvailable')}")
         elif summary["signal"] == "log":
             lines.append(f"- appended chars: {summary.get('appendedCharacterCount', 0)}")
             lines.append(f"- matched lines: {summary.get('matchedLineCount', 0)}")
@@ -2031,6 +2326,17 @@ def build_parser() -> argparse.ArgumentParser:
     fan.add_argument("--dry-run", action="store_true", required=True, help="Required; fan planning sends no input")
     fan.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-fishability-fan-*.")
     fan.set_defaults(func=run_signal_proof_fishability_fan)
+
+    chromalink = signal_sub.add_parser("chromalink", help="Read-only ChromaLink world-state/player-coordinate freshness proof")
+    chromalink.add_argument("--base-url", default=DEFAULT_CHROMALINK_BASE_URL, help=f"ChromaLink HTTP bridge base URL; default: {DEFAULT_CHROMALINK_BASE_URL}")
+    chromalink.add_argument("--timeout-seconds", type=float, default=2.0, help="HTTP timeout per endpoint; default: 2")
+    chromalink.add_argument("--wait-seconds", type=float, default=0.0, help="Poll until fresh for up to this many seconds; default: 0")
+    chromalink.add_argument("--poll-interval-ms", type=int, default=500, help="Poll interval while waiting; default: 500")
+    chromalink.add_argument("--require-fresh", action="store_true", help="Return a failing exit code unless fresh player.position is available")
+    chromalink.add_argument("--pid", type=int, help="Optional expected Rift PID to validate and record without input; requires --hwnd")
+    chromalink.add_argument("--hwnd", help="Optional expected Rift HWND to validate and record without input; requires --pid")
+    chromalink.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-chromalink-*.")
+    chromalink.set_defaults(func=run_signal_proof_chromalink)
 
     log = signal_sub.add_parser("log", help="Capture and scan newly appended Rift log text without sending input")
     log.add_argument("--log-path", required=True, help="Path to the Rift log file to watch")

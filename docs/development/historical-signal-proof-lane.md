@@ -47,6 +47,8 @@ Do **not** add more historical-signal scaffolding unless a live proof run expose
 
 Water detection should be reframed as fishability probing. The plan is documented in `docs/development/fishability-probe-plan.md`: generate candidate points, then let game feedback classify whether each point is fishable. Visual water/reticle evidence remains fallback-only. Coordinate-backed micro-step facing is blocked until a reliable player coordinate source is proven.
 
+ChromaLink is now documented as a read-only coordinate-provider candidate in `docs/development/chromalink-readonly-coordinate-provider.md`. AutoFish can query ChromaLink's published local HTTP bridge, but must not modify ChromaLink from this repo and must require fresh `player.position` proof before treating coordinates as live truth.
+
 Immediate live order:
 
 1. `/autofish invproof before|after|diff` for native inventory deltas.
@@ -109,6 +111,8 @@ Implemented trace extension: `/autofish trace start|status|stop|clear` now recor
 Current color-proof caveat: large-window sampling has proven visually yellow valid-water reticles and red invalid/too-far reticles, but has **not** proven a true blue/cyan reticle. The helper now reports conservative color suggestions plus `legacySuggestedReticleColor`, `suggestionReason`, and `manualReviewRequired` because `blueCyan` counts can be dominated by water/highlight background pixels. Treat blue/cyan as manual-review-only until a screenshot proves a real blue/cyan targeting reticle. The summarizer reports manual-review-required only for reticle-phase captures (`after-key`, `after-click`, and watch frames), not baseline or after-cancel background frames.
 
 Implemented fishability planning slice: `tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan` creates a dry-run screen-space fan of candidate probe points, validates the exact PID/HWND, and optionally captures no-input crops. It does not send movement, fishing key, or clicks. Candidate points are planning evidence only until game feedback classifies them.
+
+Implemented ChromaLink proof slice: `tools/autofish-helper-py/autofish_helper.py signal-proof chromalink` queries `/health`, `/ready`, and `/api/v1/riftreader/world-state` read-only, records `chromalinkWorldState` evidence, and classifies whether fresh `player.position` is available. It sends no game input and does not modify ChromaLink.
 
 Implemented sixth slice: `tools/autofish-helper-py/autofish_helper.py signal-proof summarize` scans proof manifests and writes `summary.json` plus `summary.md` review buckets so stale methods are classified consistently before promotion.
 

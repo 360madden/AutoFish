@@ -226,6 +226,30 @@ Interpretation:
 
 The repo now has a safer path for the user's proposed cone/fan approach: plan a forward screen-space fan first, then classify each candidate from castbar, chat/system error, item/inventory, skill/currency/progression, and only then fallback visuals. Coordinate-backed micro-step facing remains blocked because player actor facing is not exposed by the Rift API and a forward tap only becomes numeric evidence after a reliable before/after player coordinate source is proven.
 
+## ChromaLink coordinate-provider follow-up
+
+Evidence:
+
+- `.autofish-live/chromalink-world-state-latest/manifest.json`
+- `.autofish-live/signal-proof-summary-after-chromalink-latest/summary.md`
+- `.autofish-live/signal-proof-decisions.json`
+
+Result:
+
+- AutoFish now has a read-only `signal-proof chromalink` command.
+- The command sends no game input and does not modify ChromaLink.
+- It queries ChromaLink's published local HTTP bridge endpoints: `/health`, `/ready`, and `/api/v1/riftreader/world-state`.
+- The first run timed out against `http://127.0.0.1:7337`, so the current classification is `bridge-down-or-unreachable`.
+- No ChromaLink coordinates were promoted or used.
+
+Reviewed decision:
+
+- `chromalinkWorldState`: `needs-more-evidence`
+
+Interpretation:
+
+ChromaLink is the correct read-only provider candidate for player coordinates because its addon reads `Inspect.Unit.Detail("player").coordX`, `coordY`, and `coordZ`. AutoFish must still fail closed until ChromaLink reports fresh `/health`, fresh world-state, `navigation.playerPositionAvailable=true`, and `player.position.fresh=true`. ChromaLink does not currently expose heading/facing/yaw, so any future facing estimate must be computed from fresh coordinate deltas and labeled as operational inference.
+
 ## `/log` proof
 
 Result:

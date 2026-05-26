@@ -100,6 +100,30 @@ python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan 
 
 This writes a `fishabilityFan` manifest with candidate client points and optional no-input crops. It does not press the fishing key, click, move, or classify water. Future confirmed probing must classify points from game feedback such as castbar start, chat/system errors, item events, inventory deltas, or progression events. Coordinate-backed micro-step facing requires a reliable before/after player coordinate source and is not implemented yet.
 
+## ChromaLink coordinate proof
+
+ChromaLink can be used as a **read-only** coordinate provider when its local bridge is fresh. AutoFish must not modify ChromaLink from this repo.
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof chromalink `
+  --wait-seconds 2 `
+  --output-root .autofish-live\chromalink-world-state-latest
+```
+
+The command performs read-only HTTP GETs against:
+
+- `http://127.0.0.1:7337/health`
+- `http://127.0.0.1:7337/ready`
+- `http://127.0.0.1:7337/api/v1/riftreader/world-state`
+
+It sends no game input, no movement, no fishing key, and no mouse clicks. It classifies coordinates as usable only when ChromaLink reports fresh health/world-state, `navigation.playerPositionAvailable=true`, present `player.position.x/y/z`, and `player.position.fresh=true`.
+
+Use `--require-fresh` for scripts that should fail closed unless fresh coordinates are available:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof chromalink --require-fresh
+```
+
 ## Log proof harness
 
 The `/log` family of historical signals is read-only and must prove current usefulness before runtime use:

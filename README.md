@@ -28,6 +28,7 @@ Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` be
 - `/autofish invproof before|after|diff` for native inventory/catch deltas, including raw slot-level add/remove/change diagnostics.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof reticle` for cursor/reticle/pixel crops.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan` for dry-run screen-space candidate probe planning without input.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof chromalink` for read-only ChromaLink world-state/player-coordinate freshness proof.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof slash` for bounded `/autofish` command output screenshots.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof log` for read-only current log checks.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof layout` for fixed hotbar/bag region proof.
@@ -43,6 +44,8 @@ Focus must preserve the current Rift window size. AutoFish's Python helper and p
 Current reviewed proof result: `docs/live-validation/2026-05-25-historical-signal-proof-results.md`.
 
 Fishability probing plan: `docs/development/fishability-probe-plan.md`. This is the preferred direction over visual water detection: probe candidate points and classify them from game feedback. Coordinate-backed micro-step facing remains blocked until a reliable player coordinate source is proven.
+
+ChromaLink coordinate provider plan: `docs/development/chromalink-readonly-coordinate-provider.md`. AutoFish may consume ChromaLink as a read-only provider through its published local HTTP bridge, but must not modify ChromaLink from this repo. ChromaLink coordinates require fresh `/health` and fresh `player.position` world-state proof before use.
 
 ## Live-development workflow
 
