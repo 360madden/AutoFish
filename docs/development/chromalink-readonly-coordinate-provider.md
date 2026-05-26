@@ -44,6 +44,16 @@ source=Inspect.Unit.Lookup("player") -> Inspect.Unit.Detail(playerUnit).coordX/Y
 
 Use this as the screenshot-friendly addon-side cross-check for ChromaLink world-state coordinates. A mismatch should be treated as a provider/freshness/setup blocker until the live source timing is understood. This command still proves coordinates only; it does not expose native actor facing/yaw.
 
+Record the comparison with the helper:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof coordinate-crosscheck `
+  --addon-line "coords x=<x> y=<y> z=<z> playerUnit=<unit>" `
+  --wait-seconds 2
+```
+
+This command sends no input. It only parses the manually supplied addon coordinate line, queries ChromaLink read-only, compares the coordinate deltas, and writes a `coordinateCrosscheck` manifest.
+
 ## Published read-only consumer surface
 
 Use ChromaLink's local HTTP bridge when it is running:

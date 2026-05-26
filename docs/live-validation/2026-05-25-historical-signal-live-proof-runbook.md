@@ -39,6 +39,22 @@ Suggested target discovery:
   -Capture
 ```
 
+Coordinate-source cross-check before any facing/movement proof:
+
+```text
+/autofish coords
+```
+
+Then transcribe the printed line into a read-only helper proof:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof coordinate-crosscheck `
+  --addon-line "coords x=<x> y=<y> z=<z> playerUnit=<unit>" `
+  --wait-seconds 2
+```
+
+This sends no input and does not modify ChromaLink. If the direct addon coordinates and ChromaLink `player.position` do not match within tolerance, stop any coordinate-backed facing work and treat the provider as blocked/stale.
+
 ## Proof order
 
 Run proofs in this order so native/low-brittleness evidence is captured before fragile fallbacks.

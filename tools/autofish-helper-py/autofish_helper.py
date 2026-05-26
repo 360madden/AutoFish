@@ -15,6 +15,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import struct
 import sys
 import time
@@ -63,8 +64,21 @@ DEFAULT_LOG_TERMS = (
     "bait",
 )
 SIGNAL_DECISIONS = ("promote", "fallback-only", "retire", "needs-more-evidence")
-SIGNAL_NAMES = ("reticle", "fishabilityFan", "chromalinkWorldState", "facingDelta", "log", "layout", "audio", "inventory", "slash")
+SIGNAL_NAMES = (
+    "reticle",
+    "fishabilityFan",
+    "chromalinkWorldState",
+    "coordinateCrosscheck",
+    "facingDelta",
+    "log",
+    "layout",
+    "audio",
+    "inventory",
+    "slash",
+)
 DEFAULT_CHROMALINK_BASE_URL = "http://127.0.0.1:7337"
+ADDON_COORD_RE = re.compile(r"\b([xyz])\s*=\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
+ADDON_PLAYER_UNIT_RE = re.compile(r"\bplayerUnit\s*=\s*(\S+)", re.IGNORECASE)
 
 
 class POINT(ctypes.Structure):
@@ -1522,6 +1536,179 @@ def compute_facing_delta(before: dict[str, Any], after: dict[str, Any], *, min_d
     }
 
 
+def parse_addon_coord_line(line: str) -> dict[str, Any]:
+    values: dict[str, float] = {}
+    for axis, value in ADDON_COORD_RE.findall(line or ""):
+        values[axis.lower()] = float(value)
+
+    if not all(axis in values for axis in ("x", "y", "z")):
+        raise RuntimeError(
+            "Could not parse x/y/z from addon coordinate line. "
+            'Expected text like: coords x=1.23 y=4.56 z=7.89 playerUnit=...'
+        )
+
+    unit_match = ADDON_PLAYER_UNIT_RE.search(line or "")
+    return {
+        "source": "autofish-addon-slash-output",
+        "line": line,
+        "x": values["x"],
+        "y": values["y"],
+        "z": values["z"],
+        "playerUnit": unit_match.group(1) if unit_match else None,
+    }
+
+
+def addon_coordinate_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
+    numeric_values = (args.addon_x, args.addon_y, args.addon_z)
+    has_any_numeric = any(value is not None for value in numeric_values)
+    if has_any_numeric and not all(value is not None for value in numeric_values):
+        raise RuntimeError("--addon-x, --addon-y, and --addon-z must be supplied together.")
+
+    if has_any_numeric:
+        return {
+            "source": "manual-addon-coordinate-values",
+            "line": args.addon_line,
+            "x": float(args.addon_x),
+            "y": float(args.addon_y),
+            "z": float(args.addon_z),
+            "playerUnit": None,
+        }
+
+    if args.addon_line:
+        return parse_addon_coord_line(args.addon_line)
+
+    return None
+
+
+def compare_coordinates(addon_position: dict[str, Any], bridge_position: dict[str, Any], *, tolerance: float) -> dict[str, Any]:
+    deltas = {
+        axis: round(float(bridge_position[axis]) - float(addon_position[axis]), 6)
+        for axis in ("x", "y", "z")
+    }
+    abs_deltas = {axis: round(abs(value), 6) for axis, value in deltas.items()}
+    max_abs_delta = max(abs_deltas.values())
+    matched = all(value <= tolerance for value in abs_deltas.values())
+    return {
+        "matched": matched,
+        "tolerance": tolerance,
+        "deltas": deltas,
+        "absoluteDeltas": abs_deltas,
+        "maxAbsoluteDelta": round(max_abs_delta, 6),
+        "classification": "coordinate-match" if matched else "coordinate-mismatch",
+    }
+
+
+def run_signal_proof_coordinate_crosscheck(args: argparse.Namespace) -> int:
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-coordinate-crosscheck-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    base_url = normalize_base_url(args.base_url)
+    manifest: dict[str, Any] = {
+        "schema": "autofish.signalProof.coordinateCrosscheck.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "mode": "read-only",
+        "safety": {
+            "sendsInput": False,
+            "sendsMovement": False,
+            "sendsFishingKey": False,
+            "clickCount": 0,
+            "modifiesChromaLink": False,
+            "usesChromaLinkAsReadOnlyProvider": True,
+            "requiresManualAddonCoordinateEvidence": True,
+            "headingFacingYawExpected": False,
+        },
+        "request": {
+            "baseUrl": base_url,
+            "timeoutSeconds": args.timeout_seconds,
+            "waitSeconds": args.wait_seconds,
+            "pollIntervalMs": args.poll_interval_ms,
+            "tolerance": args.tolerance,
+            "requireMatch": bool(args.require_match),
+            "pid": args.pid,
+            "hwnd": args.hwnd,
+            "addonLine": args.addon_line,
+            "addonValuesProvided": any(value is not None for value in (args.addon_x, args.addon_y, args.addon_z)),
+        },
+        "target": None,
+        "addonPosition": None,
+        "chromalink": None,
+        "result": {
+            "classification": "unproven",
+            "matched": False,
+        },
+        "decision": {
+            "classification": "unproven",
+            "notes": [
+                "This proof compares manual /autofish coords output against ChromaLink player.position.",
+                "It sends no game input and does not modify ChromaLink.",
+                "A match proves coordinate-source agreement only; it does not prove native actor-facing/yaw.",
+            ],
+        },
+    }
+
+    try:
+        if args.tolerance < 0:
+            raise RuntimeError("--tolerance must be zero or greater.")
+        if (args.pid is None) != (args.hwnd is None):
+            raise RuntimeError("--pid and --hwnd must be supplied together when target validation is requested.")
+        if args.pid is not None and args.hwnd is not None:
+            manifest["target"] = validate_target(parse_hwnd(args.hwnd), int(args.pid), require_foreground=False)
+
+        addon_position = addon_coordinate_from_args(args)
+        manifest["addonPosition"] = addon_position
+
+        chromalink_position = wait_for_chromalink_position(
+            base_url,
+            timeout_seconds=args.timeout_seconds,
+            wait_seconds=args.wait_seconds,
+            poll_interval_ms=args.poll_interval_ms,
+        )
+        manifest["chromalink"] = chromalink_position
+
+        if addon_position is None:
+            result = {
+                "classification": "missing-addon-coordinate",
+                "matched": False,
+                "reason": "Run /autofish coords after reloading the addon, then pass the printed line with --addon-line or the numbers with --addon-x/--addon-y/--addon-z.",
+            }
+        elif not chromalink_position.get("coordinateReady"):
+            result = {
+                "classification": "chromalink-not-fresh",
+                "matched": False,
+                "reason": "ChromaLink did not provide fresh player.position.",
+                "chromalinkClassification": (chromalink_position.get("summary") or {}).get("classification"),
+            }
+        else:
+            bridge_position = chromalink_position.get("position")
+            if not isinstance(bridge_position, dict):
+                raise RuntimeError("ChromaLink reported coordinateReady without a player position object.")
+            result = compare_coordinates(addon_position, bridge_position, tolerance=float(args.tolerance))
+
+        manifest["result"] = result
+        manifest["decision"]["classification"] = result["classification"]
+        write_manifest(output_root, manifest)
+
+        response = {
+            "ok": bool(result.get("matched")),
+            "outputRoot": str(output_root),
+            "manifest": str(output_root / "manifest.json"),
+            "classification": result.get("classification"),
+            "matched": bool(result.get("matched")),
+            "addonPosition": addon_position,
+            "chromalinkPosition": chromalink_position.get("position"),
+            "result": result,
+        }
+        print(json.dumps(response, indent=2))
+        if args.require_match and not result.get("matched"):
+            return 1
+        return 0
+    except Exception as exc:
+        manifest["error"] = str(exc)
+        write_manifest(output_root, manifest)
+        print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
+        return 1
+
+
 def run_signal_proof_chromalink(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-chromalink-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -2214,6 +2401,16 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
         if summary.get("classification") in ("bridge-down-or-unreachable", "provider-health-not-fresh", "world-state-not-fresh"):
             return "provider-blocked-rerun-freshness"
         return "needs-fresh-player-position"
+    if signal == "coordinateCrosscheck":
+        if summary.get("matched"):
+            return "coordinate-source-agreement-review"
+        if summary.get("classification") == "missing-addon-coordinate":
+            return "needs-autofish-coords-output"
+        if summary.get("classification") == "chromalink-not-fresh":
+            return "provider-blocked-rerun-freshness"
+        if summary.get("classification") == "coordinate-mismatch":
+            return "coordinate-source-mismatch-review"
+        return "needs-more-evidence"
     if signal == "facingDelta":
         if summary.get("usable"):
             return "operational-facing-candidate-review"
@@ -2342,6 +2539,26 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "headingAvailable": navigation.get("headingAvailable"),
                 "facingAvailable": navigation.get("facingAvailable"),
                 "controlAvailable": navigation.get("controlAvailable"),
+            }
+        )
+    elif signal == "coordinateCrosscheck":
+        result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
+        addon_position = manifest.get("addonPosition") if isinstance(manifest.get("addonPosition"), dict) else None
+        chromalink = manifest.get("chromalink") if isinstance(manifest.get("chromalink"), dict) else {}
+        chromalink_summary = chromalink.get("summary") if isinstance(chromalink.get("summary"), dict) else {}
+        chromalink_position = chromalink.get("position") if isinstance(chromalink.get("position"), dict) else None
+        summary.update(
+            {
+                "classification": result.get("classification"),
+                "matched": bool(result.get("matched")),
+                "tolerance": result.get("tolerance"),
+                "deltas": result.get("deltas"),
+                "absoluteDeltas": result.get("absoluteDeltas"),
+                "maxAbsoluteDelta": result.get("maxAbsoluteDelta"),
+                "addonPosition": addon_position,
+                "chromalinkPosition": chromalink_position,
+                "chromalinkClassification": chromalink_summary.get("classification"),
+                "chromalinkCoordinateReady": bool(chromalink.get("coordinateReady")),
             }
         )
     elif signal == "facingDelta":
@@ -2474,6 +2691,18 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             if position:
                 lines.append(f"- player position: x={position.get('x')} y={position.get('y')} z={position.get('z')} ageMs={position.get('ageMs')}")
             lines.append(f"- heading/facing/control available: {summary.get('headingAvailable')}/{summary.get('facingAvailable')}/{summary.get('controlAvailable')}")
+        elif summary["signal"] == "coordinateCrosscheck":
+            lines.append(f"- classification: {summary.get('classification')}")
+            lines.append(f"- matched: {summary.get('matched')}; tolerance: {summary.get('tolerance')}")
+            addon_position = summary.get("addonPosition") if isinstance(summary.get("addonPosition"), dict) else {}
+            chromalink_position = summary.get("chromalinkPosition") if isinstance(summary.get("chromalinkPosition"), dict) else {}
+            if addon_position:
+                lines.append(f"- addon coords: x={addon_position.get('x')} y={addon_position.get('y')} z={addon_position.get('z')} source={addon_position.get('source')}")
+            if chromalink_position:
+                lines.append(f"- ChromaLink coords: x={chromalink_position.get('x')} y={chromalink_position.get('y')} z={chromalink_position.get('z')} ageMs={chromalink_position.get('ageMs')}")
+            if summary.get("absoluteDeltas"):
+                lines.append(f"- absolute deltas: {summary.get('absoluteDeltas')} max={summary.get('maxAbsoluteDelta')}")
+            lines.append(f"- ChromaLink classification/ready: {summary.get('chromalinkClassification')}/{summary.get('chromalinkCoordinateReady')}")
         elif summary["signal"] == "facingDelta":
             lines.append(f"- classification: {summary.get('classification')}")
             lines.append(f"- usable: {summary.get('usable')}")
@@ -2652,6 +2881,25 @@ def build_parser() -> argparse.ArgumentParser:
     chromalink.add_argument("--hwnd", help="Optional expected Rift HWND to validate and record without input; requires --pid")
     chromalink.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-chromalink-*.")
     chromalink.set_defaults(func=run_signal_proof_chromalink)
+
+    coordinate_crosscheck = signal_sub.add_parser(
+        "coordinate-crosscheck",
+        help="Compare manual /autofish coords output to fresh read-only ChromaLink player.position",
+    )
+    coordinate_crosscheck.add_argument("--addon-line", help='Exact in-game /autofish coords line, for example: coords x=1.23 y=4.56 z=7.89 playerUnit=...')
+    coordinate_crosscheck.add_argument("--addon-x", type=float, help="Manual addon coordX value from /autofish coords; requires --addon-y and --addon-z")
+    coordinate_crosscheck.add_argument("--addon-y", type=float, help="Manual addon coordY value from /autofish coords; requires --addon-x and --addon-z")
+    coordinate_crosscheck.add_argument("--addon-z", type=float, help="Manual addon coordZ value from /autofish coords; requires --addon-x and --addon-y")
+    coordinate_crosscheck.add_argument("--base-url", default=DEFAULT_CHROMALINK_BASE_URL, help=f"ChromaLink HTTP bridge base URL; default: {DEFAULT_CHROMALINK_BASE_URL}")
+    coordinate_crosscheck.add_argument("--timeout-seconds", type=float, default=2.0, help="HTTP timeout per ChromaLink endpoint; default: 2")
+    coordinate_crosscheck.add_argument("--wait-seconds", type=float, default=2.0, help="Poll until fresh for up to this many seconds; default: 2")
+    coordinate_crosscheck.add_argument("--poll-interval-ms", type=int, default=500, help="Poll interval while waiting; default: 500")
+    coordinate_crosscheck.add_argument("--tolerance", type=float, default=0.5, help="Maximum allowed absolute delta on each axis; default: 0.5")
+    coordinate_crosscheck.add_argument("--require-match", action="store_true", help="Return a failing exit code unless addon and ChromaLink coordinates match within tolerance")
+    coordinate_crosscheck.add_argument("--pid", type=int, help="Optional expected Rift PID to validate and record without input; requires --hwnd")
+    coordinate_crosscheck.add_argument("--hwnd", help="Optional expected Rift HWND to validate and record without input; requires --pid")
+    coordinate_crosscheck.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-coordinate-crosscheck-*.")
+    coordinate_crosscheck.set_defaults(func=run_signal_proof_coordinate_crosscheck)
 
     facing = signal_sub.add_parser("facing-delta", help="Estimate operational facing from fresh ChromaLink coordinate delta after a tiny confirmed movement pulse")
     facing.add_argument("--pid", type=int, required=True, help="Expected Rift process ID")

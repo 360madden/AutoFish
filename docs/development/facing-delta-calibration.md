@@ -36,6 +36,14 @@ Inspect.Unit.Detail(playerUnit).coordZ
 
 Use this for a visible chat/screenshot cross-check against ChromaLink `player.position`. If the addon printout and ChromaLink disagree, stop and classify the coordinate provider as blocked/stale before sending any movement pulse.
 
+Record the cross-check before movement:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof coordinate-crosscheck `
+  --addon-line "coords x=<x> y=<y> z=<z> playerUnit=<unit>" `
+  --require-match
+```
+
 ## AutoFish proof command
 
 Dry-run first:

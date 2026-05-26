@@ -112,6 +112,24 @@ Use the in-game addon probe as the direct source cross-check:
 
 It prints the current player `coordX`, `coordY`, and `coordZ` values read from `Inspect.Unit.Detail`. Compare that visible addon output to the ChromaLink `player.position` values before trusting helper-side coordinate automation.
 
+The helper can record that comparison as a read-only proof after you reload the addon and transcribe the visible `/autofish coords` line:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof coordinate-crosscheck `
+  --addon-line "coords x=<x> y=<y> z=<z> playerUnit=<unit>" `
+  --wait-seconds 2
+```
+
+Or pass the three numeric values directly:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof coordinate-crosscheck `
+  --addon-x <x> --addon-y <y> --addon-z <z> `
+  --require-match
+```
+
+This command sends no input. It queries ChromaLink read-only, compares the two coordinate sources within a configurable `--tolerance`, and writes a `coordinateCrosscheck` manifest.
+
 ```powershell
 python tools\autofish-helper-py\autofish_helper.py signal-proof chromalink `
   --wait-seconds 2 `

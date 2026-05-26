@@ -254,6 +254,7 @@ Follow-up implemented on 2026-05-26, pending live reload/proof:
 
 - `/autofish coords` now prints the AutoFish addon's direct `Inspect.Unit.Detail` coordinate readout.
 - Use the visible in-game output as a cross-check against ChromaLink `player.position` before trusting helper-side coordinate automation.
+- `signal-proof coordinate-crosscheck` records that comparison as a read-only manifest after the operator transcribes the visible `/autofish coords` output.
 - This is still coordinate evidence only; it does not prove native actor facing/yaw.
 
 ## Facing-delta calibration follow-up

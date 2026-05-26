@@ -87,6 +87,7 @@ AutoFish has two coordinate evidence paths:
 
 - direct addon cross-check: `/autofish coords`, which prints `Inspect.Unit.Detail(playerUnit).coordX`, `coordY`, and `coordZ` in game,
 - helper-side bridge: ChromaLink, which can expose `player.position` through `/api/v1/riftreader/world-state` when the provider is fresh.
+- proof comparison: `signal-proof coordinate-crosscheck`, which compares manually supplied `/autofish coords` output against fresh ChromaLink coordinates without sending input.
 
 See `docs/development/chromalink-readonly-coordinate-provider.md`.
 
