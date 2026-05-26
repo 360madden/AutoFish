@@ -2439,6 +2439,50 @@ def summarize_review_gates(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def summarize_red_reticle_click_guards(manifest: dict[str, Any]) -> dict[str, Any]:
+    guards: list[dict[str, Any]] = []
+    casts = manifest.get("casts") if isinstance(manifest.get("casts"), list) else []
+    for cast in casts:
+        if not isinstance(cast, dict):
+            continue
+        guard = cast.get("redReticleClickGuard")
+        if not isinstance(guard, dict):
+            continue
+        cast_number = cast.get("castNumber")
+        scope = f"cast-{cast_number}" if cast_number is not None else "cast"
+        guards.append({"scope": scope, **guard})
+
+    gates = normalized_manifest_review_gates(manifest)
+    top_level_guard = gates.get("redReticleClickGuard")
+    if not guards and isinstance(top_level_guard, dict):
+        guards.append({"scope": "manifest", **top_level_guard})
+
+    if not guards:
+        return {
+            "redReticleClickGuardCount": 0,
+            "redReticleClickGuardFailedCount": 0,
+            "redReticleClickGuardOverriddenCount": 0,
+            "redReticleClickGuardRedCount": 0,
+            "redReticleClickGuardColors": [],
+            "redReticleClickGuardReasons": [],
+            "redReticleClickGuards": [],
+        }
+
+    colors = sorted(
+        set(str(guard.get("suggestedReticleColor")) for guard in guards if guard.get("suggestedReticleColor"))
+    )
+    reasons = sorted(set(str(guard.get("reason")) for guard in guards if guard.get("reason")))
+    return {
+        "redReticleClickGuardCount": len(guards),
+        "redReticleClickGuardFailedCount": len([guard for guard in guards if guard.get("passed") is not True]),
+        "redReticleClickGuardOverriddenCount": len([guard for guard in guards if guard.get("overridden") is True]),
+        "redReticleClickGuardRedCount": len([guard for guard in guards if guard.get("suggestedReticleColor") == "red"]),
+        "redReticleClickGuardColors": colors,
+        "redReticleClickGuardReasons": reasons,
+        "redReticleClickGuards": guards,
+    }
+
+
 def read_text_from_offset(path: Path, offset: int, max_bytes: int) -> tuple[str, int, bool]:
     current_size = path.stat().st_size
     start = offset if offset <= current_size else 0
@@ -4708,6 +4752,8 @@ def nonzero_counts(counts: dict[str, Any]) -> dict[str, int]:
 
 
 def suggest_review(signal: str, summary: dict[str, Any]) -> str:
+    if signal in ("oneCast", "boundedSession") and summary.get("redReticleClickGuardFailedCount", 0) > 0:
+        return "blocked-red-reticle-review"
     if summary.get("hasError"):
         return "rerun"
     if signal == "reticle":
@@ -4878,6 +4924,7 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "reviewGateOverridden": bool(review_gate.get("overridden")),
                 "target": manifest.get("target"),
                 **summarize_review_gates(manifest),
+                **summarize_red_reticle_click_guards(manifest),
             }
         )
     elif signal == "boundedSession":
@@ -4927,6 +4974,7 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
                 "reviewGateOverridden": bool(review_gate.get("overridden")),
                 "target": manifest.get("target"),
                 **summarize_review_gates(manifest),
+                **summarize_red_reticle_click_guards(manifest),
             }
         )
     elif signal == "fishabilityFan":
@@ -5106,6 +5154,17 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- actions: {summary.get('actionCount', 0)} ({', '.join(str(name) for name in summary.get('actionNames', [])) or '-'})")
             lines.append(f"- captures: {summary.get('captureCount', 0)} ({', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'})")
             lines.append(f"- click count: {summary.get('clickCount')}; pull clicks: {summary.get('pullClicks')}; wait seconds: {summary.get('castWaitSeconds')}")
+            if summary.get("redReticleClickGuardCount", 0):
+                lines.append(
+                    "- red-reticle guard: "
+                    f"failed {summary.get('redReticleClickGuardFailedCount', 0)}/{summary.get('redReticleClickGuardCount', 0)}; "
+                    f"red detections {summary.get('redReticleClickGuardRedCount', 0)}; "
+                    f"overridden {summary.get('redReticleClickGuardOverriddenCount', 0)}"
+                )
+                lines.append(f"- red-reticle guard colors: {', '.join(summary.get('redReticleClickGuardColors', [])) or '-'}")
+                reasons = summary.get("redReticleClickGuardReasons", [])
+                if reasons:
+                    lines.append(f"- red-reticle guard reasons: {'; '.join(str(reason) for reason in reasons)}")
             if summary.get("profileId"):
                 lines.append(f"- profile: {summary.get('profileId')} (`{summary.get('profilePath')}`)")
         elif summary["signal"] == "boundedSession":
@@ -5116,6 +5175,17 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- captures: {summary.get('captureCount', 0)} ({', '.join(str(label) for label in summary.get('captureLabels', [])) or '-'})")
             lines.append(f"- max clicks: {summary.get('maxClickCount')}; pull clicks: {summary.get('pullClicks')}; wait seconds: {summary.get('castWaitSeconds')}")
             lines.append(f"- one-cast review gate required/passed/overridden: {summary.get('reviewGateRequired')}/{summary.get('reviewGatePassed')}/{summary.get('reviewGateOverridden')}")
+            if summary.get("redReticleClickGuardCount", 0):
+                lines.append(
+                    "- red-reticle guard: "
+                    f"failed {summary.get('redReticleClickGuardFailedCount', 0)}/{summary.get('redReticleClickGuardCount', 0)}; "
+                    f"red detections {summary.get('redReticleClickGuardRedCount', 0)}; "
+                    f"overridden {summary.get('redReticleClickGuardOverriddenCount', 0)}"
+                )
+                lines.append(f"- red-reticle guard colors: {', '.join(summary.get('redReticleClickGuardColors', [])) or '-'}")
+                reasons = summary.get("redReticleClickGuardReasons", [])
+                if reasons:
+                    lines.append(f"- red-reticle guard reasons: {'; '.join(str(reason) for reason in reasons)}")
             if summary.get("profileId"):
                 lines.append(f"- profile: {summary.get('profileId')} (`{summary.get('profilePath')}`)")
         elif summary["signal"] == "fishabilityFan":

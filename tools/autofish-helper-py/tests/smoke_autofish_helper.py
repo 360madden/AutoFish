@@ -241,6 +241,83 @@ def test_red_reticle_click_guard(helper) -> None:
     assert yellow["passed"]
 
 
+def test_red_reticle_guard_summary(helper) -> None:
+    manifest_path = Path("one-cast-red-reticle") / "manifest.json"
+    manifest = {
+        "schema": "autofish.signalProof.oneCast.v1",
+        "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+        "mode": "confirm-input",
+        "error": "Red reticle was detected after the fishing key; refusing the confirm click.",
+        "actions": [{"name": "abort-confirm-click"}],
+        "captures": [{"label": "after-key"}],
+        "request": {"pullClicks": 1, "castWaitSeconds": 18},
+        "safety": {"clickCount": 0},
+        "result": {"classification": "unproven", "completed": False, "liveInputSent": True},
+        "reviewGates": {
+            "redReticleClickGuard": {
+                "required": True,
+                "passed": False,
+                "suggestedReticleColor": "red",
+                "reason": "Red reticle was detected after the fishing key; refusing the confirm click.",
+            }
+        },
+    }
+    summary = helper.summarize_signal_proof_manifest(manifest_path, manifest)
+    assert summary["suggestedReview"] == "blocked-red-reticle-review"
+    assert "redReticleClickGuard" in summary["failedReviewGateNames"]
+    assert summary["redReticleClickGuardCount"] == 1
+    assert summary["redReticleClickGuardFailedCount"] == 1
+    assert summary["redReticleClickGuardRedCount"] == 1
+
+    markdown = helper.render_signal_proof_markdown(
+        {
+            "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+            "proofRoot": ".autofish-live",
+            "manifestCount": 1,
+            "bySignal": {"oneCast": {"count": 1, "suggestedReviews": {summary["suggestedReview"]: 1}}},
+            "summaries": [summary],
+        }
+    )
+    assert "red-reticle guard: failed 1/1" in markdown
+    assert "blocked-red-reticle-review" in markdown
+
+    bounded_summary = helper.summarize_signal_proof_manifest(
+        Path("bounded-red-reticle") / "manifest.json",
+        {
+            "schema": "autofish.signalProof.boundedSession.v1",
+            "generatedAtUtc": "2026-05-26T00:00:00+00:00",
+            "mode": "confirm-input",
+            "casts": [
+                {
+                    "castNumber": 1,
+                    "completed": False,
+                    "actions": [{"name": "abort-confirm-click"}],
+                    "redReticleClickGuard": {
+                        "required": True,
+                        "passed": False,
+                        "suggestedReticleColor": "red",
+                        "reason": "Red reticle was detected after the fishing key; refusing the confirm click.",
+                    },
+                }
+            ],
+            "captures": [{"label": "cast-001-after-key"}],
+            "request": {"maxCasts": 3, "pullClicks": 1, "castWaitSeconds": 18},
+            "safety": {"maxClickCount": 0},
+            "result": {"classification": "unproven", "completed": False, "liveInputSent": True},
+            "reviewGates": {
+                "redReticleClickGuard": {
+                    "required": True,
+                    "passed": False,
+                    "suggestedReticleColor": "red",
+                }
+            },
+        },
+    )
+    assert bounded_summary["suggestedReview"] == "blocked-red-reticle-review"
+    assert bounded_summary["redReticleClickGuardCount"] == 1
+    assert bounded_summary["redReticleClickGuardFailedCount"] == 1
+
+
 def test_target_snapshot_invalid_hwnd(helper) -> None:
     parser = helper.build_parser()
     args = parser.parse_args(
@@ -866,6 +943,7 @@ def main() -> int:
     test_runbook_render(helper, doc_validator)
     test_direct_live_command_stop_file_defaults(helper)
     test_red_reticle_click_guard(helper)
+    test_red_reticle_guard_summary(helper)
     test_target_snapshot_invalid_hwnd(helper)
     test_stale_session_plan_refuses_plan_backed_proofs(helper)
     test_fishability_fan_suggested_commands(helper)
