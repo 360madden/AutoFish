@@ -17,7 +17,7 @@ Larger Rift windows are supported and preferred. The helper captures the actual 
 
 Use client-relative coordinates. If the Rift window is resized, rerun preflight/capture and recalibrate fishable X/Y before sending any reticle, click, or cast-start input.
 
-Focus behavior must preserve window size. The Python helper and AutoFish preflight only call Windows `SW_RESTORE` when the Rift window is minimized; they should not de-maximize or shrink a normal/maximized Rift window before proof capture.
+Focus behavior must preserve window size. Live-input Python helper commands now refuse to restore a minimized Rift window; restore/maximize Rift manually first so Windows does not snap back to a tiny saved restored size. AutoFish preflight only calls Windows `SW_RESTORE` when the Rift window is minimized; it should not de-maximize or shrink a normal/maximized Rift window before proof capture.
 
 ## Current priority: historical signal proof
 
@@ -66,6 +66,38 @@ The manifest records:
 Color suggestions are conservative. Red/orange invalid reticles can include yellow pixels, and water/highlight backgrounds can inflate blue/cyan counts. The manifest keeps `legacySuggestedReticleColor`, `suggestionReason`, and `manualReviewRequired` so suspected blue/cyan/background cases are reviewed visually instead of silently promoted.
 
 No live command should send input without an explicit target PID/HWND and either `--dry-run` or `--confirm-input`. The helper refuses to send `-` by default because this local setup binds it to `reloadui`.
+
+## Bounded one-cast proof
+
+Use `one-cast` after the reticle proof has identified a current fishable client coordinate. This is the Python-native replacement path for the older PowerShell prototype script.
+
+Dry-run first:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
+  --pid <CURRENT_RIFT_PID> `
+  --hwnd <CURRENT_RIFT_HWND> `
+  --x <FISHABLE_CLIENT_X> `
+  --y <FISHABLE_CLIENT_Y> `
+  --key 8 `
+  --dry-run
+```
+
+Then, only while supervised and with Rift already restored/maximized and foregroundable:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
+  --pid <CURRENT_RIFT_PID> `
+  --hwnd <CURRENT_RIFT_HWND> `
+  --x <FISHABLE_CLIENT_X> `
+  --y <FISHABLE_CLIENT_Y> `
+  --key 8 `
+  --cast-wait-seconds 18 `
+  --pull-clicks 1 `
+  --confirm-input
+```
+
+The command performs at most one cast attempt. Confirmed mode can move the cursor, press the fishing key once, left-click the calibrated cast point, wait, and perform the configured bounded pull/loot clicks. It sends no movement and no loop. If `--stop-file <path>` exists before or during the wait, the command aborts before the next action. Live-input mode refuses minimized Rift windows so it does not restore the client to a tiny saved size.
 
 ## Fishability fan planning
 

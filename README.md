@@ -28,6 +28,7 @@ Use `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md` be
 - `/autofish invproof before|after|diff` for native inventory/catch deltas, including raw slot-level add/remove/change diagnostics.
 - `/autofish coords` for a direct addon-side player `coordX/coordY/coordZ` readout from `Inspect.Unit.Detail`, useful as a ChromaLink/facing cross-check.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof reticle` for cursor/reticle/pixel crops.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast` for one bounded Python-native cast/click/wait/pull proof at a calibrated fishable point.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan` for dry-run screen-space candidate probe planning without input.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof chromalink` for read-only ChromaLink world-state/player-coordinate freshness proof.
 - `python tools/autofish-helper-py/autofish_helper.py signal-proof coordinate-crosscheck` for read-only comparison of manual `/autofish coords` output against fresh ChromaLink `player.position`.
@@ -42,7 +43,7 @@ Do not copy, execute, or port public bot scripts/binaries. Use old methods only 
 
 Larger Rift windows are supported and preferred for proof capture. The helper and preflight capture record the live client width/height and warn when the client is below `960x540`, because tiny `640x360` screenshots are often too hard to read. Coordinates remain client-relative; after resizing the game window, recalibrate the fishable client X/Y before sending input.
 
-Focus must preserve the current Rift window size. AutoFish's Python helper and preflight script only restore minimized windows; they should not de-maximize or shrink a normal/maximized Rift window before proof capture.
+Focus must preserve the current Rift window size. AutoFish's live-input Python helper commands refuse to restore minimized windows; restore/maximize Rift manually first. The preflight script only restores minimized windows and should not de-maximize or shrink a normal/maximized Rift window before proof capture.
 
 Current reviewed proof result: `docs/live-validation/2026-05-25-historical-signal-proof-results.md`.
 
@@ -95,6 +96,7 @@ Owns:
 - screenshot capture and crop/diff work,
 - cursor hover/move/click and keypress orchestration,
 - bounded prototype commands such as hover, press `8`, left-click, and capture,
+- one-cast proof commands that click a calibrated point, press the fishing key, wait, and perform a bounded pull/loot click,
 - future bite/pull/loot timing and visual detection.
 
 The helper runs on the same local PC as the Rift game window. It supervises and automates bounded desktop interactions; it should not replace the addon's local safety logic.

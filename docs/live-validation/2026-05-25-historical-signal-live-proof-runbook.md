@@ -122,6 +122,24 @@ Decision:
 - Do not promote native hover APIs unless `/autofish trace` samples show non-nil/non-empty `Inspect.Cursor`, `Inspect.Tooltip`, or `Inspect.Interaction` values while the visual reticle or tooltip is active.
 - Treat `blueCyan` color stats as suspicious around water/highlights until manually reviewed; current proof shows the heuristic can be background-contaminated. Prefer the tightened `suggestedReticleColor` and read `legacySuggestedReticleColor`, `suggestionReason`, and `manualReviewRequired` before classifying any blue/cyan sample.
 
+### 2b. Bounded one-cast proof
+
+After a fishable point is calibrated, use the Python-native one-cast proof instead of the older PowerShell prototype script:
+
+```powershell
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
+  --pid <pid> `
+  --hwnd <hwnd> `
+  --x <fishable-client-x> `
+  --y <fishable-client-y> `
+  --key 8 `
+  --cast-wait-seconds 18 `
+  --pull-clicks 1 `
+  --confirm-input
+```
+
+Dry-run first with `--dry-run`. Confirmed mode is one supervised cast attempt only: no movement and no loop. It refuses minimized Rift windows; restore/maximize Rift manually before live input.
+
 ### 3. Current log proof
 
 Only test logs as read-only evidence:
