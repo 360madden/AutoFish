@@ -82,6 +82,7 @@ SIGNAL_NAMES = (
 )
 DEFAULT_CHROMALINK_BASE_URL = "http://127.0.0.1:7337"
 DEFAULT_STOP_FILE = ".autofish-live/STOP.txt"
+DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES = 240
 REVIEW_SCOPE_SCHEMA = "autofish.reviewScope.v1"
 ADDON_COORD_RE = re.compile(r"\b([xyz])\s*=\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 ADDON_PLAYER_UNIT_RE = re.compile(r"\bplayerUnit\s*=\s*(\S+)", re.IGNORECASE)
@@ -1004,6 +1005,79 @@ def positive_int_or_none(value: Any) -> int | None:
     return parsed if parsed > 0 else None
 
 
+def parse_iso_datetime_utc(value: Any) -> datetime:
+    if not value:
+        raise ValueError("timestamp is missing")
+    text = str(value)
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def check_session_plan_age_gate(
+    session_plan_info: dict[str, Any] | None,
+    *,
+    max_age_minutes: int | float | None = DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
+    if not isinstance(plan, dict):
+        return {
+            "required": False,
+            "passed": True,
+            "maxAgeMinutes": max_age_minutes,
+            "reason": "No session plan provided.",
+        }
+    generated_at = plan.get("generatedAtUtc") if isinstance(plan, dict) else None
+    gate: dict[str, Any] = {
+        "required": True,
+        "passed": False,
+        "generatedAtUtc": generated_at,
+        "maxAgeMinutes": max_age_minutes,
+    }
+    if max_age_minutes is None or float(max_age_minutes) <= 0:
+        gate.update(
+            {
+                "required": False,
+                "passed": True,
+                "reason": "Session plan age gate disabled.",
+            }
+        )
+        return gate
+
+    try:
+        generated = parse_iso_datetime_utc(generated_at)
+    except Exception as exc:
+        gate["reason"] = f"Session plan generatedAtUtc is invalid: {exc}"
+        return gate
+
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    age_seconds = (current - generated).total_seconds()
+    max_age_seconds = float(max_age_minutes) * 60.0
+    gate.update(
+        {
+            "nowUtc": current.isoformat(),
+            "ageSeconds": age_seconds,
+            "ageMinutes": age_seconds / 60.0,
+            "maxAgeSeconds": max_age_seconds,
+        }
+    )
+    if age_seconds < 0:
+        gate["reason"] = "Session plan timestamp is in the future; recreate the plan on this machine."
+        return gate
+
+    gate["passed"] = age_seconds <= max_age_seconds
+    gate["reason"] = (
+        "Session plan age is within the allowed live-proof window."
+        if gate["passed"]
+        else "Session plan is too old for confirmed live proof input; recreate the plan and rerun no-input gates."
+    )
+    return gate
+
+
 def session_plan_expected_client_size(session_plan_info: dict[str, Any] | None) -> dict[str, Any] | None:
     plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
     if not isinstance(plan, dict):
@@ -1421,6 +1495,10 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         allow_unreviewed=False,
     )
     one_cast_gate = check_one_cast_review_gate(one_cast_gate_args, loaded)
+    plan_age_gate = check_session_plan_age_gate(
+        loaded,
+        max_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+    )
     target_gate = check_session_plan_target_freshness(loaded)
     current_target = target_gate.get("currentTarget") if isinstance(target_gate.get("currentTarget"), dict) else None
     foreground_gate = check_session_plan_foreground_gate(loaded, current_target)
@@ -1429,6 +1507,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
     stop_file_gate = check_session_plan_stop_file_gate(loaded)
     ready_for_one_cast = bool(
         stop_file_gate.get("passed")
+        and plan_age_gate.get("passed")
         and target_gate.get("passed")
         and foreground_gate.get("passed")
         and readability_gate.get("passed")
@@ -1436,6 +1515,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
     )
     ready_for_bounded_session = bool(
         stop_file_gate.get("passed")
+        and plan_age_gate.get("passed")
         and target_gate.get("passed")
         and foreground_gate.get("passed")
         and readability_gate.get("passed")
@@ -1450,6 +1530,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         "decisionRegister": args.decision_register,
         "gates": {
             "stopFileClear": stop_file_gate,
+            "planFresh": plan_age_gate,
             "targetCurrent": target_gate,
             "targetForeground": foreground_gate,
             "clientReadable": readability_gate,
@@ -1458,6 +1539,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         },
         "readiness": {
             "stopFileClear": bool(stop_file_gate.get("passed")),
+            "planFresh": bool(plan_age_gate.get("passed")),
             "targetCurrent": bool(target_gate.get("passed")),
             "targetForeground": bool(foreground_gate.get("passed")),
             "clientReadable": bool(readability_gate.get("passed")),
@@ -1470,6 +1552,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
         "notes": [
             "This command sends no game input.",
             "stopFileClear fails when the session plan stop file exists.",
+            "planFresh fails when the session plan is older than the configured max age.",
             "targetCurrent compares the current Rift client size with the session plan targetValidation when a size was recorded.",
             "targetForeground requires the exact target HWND to be the current foreground window.",
             "clientReadable requires a restored, readable client size for proof review.",
@@ -1481,6 +1564,7 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
     print(json.dumps(report, indent=2))
     readiness_name_by_flag = {
         "stop-file-clear": "stopFileClear",
+        "plan-fresh": "planFresh",
         "target-current": "targetCurrent",
         "target-foreground": "targetForeground",
         "client-readable": "clientReadable",
@@ -2198,6 +2282,14 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
     }
 
     try:
+        manifest["reviewGates"]["planFresh"] = check_session_plan_age_gate(
+            plan_defaults["sessionPlan"],
+            max_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+        )
+        if not manifest["reviewGates"]["planFresh"].get("passed"):
+            raise RuntimeError(
+                str(manifest["reviewGates"]["planFresh"].get("reason") or "Session plan age gate failed.")
+            )
         manifest["reviewGates"]["fishabilityCandidate"] = (
             check_fan_candidate_review_gate(
                 plan_defaults["sessionPlan"],
@@ -2399,6 +2491,7 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
         "sessionPlanAppliedDefaults": plan_defaults["appliedDefaults"],
         "profile": runtime_defaults["profile"],
         "appliedDefaults": runtime_defaults["appliedDefaults"],
+        "sessionPlanAgeGate": None,
         "reviewGate": None,
         "targetGate": None,
         "target": None,
@@ -2419,6 +2512,12 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
     }
 
     try:
+        manifest["sessionPlanAgeGate"] = check_session_plan_age_gate(
+            plan_defaults["sessionPlan"],
+            max_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
+        )
+        if not manifest["sessionPlanAgeGate"].get("passed"):
+            raise RuntimeError(str(manifest["sessionPlanAgeGate"].get("reason") or "Session plan age gate failed."))
         manifest["reviewGate"] = (
             check_one_cast_review_gate(args, plan_defaults["sessionPlan"])
             if args.confirm_input
@@ -4680,10 +4779,20 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_gates.add_argument("--path", default=".autofish-live/session-plan-latest.json", help="Session plan JSON path")
     session_plan_gates.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register path")
     session_plan_gates.add_argument(
+        "--max-plan-age-minutes",
+        type=float,
+        default=DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+        help=(
+            "Maximum session plan age for planFresh/ready-* gates; use <=0 to disable. "
+            f"Default: {DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES}"
+        ),
+    )
+    session_plan_gates.add_argument(
         "--require",
         action="append",
         choices=(
             "stop-file-clear",
+            "plan-fresh",
             "target-current",
             "target-foreground",
             "client-readable",
@@ -4749,6 +4858,15 @@ def build_parser() -> argparse.ArgumentParser:
     one_cast.add_argument("--post-click-delay-ms", type=int, help="Delay after confirm click before capture; default: 800")
     one_cast.add_argument("--post-pull-delay-ms", type=int, help="Delay after each pull/loot click before capture; default: profile lootTimeoutMs or 1200")
     one_cast.add_argument("--stop-file", default=DEFAULT_STOP_FILE, help=f"If this file exists before/during the run, abort before the next action; default: {DEFAULT_STOP_FILE}")
+    one_cast.add_argument(
+        "--max-plan-age-minutes",
+        type=float,
+        default=DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+        help=(
+            "Maximum session plan age before refusing plan-backed proof; use <=0 to disable for offline diagnostics. "
+            f"Default: {DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES}"
+        ),
+    )
     one_cast.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register used to require reviewed fishabilityCandidate proof for fan-derived session plans")
     one_cast.add_argument("--allow-unreviewed-fan-candidate", action="store_true", help="Bypass the fishabilityCandidate decision gate for fan-derived session plans intentionally")
     one_cast.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-one-cast-*.")
@@ -4780,6 +4898,15 @@ def build_parser() -> argparse.ArgumentParser:
     bounded_session.add_argument("--post-pull-delay-ms", type=int, help="Delay after each pull/loot click before completion capture; default: profile lootTimeoutMs or 1200")
     bounded_session.add_argument("--inter-cast-delay-ms", type=int, help="Delay between cast attempts; default: 800")
     bounded_session.add_argument("--capture-each-cast", action="store_true", help="Capture after hover/key/confirm in addition to each cast completion")
+    bounded_session.add_argument(
+        "--max-plan-age-minutes",
+        type=float,
+        default=DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
+        help=(
+            "Maximum session plan age before refusing plan-backed proof; use <=0 to disable for offline diagnostics. "
+            f"Default: {DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES}"
+        ),
+    )
     bounded_session.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register used to require reviewed oneCast proof before confirmed sessions")
     bounded_session.add_argument("--allow-unreviewed-one-cast", action="store_true", help="Bypass the oneCast decision gate intentionally; still requires --confirm-input and all target gates")
     bounded_session.add_argument("--stop-file", default=DEFAULT_STOP_FILE, help=f"If this file exists before/during the run, abort before the next action; default: {DEFAULT_STOP_FILE}")

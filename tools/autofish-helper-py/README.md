@@ -90,7 +90,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan create `
   --output .autofish-live\session-plan-latest.json
 ```
 
-Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, or the fishable coordinate changes. When a plan has `targetValidation.clientWidth/clientHeight` from `--validate-target` or a fishability-fan manifest, `session-plan gates`, `one-cast`, and `bounded-session` now compare that size with the current Rift target before allowing plan-backed live input. Live-input commands also recompute client-to-screen coordinates immediately before each cursor move/click, so a same-size window move does not reuse stale screen coordinates.
+Session plans are local proof artifacts. Do not reuse one after Rift restarts, the window is resized, the fishable coordinate changes, or the plan is stale. `session-plan gates`, plan-backed `one-cast`, and plan-backed `bounded-session` include a `planFresh`/age gate that defaults to a 240-minute maximum age; override with `--max-plan-age-minutes <minutes>` or use `<=0` only for intentional offline diagnostics. When a plan has `targetValidation.clientWidth/clientHeight` from `--validate-target` or a fishability-fan manifest, `session-plan gates`, `one-cast`, and `bounded-session` now compare that size with the current Rift target before allowing plan-backed live input. Live-input commands also recompute client-to-screen coordinates immediately before each cursor move/click, so a same-size window move does not reuse stale screen coordinates.
 
 By default, a session plan includes `.autofish-live\STOP.txt` as the emergency stop file. Use `session-plan stop-file create --path <plan>` to stop before the next bounded action or during a wait period, `session-plan stop-file clear --path <plan>` before a later supervised rerun, and `session-plan stop-file status --path <plan>` to inspect it without changing it.
 
@@ -229,7 +229,7 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
 
-Add `--require stop-file-clear`, `--require target-current`, `--require target-foreground`, `--require client-readable`, `--require confirmed-one-cast`, or `--require confirmed-bounded-session` when a script should fail closed unless that gate is ready. For the practical pre-live bundles, use `--require ready-one-cast` before confirmed `one-cast` and `--require ready-bounded-session` before confirmed `bounded-session`; these compound checks include the stop-file, target-current, foreground, readability, and needed reviewed-decision gates.
+Add `--require stop-file-clear`, `--require plan-fresh`, `--require target-current`, `--require target-foreground`, `--require client-readable`, `--require confirmed-one-cast`, or `--require confirmed-bounded-session` when a script should fail closed unless that gate is ready. For the practical pre-live bundles, use `--require ready-one-cast` before confirmed `one-cast` and `--require ready-bounded-session` before confirmed `bounded-session`; these compound checks include the stop-file, plan-age, target-current, foreground, readability, and needed reviewed-decision gates.
 
 The created plan still marks the fan candidate as planning-only source evidence; confirmed one-cast input from that plan requires a reviewed `fishabilityCandidate` decision attached to that same session plan unless intentionally bypassed with `--allow-unreviewed-fan-candidate`. Run the generated session-plan dry-run before any confirmed one-cast proof.
 

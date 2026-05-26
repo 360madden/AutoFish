@@ -24,13 +24,17 @@ try {
     python tools/autofish-helper-py/autofish_helper.py session-plan stop-file create --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'stop-file-clear' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'plan-fresh' | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'max-plan-age-minutes' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'target-current' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'target-foreground' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'client-readable' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'ready-one-cast' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py session-plan gates --help | Select-String -Pattern 'confirmed-bounded-session' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast --help | Select-String -Pattern 'max-plan-age-minutes' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Out-Null
+    python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --help | Select-String -Pattern 'max-plan-age-minutes' | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan-runbook --help | Out-Null
     python tools/autofish-helper-py/autofish_helper.py signal-proof decide --help | Out-Null

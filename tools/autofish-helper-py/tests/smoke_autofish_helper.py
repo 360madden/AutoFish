@@ -142,6 +142,7 @@ def test_direct_live_command_stop_file_defaults(helper) -> None:
         ]
     )
     assert one_cast.stop_file == helper.DEFAULT_STOP_FILE
+    assert one_cast.max_plan_age_minutes == helper.DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES
 
     bounded_session = parser.parse_args(
         [
@@ -159,6 +160,7 @@ def test_direct_live_command_stop_file_defaults(helper) -> None:
         ]
     )
     assert bounded_session.stop_file == helper.DEFAULT_STOP_FILE
+    assert bounded_session.max_plan_age_minutes == helper.DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES
 
 
 def test_fishability_fan_suggested_commands(helper) -> None:
@@ -367,6 +369,7 @@ def test_session_plan_from_fan_candidate(helper) -> None:
         gate_report = json.loads(gate_output.getvalue())
         assert gate_report["schema"] == "autofish.sessionPlan.reviewGates.v1"
         assert gate_report["readiness"]["stopFileClear"]
+        assert gate_report["readiness"]["planFresh"]
         assert "targetForeground" in gate_report["readiness"]
         assert "clientReadable" in gate_report["readiness"]
         assert gate_report["readiness"]["confirmedOneCast"]
@@ -499,6 +502,44 @@ def test_session_plan_target_freshness_gate(helper) -> None:
     unrecorded_gate = helper.check_session_plan_target_freshness({"plan": {"schema": "autofish.sessionPlan.v1"}})
     assert not unrecorded_gate["required"]
     assert unrecorded_gate["passed"]
+
+    now = helper.datetime(2026, 5, 26, 12, 0, tzinfo=helper.timezone.utc)
+    fresh_age_gate = helper.check_session_plan_age_gate(
+        {"plan": {**plan, "generatedAtUtc": "2026-05-26T11:30:00+00:00"}},
+        max_age_minutes=60,
+        now=now,
+    )
+    assert fresh_age_gate["required"]
+    assert fresh_age_gate["passed"]
+    assert fresh_age_gate["ageMinutes"] == 30
+
+    stale_age_gate = helper.check_session_plan_age_gate(
+        {"plan": {**plan, "generatedAtUtc": "2026-05-26T11:30:00+00:00"}},
+        max_age_minutes=10,
+        now=now,
+    )
+    assert stale_age_gate["required"]
+    assert not stale_age_gate["passed"]
+
+    disabled_age_gate = helper.check_session_plan_age_gate(
+        {"plan": {**plan, "generatedAtUtc": "2026-05-26T11:30:00+00:00"}},
+        max_age_minutes=0,
+        now=now,
+    )
+    assert not disabled_age_gate["required"]
+    assert disabled_age_gate["passed"]
+
+    future_age_gate = helper.check_session_plan_age_gate(
+        {"plan": {**plan, "generatedAtUtc": "2026-05-26T12:05:00+00:00"}},
+        max_age_minutes=60,
+        now=now,
+    )
+    assert not future_age_gate["passed"]
+    assert "future" in future_age_gate["reason"]
+
+    direct_cli_age_gate = helper.check_session_plan_age_gate(None, now=now)
+    assert not direct_cli_age_gate["required"]
+    assert direct_cli_age_gate["passed"]
 
     ready_target = {
         "hwnd": "0x1234",

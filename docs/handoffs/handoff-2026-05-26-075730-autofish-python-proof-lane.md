@@ -112,9 +112,11 @@ python tools\autofish-helper-py\autofish_helper.py session-plan gates `
   --path .autofish-live\session-plan-latest.json
 ```
 
+Use `--require plan-fresh` when a script should fail closed unless the session plan is inside the configured age window. The same age gate is enforced by plan-backed `one-cast` and `bounded-session`. The default is 240 minutes; use `--max-plan-age-minutes <minutes>` to tighten it, or `<=0` only for intentional offline diagnostics.
+
 Use `--require target-current` when a script should fail closed unless the current Rift client size still matches the session plan's recorded `targetValidation.clientWidth/clientHeight`.
 
-Use `--require target-foreground` and `--require client-readable` when scripts should fail closed unless the exact Rift HWND is foreground and the client is restored/readable. Use `--require ready-one-cast` before confirmed one-cast input and `--require ready-bounded-session` before confirmed bounded-session input. These are no-input compound readiness checks over stop-file-clear, target-current, foreground/readability, and the relevant reviewed-decision gate.
+Use `--require target-foreground` and `--require client-readable` when scripts should fail closed unless the exact Rift HWND is foreground and the client is restored/readable. Use `--require ready-one-cast` before confirmed one-cast input and `--require ready-bounded-session` before confirmed bounded-session input. These are no-input compound readiness checks over stop-file-clear, plan-age, target-current, foreground/readability, and the relevant reviewed-decision gate.
 
 ### Target-freshness gate
 
