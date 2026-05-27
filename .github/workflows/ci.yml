@@ -13,16 +13,36 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Show .NET SDKs
-        run: dotnet --info
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
 
-      - name: Build desktop solution
-        run: dotnet build AutoFish.sln --configuration Release
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
 
-      - name: Validate fishing profiles
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1"
+
+      - name: Show tool versions
+        run: |
+          dotnet --info
+          python --version
+          lua -v
+          luac -v
+
+      - name: Run all local checks
         shell: pwsh
-        run: .\scripts\validate-profiles.ps1
-
-      - name: Run Python helper checks
-        shell: pwsh
-        run: .\scripts\run-python-helper-checks.ps1
+        run: .\scripts\run-local-checks.ps1
