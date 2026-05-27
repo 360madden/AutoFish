@@ -37,25 +37,25 @@ The Python helper is the **primary active development surface**. The Lua addon i
 ## Commands
 
 ### Offline validation (run before PRs)
-```powershell
+```bash
 python scripts/run_local_checks.py                  # Full: .NET build + profiles + Python + Lua
 python scripts/run_local_checks.py --skip-lua       # Skip Lua if luac/lua not installed
 python scripts/run_python_checks.py                 # Python only: compile, smoke, doc validation, help surfaces
 ```
 
 ### .NET build (legacy)
-```powershell
+```bash
 dotnet build AutoFish.sln --configuration Release
 dotnet run --project src/AutoFish.App/AutoFish.App.csproj
 ```
 
 ### Profile validation
-```powershell
+```bash
 python scripts/run_local_checks.py --skip-lua
 ```
 
 ### Lua syntax/smoke (requires `luac` and `lua` on PATH)
-```powershell
+```bash
 luac -p lua/AutoFish/AutoFishAddon.lua
 lua scripts/lua-smoke-tests.lua
 ```
@@ -63,41 +63,41 @@ lua scripts/lua-smoke-tests.lua
 ### Live proof commands (Python helper — all require exact PID/HWND)
 
 **Target validation (no input sent):**
-```powershell
-python tools\autofish-helper-py\autofish_helper.py target-snapshot --pid <PID> --hwnd <HWND> --require-readable
+```bash
+python tools/autofish-helper-py/autofish_helper.py target-snapshot --pid <PID> --hwnd <HWND> --require-readable
 ```
 
 **Session plan management:**
-```powershell
-python tools\autofish-helper-py\autofish_helper.py session-plan create --pid <PID> --hwnd <HWND> --x <X> --y <Y> --profile starter-pond --validate-target --output .autofish-live\session-plan-latest.json
-python tools\autofish-helper-py\autofish_helper.py session-plan gates --path .autofish-live\session-plan-latest.json
-python tools\autofish-helper-py\autofish_helper.py session-plan explain --path .autofish-live\session-plan-latest.json
-python tools\autofish-helper-py\autofish_helper.py session-plan preflight --path .autofish-live\session-plan-latest.json --require ready-one-cast
-python tools\autofish-helper-py\autofish_helper.py session-plan checklist --path .autofish-live\session-plan-latest.json
-python tools\autofish-helper-py\autofish_helper.py session-plan runbook --path .autofish-live\session-plan-latest.json
-python tools\autofish-helper-py\autofish_helper.py session-plan doctor --path .autofish-live\session-plan-latest.json --proof-root .autofish-live --decision-register .autofish-live\signal-proof-decisions.json
-python tools\autofish-helper-py\autofish_helper.py session-plan stop-file create --path .autofish-live\session-plan-latest.json   # Emergency stop
-python tools\autofish-helper-py\autofish_helper.py session-plan stop-file clear --path .autofish-live\session-plan-latest.json    # Resume
+```bash
+python tools/autofish-helper-py/autofish_helper.py session-plan create --pid <PID> --hwnd <HWND> --x <X> --y <Y> --profile starter-pond --validate-target --output .autofish-live/session-plan-latest.json
+python tools/autofish-helper-py/autofish_helper.py session-plan gates --path .autofish-live/session-plan-latest.json
+python tools/autofish-helper-py/autofish_helper.py session-plan explain --path .autofish-live/session-plan-latest.json
+python tools/autofish-helper-py/autofish_helper.py session-plan preflight --path .autofish-live/session-plan-latest.json --require ready-one-cast
+python tools/autofish-helper-py/autofish_helper.py session-plan checklist --path .autofish-live/session-plan-latest.json
+python tools/autofish-helper-py/autofish_helper.py session-plan runbook --path .autofish-live/session-plan-latest.json
+python tools/autofish-helper-py/autofish_helper.py session-plan doctor --path .autofish-live/session-plan-latest.json --proof-root .autofish-live --decision-register .autofish-live/signal-proof-decisions.json
+python tools/autofish-helper-py/autofish_helper.py session-plan stop-file create --path .autofish-live/session-plan-latest.json   # Emergency stop
+python tools/autofish-helper-py/autofish_helper.py session-plan stop-file clear --path .autofish-live/session-plan-latest.json    # Resume
 ```
 
 **Proof commands (dry-run first, then --confirm-input):**
-```powershell
-python tools\autofish-helper-py\autofish_helper.py signal-proof reticle --session-plan ... --dry-run
-python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast --session-plan ... --dry-run
-python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session --session-plan ... --dry-run
-python tools\autofish-helper-py\autofish_helper.py signal-proof slash --pid <PID> --hwnd <HWND> --default-proof-pack --dry-run
-python tools\autofish-helper-py\autofish_helper.py signal-proof fishability-fan --pid <PID> --hwnd <HWND> --origin-x <X> --origin-y <Y> --forward-x <FX> --forward-y <FY> --dry-run
-python tools\autofish-helper-py\autofish_helper.py signal-proof chromalink --require-fresh
-python tools\autofish-helper-py\autofish_helper.py signal-proof coordinate-crosscheck --addon-line "coords x=<x> y=<y> z=<z>"
-python tools\autofish-helper-py\autofish_helper.py signal-proof facing-delta --pid <PID> --hwnd <HWND> --dry-run
-python tools\autofish-helper-py\autofish_helper.py signal-proof facing-from-coords --before-line "..." --after-line "..."
+```bash
+python tools/autofish-helper-py/autofish_helper.py signal-proof reticle --session-plan ... --dry-run
+python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast --session-plan ... --dry-run
+python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session --session-plan ... --dry-run
+python tools/autofish-helper-py/autofish_helper.py signal-proof slash --pid <PID> --hwnd <HWND> --default-proof-pack --dry-run
+python tools/autofish-helper-py/autofish_helper.py signal-proof fishability-fan --pid <PID> --hwnd <HWND> --origin-x <X> --origin-y <Y> --forward-x <FX> --forward-y <FY> --dry-run
+python tools/autofish-helper-py/autofish_helper.py signal-proof chromalink --require-fresh
+python tools/autofish-helper-py/autofish_helper.py signal-proof coordinate-crosscheck --addon-line "coords x=<x> y=<y> z=<z>"
+python tools/autofish-helper-py/autofish_helper.py signal-proof facing-delta --pid <PID> --hwnd <HWND> --dry-run
+python tools/autofish-helper-py/autofish_helper.py signal-proof facing-from-coords --before-line "..." --after-line "..."
 ```
 
 **Review and decide:**
-```powershell
-python tools\autofish-helper-py\autofish_helper.py signal-proof summarize --proof-root .autofish-live
-python tools\autofish-helper-py\autofish_helper.py signal-proof decide --signal oneCast --decision fallback-only --reason "..." --evidence <manifest> --session-plan <plan>
-python tools\autofish-helper-py\autofish_helper.py doctor --proof-root .autofish-live --decision-register .autofish-live\signal-proof-decisions.json
+```bash
+python tools/autofish-helper-py/autofish_helper.py signal-proof summarize --proof-root .autofish-live
+python tools/autofish-helper-py/autofish_helper.py signal-proof decide --signal oneCast --decision fallback-only --reason "..." --evidence <manifest> --session-plan <plan>
+python tools/autofish-helper-py/autofish_helper.py doctor --proof-root .autofish-live --decision-register .autofish-live/signal-proof-decisions.json
 ```
 
 ## Critical conventions and gotchas

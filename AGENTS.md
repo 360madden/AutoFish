@@ -46,14 +46,14 @@ AutoFish is a **Rift fishing automation tool** with a split stack:
 ## Commands Quick Reference
 
 ### Validate changes before committing
-```powershell
+```bash
 python scripts/run_local_checks.py                  # Full: .NET + profiles + Python + Lua
 python scripts/run_local_checks.py --skip-lua       # Skip Lua if luac/lua not installed
 python scripts/run_python_checks.py                 # Python only: compile, smoke, docs, help
 ```
 
 ### Lua checks
-```powershell
+```bash
 luac -p lua/AutoFish/AutoFishAddon.lua
 lua scripts/lua-smoke-tests.lua
 ```
