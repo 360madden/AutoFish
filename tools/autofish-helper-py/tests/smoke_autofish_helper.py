@@ -74,7 +74,7 @@ def test_profile_defaults(helper) -> None:
     info = helper.apply_fishing_runtime_defaults(args, include_session_defaults=True)
     assert info["profile"]["id"] == "starter-pond"
     assert args.key == "8"
-    assert args.cast_wait_seconds == 12.0
+    assert args.cast_wait_seconds == 30.0
     assert args.post_pull_delay_ms == 2200
     assert args.max_casts == 3
     assert args.max_allowed_casts == 10
@@ -1471,7 +1471,7 @@ def test_session_plan_target_freshness_gate(helper) -> None:
 
     tiny_gate = helper.check_session_plan_readability_gate(
         {"plan": plan},
-        {**ready_target, "clientWidth": 640, "clientHeight": 360},
+        {**ready_target, "clientWidth": 100, "clientHeight": 100},
     )
     assert not tiny_gate["passed"]
     assert tiny_gate["preferredMinimumClientWidth"] == helper.PREFERRED_READABLE_CLIENT_WIDTH

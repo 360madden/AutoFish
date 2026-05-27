@@ -35,7 +35,8 @@
         "reactionFloorMs": { "type": "integer", "minimum": 0 },
         "reactionCeilingMs": { "type": "integer", "minimum": 0 },
         "biteTimeoutMs": { "type": "integer", "minimum": 0 },
-        "lootTimeoutMs": { "type": "integer", "minimum": 0 }
+        "lootTimeoutMs": { "type": "integer", "minimum": 0 },
+        "interCastDelayMs": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },

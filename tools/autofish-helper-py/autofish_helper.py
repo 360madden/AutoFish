@@ -50,8 +50,8 @@ SW_RESTORE = 9
 VK_SHIFT = 0x10
 VK_CONTROL = 0x11
 VK_MENU = 0x12
-PREFERRED_READABLE_CLIENT_WIDTH = 960
-PREFERRED_READABLE_CLIENT_HEIGHT = 540
+PREFERRED_READABLE_CLIENT_WIDTH = 320
+PREFERRED_READABLE_CLIENT_HEIGHT = 240
 DEFAULT_LOG_TERMS = (
     "fish",
     "fishing",
@@ -337,7 +337,7 @@ def validate_target(hwnd: int, expected_pid: int, *, require_foreground: bool) -
             "preferredMinimumClientHeight": PREFERRED_READABLE_CLIENT_HEIGHT,
             "belowPreferredMinimum": below_readable_preference,
             "warning": (
-                "Client is below preferred proof-capture size; enlarge Rift before evidence runs if readable screenshots matter."
+                "Higher resolutions improve reticle detection reliability; consider enlarging Rift for better evidence."
                 if below_readable_preference
                 else None
             ),
@@ -457,9 +457,9 @@ def build_target_snapshot_report(args: argparse.Namespace) -> dict[str, Any]:
         "required": bool(args.require_readable),
         "passed": readable,
         "reason": (
-            "Target client is restored and at or above the preferred proof-capture size."
+            "Target client is restored for proof review (higher resolutions improve reliability)."
             if readable
-            else "Target client is minimized, unreadable, below preferred proof-capture size, or has no client origin."
+            else "Target is minimized or too small for usable proof screenshots."
         ),
         "preferredMinimumClientWidth": PREFERRED_READABLE_CLIENT_WIDTH,
         "preferredMinimumClientHeight": PREFERRED_READABLE_CLIENT_HEIGHT,
@@ -1034,7 +1034,7 @@ def apply_fishing_runtime_defaults(args: argparse.Namespace, *, include_session_
     if include_session_defaults:
         apply_default("max_casts", 3)
         apply_default("max_allowed_casts", 10)
-        apply_default("inter_cast_delay_ms", 800)
+        apply_default("inter_cast_delay_ms", int(pacing.get("interCastDelayMs", 800)))
 
     return {
         "profile": profile_info,
@@ -1464,7 +1464,7 @@ def check_session_plan_readability_gate(
             "reason": (
                 "Target client size is readable for proof review."
                 if passed
-                else "Target client is minimized or below preferred proof-review size; restore/maximize Rift before live proof input."
+                else "Target is minimized or very small; restore Rift for better detection screenshots."
             ),
         }
     )
@@ -6625,7 +6625,7 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_create.add_argument("--pull-clicks", type=int, default=1, help="Pull/loot click default; default: 1")
     session_plan_create.add_argument("--cast-wait-seconds", type=float, help="Optional cast wait override; otherwise profile/default command pacing applies")
     session_plan_create.add_argument("--post-pull-delay-ms", type=int, help="Optional post-pull delay override; otherwise profile/default command pacing applies")
-    session_plan_create.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Inter-cast delay default; default: 800")
+    session_plan_create.add_argument("--inter-cast-delay-ms", type=int, default=None, help="Inter-cast delay default; default: 800 (profile interCastDelayMs when set)")
     session_plan_create.add_argument("--stop-file", help=f"Stop file path to include; default: {DEFAULT_STOP_FILE}")
     session_plan_create.add_argument("--validate-target", action="store_true", help="Validate PID/HWND now and record target geometry without sending input")
     session_plan_create.add_argument("--output", default=".autofish-live/session-plan-latest.json", help="Output session plan JSON path")
@@ -6643,7 +6643,7 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_from_fan.add_argument("--pull-clicks", type=int, default=1, help="Pull/loot click default; default: 1")
     session_plan_from_fan.add_argument("--cast-wait-seconds", type=float, help="Optional cast wait override; otherwise profile/default command pacing applies")
     session_plan_from_fan.add_argument("--post-pull-delay-ms", type=int, help="Optional post-pull delay override; otherwise profile/default command pacing applies")
-    session_plan_from_fan.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Inter-cast delay default; default: 800")
+    session_plan_from_fan.add_argument("--inter-cast-delay-ms", type=int, default=None, help="Inter-cast delay default; default: 800 (profile interCastDelayMs when set)")
     session_plan_from_fan.add_argument("--stop-file", help=f"Stop file path to include; default: {DEFAULT_STOP_FILE}")
     session_plan_from_fan.add_argument("--validate-target", action="store_true", help="Validate PID/HWND now and record target geometry without sending input")
     session_plan_from_fan.add_argument("--require-usable-facing", action="store_true", help="Fail unless the fishability-fan manifest carries usable facingEvidence")

@@ -12,7 +12,8 @@
   "pacing": {
     "reactionFloorMs": 50,
     "reactionCeilingMs": 150,
-    "biteTimeoutMs": 10000,
+    "biteTimeoutMs": 30000,
+    "interCastDelayMs": 1500,
     "lootTimeoutMs": 1800
   },
   "thresholds": {

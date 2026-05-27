@@ -12,8 +12,9 @@
   "pacing": {
     "reactionFloorMs": 60,
     "reactionCeilingMs": 180,
-    "biteTimeoutMs": 12000,
-    "lootTimeoutMs": 2200
+    "biteTimeoutMs": 30000,
+    "lootTimeoutMs": 2200,
+    "interCastDelayMs": 1500
   },
   "thresholds": {
     "rebaitAtOrBelow": 5,
