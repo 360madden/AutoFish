@@ -1,0 +1,47 @@
+---
+globs:
+  - "contracts/*.json"
+  - "src/AutoFish.Contracts/**/*.cs"
+---
+
+# AutoFish — Contracts & Schema Conventions
+
+## Schema Inventory
+| Schema | Purpose |
+|---|---|
+| `bridge-command.schema.json` | Command envelope (start, pause, resume, stop, sync_profile, request_snapshot, ack) |
+| `bridge-envelope.schema.json` | Transport wrapper (messageType, contractVersion, issuedAtUtc, payload) |
+| `fishing-profile.schema.json` | Profile definition (pacing, thresholds, guardrails) |
+| `rift-observation.schema.json` | In-game observation data |
+| `session-status.schema.json` | Session state snapshots |
+
+## Baseline
+- **Current contract version:** `1.0.0` (set in `BridgeEnvelopeFactory.CurrentContractVersion`).
+- JSON Schemas use **draft 2020-12** (`$schema: https://json-schema.org/draft/2020-12/schema`).
+- All schemas enforce `"additionalProperties": false`.
+
+## Schema ↔ C# Model Sync
+- **Every JSON schema in `contracts/` must have a matching C# model in `src/AutoFish.Contracts/Models/`.**
+- C# models use **positional records** with `IReadOnlyList<T>` for arrays and nullable reference types.
+- Serialization uses `ContractJson.Options`: `JsonSerializerDefaults.Web`, `WriteIndented = true`, `DefaultIgnoreCondition = WhenWritingNull`.
+- Enums serialize as **snake_case_lower** via `JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false)`.
+
+## Versioning Policy (Semantic)
+- **Patch:** docs, comments, internal refactors — no payload shape changes.
+- **Minor:** additive, backward-compatible — new optional fields, new command types.
+- **Major:** breaking — removing/renaming fields, changing types, new required fields, enum meaning changes.
+
+## Consumer Rules
+- Ignore unknown fields.
+- Preserve existing required fields.
+- Continue operating when optional fields are absent.
+
+## Bridge Envelope
+- `BridgeEnvelope` wraps all messages with `messageType`, `contractVersion`, `issuedAtUtc`, `payload`.
+- `BridgeEnvelopeFactory.Create<TPayload>()` is the canonical creation path.
+
+## Change-Review Gate (before enabling live transport)
+1. Lua constants and C# contract models must align.
+2. JSON schemas must match the documented version policy.
+3. New payload fields must be optional unless intentionally breaking.
+4. Downgrade/unknown-field behavior must remain safe.

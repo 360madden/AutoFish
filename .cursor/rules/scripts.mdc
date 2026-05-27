@@ -1,0 +1,32 @@
+---
+globs: "scripts/*.ps1"
+---
+
+# AutoFish — PowerShell Script Conventions
+
+## Requirements
+- **PowerShell 7+ (`pwsh`)** required. Windows PowerShell 5.1 lacks `ConvertFrom-Json -Depth`.
+- All scripts must run from the repo root or resolve paths relative to `$PSScriptRoot`.
+
+## Established Patterns
+- **`$ErrorActionPreference = 'Stop'`** and **`Set-StrictMode -Version Latest`** at the top of every script.
+- **`Invoke-CheckedCommand`** pattern: wrap commands in a `[scriptblock]`, check `$LASTEXITCODE`, throw on failure.
+- **`Assert-CommandAvailable`** for optional dependencies (e.g., `luac`, `lua`).
+- **`Push-Location` / `Pop-Location`** in a `try`/`finally` block to restore the working directory.
+
+## Script Map
+| Script | Purpose |
+|---|---|
+| `run-local-checks.ps1` | Full offline validation: .NET build + profiles + Python + Lua |
+| `run-python-helper-checks.ps1` | Python-only: compile, smoke tests, doc validation, help surfaces |
+| `validate-profiles.ps1` | Profile JSON schema compliance and id uniqueness |
+| `deploy-addon.ps1` | Copy Lua addon to Rift addons directory |
+| `run-live-preflight.ps1` | Live: target discovery + focus + capture via RiftReader |
+| `start-live-fishing-prototype.ps1` | Live: supervised fishing prototype bootstrap |
+| `invoke-live-fishable-point-probe.ps1` | Live: fishable coordinate calibration |
+
+## Style
+- **PascalCase** for function names (`Validate-Profile`, `Test-IntegerProperty`).
+- **`param()` blocks** at the top with typed parameters and defaults.
+- **Descriptive error messages** including file paths and property names.
+- **Use `[System.Collections.Generic.List[string]]`** for collecting validation errors.

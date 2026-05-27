@@ -1,0 +1,40 @@
+---
+globs: "profiles/*.json"
+---
+
+# AutoFish — Profile Authoring Conventions
+
+## Schema
+Profiles conform to `contracts/fishing-profile.schema.json` (JSON Schema draft 2020-12, `additionalProperties: false`).
+
+## Required Fields
+Every profile must have: `id`, `displayName`, `zoneName`, `targetSkill`, `enabledSkills`, `pacing`, `thresholds`, `guardrails`.
+
+## Rules
+- **`id`:** lowercase + hyphens only (`^[a-z0-9-]+$`). Must be unique across all profiles.
+- **`enabledSkills`:** at least 1 entry. Typical values: `fishing`, `survival`, `cooking`.
+- **`pacing.reactionCeilingMs`** must be >= `reactionFloorMs`.
+- **All threshold values** must be non-negative integers.
+- **`notes`:** keep short and operational. Operator-facing guidance only.
+- **`guardrails`:** all three booleans required (`pauseOnCombat`, `pauseOnBridgeLoss`, `recoverOnDrift`).
+
+## Pacing → Proof Command Mapping
+- `pacing.biteTimeoutMs` → `--cast-wait-seconds` default.
+- `pacing.lootTimeoutMs` → `--post-pull-delay-ms` default.
+- CLI overrides always take precedence over profile defaults.
+
+## Validation
+```powershell
+.\scripts\validate-profiles.ps1
+```
+Run this after any profile change. It checks schema compliance, id uniqueness, and value constraints.
+
+## Python Helper Usage
+```powershell
+# By profile id (looks up profiles/ directory)
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast --profile starter-pond --dry-run
+
+# By JSON path (for testing new profiles before committing)
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast --profile profiles\my-new-profile.json --dry-run
+```
+The selected profile and applied defaults are written into the proof manifest.

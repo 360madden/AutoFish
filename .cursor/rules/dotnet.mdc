@@ -1,0 +1,30 @@
+---
+globs:
+  - "src/**/*.cs"
+  - "src/**/*.csproj"
+---
+
+# AutoFish — .NET Conventions
+
+## Project Structure
+- **`src/AutoFish.Contracts/`** — Active. C# models + serialization for bridge contracts. Target `net10.0`, implicit usings, nullable enabled.
+- **`src/AutoFish.App/`** — **Frozen legacy.** WinForms GUI kept for reference. Do not add new live-window automation here.
+
+## Code Style
+- **Positional records** for contract models (e.g., `public sealed record FishingProfile(...)`).
+- **`IReadOnlyList<T>`** for array properties — immutable by contract.
+- **Nullable reference types** enabled project-wide (`<Nullable>enable</Nullable>`).
+- **System.Text.Json** for all serialization. Use `ContractJson.Options` as the single source of truth.
+- **Snake_case_lower** enum serialization (`JsonStringEnumConverter` with `SnakeCaseLower`).
+
+## Validation
+```powershell
+dotnet build AutoFish.sln --configuration Release
+```
+Run `.\scripts\run-local-checks.ps1` to validate contracts + profiles + Python + Lua together.
+
+## What NOT To Do
+- Do not add new live-window automation to `AutoFish.App`.
+- Do not add Newtonsoft.Json — the project uses System.Text.Json exclusively.
+- Do not add mutable properties to contract models — records are sealed and immutable.
+- Do not change `CurrentContractVersion` without updating schemas and Lua constants.
