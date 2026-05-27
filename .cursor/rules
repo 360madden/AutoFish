@@ -1,6 +1,6 @@
 # AutoFish — Cursor Rules
 
-See `CLAUDE.md` for full agent instructions, commands, and hard constraints. The critical few:
+The critical few:
 
 1. **Never call `--confirm-input` without explicit user approval.** This project sends real keyboard/mouse input to a live game.
 2. **Python helper is monolithic** — `tools/autofish-helper-py/autofish_helper.py` is a single file. Do not split.
