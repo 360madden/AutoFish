@@ -3431,9 +3431,21 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                     "startedAtUtc": datetime.now(timezone.utc).isoformat(),
                     "actions": [],
                     "completed": False,
+                    "foregroundGuard": {
+                        "required": True,
+                        "passed": False,
+                    },
                 }
 
                 screen_x, screen_y = current_screen_point(require_foreground=True)
+                cast["foregroundGuard"] = {
+                    "required": True,
+                    "passed": True,
+                    "checkedAtUtc": datetime.now(timezone.utc).isoformat(),
+                    "foregroundWindow": hwnd_hex(int(user32.GetForegroundWindow())),
+                    "targetWindow": hwnd_hex(hwnd),
+                    "phase": "pre-cast",
+                }
                 move_cursor_to(screen_x, screen_y)
                 time.sleep(args.post_hover_delay_ms / 1000.0)
                 cast["actions"].append({"name": "move-cursor", "screenX": screen_x, "screenY": screen_y})
