@@ -1,5 +1,7 @@
 # AutoFish — Project Knowledge
 
+> **Agent note:** This file is the condensed reference for AI agents working on this repo. Read it first. Follow `CLAUDE.md` for agent-specific instructions and safety rules. The Python helper sends real keyboard/mouse input to a live game — never call `--confirm-input` without explicit user approval.
+
 ## What this project is
 
 AutoFish is a split-stack Rift fishing automation tool with four layers:

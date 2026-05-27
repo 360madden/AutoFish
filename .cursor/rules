@@ -1,0 +1,10 @@
+# AutoFish — Cursor Rules
+
+See `CLAUDE.md` for full agent instructions, commands, and hard constraints. The critical few:
+
+1. **Never call `--confirm-input` without explicit user approval.** This project sends real keyboard/mouse input to a live game.
+2. **Python helper is monolithic** — `tools/autofish-helper-py/autofish_helper.py` is a single file. Do not split.
+3. **Python stdlib only** — no pip packages. Windows-only.
+4. **Dry-run before confirm-input** for any command that sends input.
+5. **No `-` key** as input (bound to `reloadui`).
+6. **Run `.\scripts\run-local-checks.ps1 -SkipLuaChecks`** after Python changes, or `.\scripts\run-python-helper-checks.ps1` for quick checks.
