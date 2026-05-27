@@ -1,0 +1,62 @@
+---
+globs:
+  - "scripts/lua-smoke-tests.lua"
+  - "tools/autofish-helper-py/tests/*.py"
+---
+
+# AutoFish — Testing Conventions
+
+## Test Layers
+
+| Layer | Path | Runner | Scope |
+|---|---|---|---|
+| Python smoke | `tools/autofish-helper-py/tests/smoke_autofish_helper.py` | `python` directly | Module import, basic CLI dispatch, dry-run safety |
+| Python doc validation | `tools/autofish-helper-py/tests/validate_doc_commands.py` | `python` directly | Verifies documented commands exist in CLI args |
+| Python Lua slash validation | `tools/autofish-helper-py/tests/validate_lua_slash_commands.py` | `python` directly | Cross-references Lua slash commands with Python help |
+| Lua smoke | `scripts/lua-smoke-tests.lua` | `lua` | Exercising Lua modules in isolation |
+
+## Python Test Conventions
+
+- **Stdlib only.** No `pytest`, `unittest` external deps. Use Python's built-in `unittest` or plain `assert`.
+- **No live input.** Tests must never call `--confirm-input`. Dry-run path only.
+- **Smoke test (`smoke_autofish_helper.py`):** Verifies the helper module imports cleanly and top-level CLI dispatch works. Import check only — no live game interaction.
+- **Doc validation (`validate_doc_commands.py`):** Parses help output and verifies every documented subcommand resolves.
+- **Slash validation (`validate_lua_slash_commands.py`):** Reads Lua source for slash command registrations, cross-references against Python helper docs.
+- **New tests:** Add to `tools/autofish-helper-py/tests/`. Name with descriptive `snake_case.py`.
+- **If a test creates files:** Use `tempfile` and clean up in a `finally` block.
+
+## Lua Test Conventions
+
+- **Single smoke file:** `scripts/lua-smoke-tests.lua` exercises Lua module loading and basic assertions.
+- **No Rift API dependency.** Tests run outside the game; stub or skip any `Inspect.*` or game-specific calls.
+- **Output conventions:** Print `PASS:` / `FAIL:` lines for machine-readable results.
+- **Exit code:** Use `os.exit(0)` on all-pass; `os.exit(1)` on any failure.
+
+## Running Tests
+
+```powershell
+# Python-only checks (smoke + doc validation + help surfaces)
+.\scripts\run-python-helper-checks.ps1
+
+# Python smoke test alone
+python tools\autofish-helper-py\tests\smoke_autofish_helper.py
+
+# Lua syntax check (requires luac on PATH)
+luac -p lua/AutoFish/AutoFishAddon.lua
+
+# Lua smoke tests (requires lua on PATH)
+lua scripts\lua-smoke-tests.lua
+
+# Full validation (requires luac and lua)
+.\scripts\run-local-checks.ps1
+
+# Skip Lua if not installed
+.\scripts\run-local-checks.ps1 -SkipLuaChecks
+```
+
+## Test Creation Rules
+
+- **Test new behavior before or alongside implementation.** If a new signal, proof command, or Lua function is added, add a corresponding test.
+- **Run tests after changes.** Use `run-python-helper-checks.ps1` for Python changes; `lua scripts/lua-smoke-tests.lua` for Lua changes.
+- **Never modify smoke tests just to make them pass.** A failing smoke test indicates a real regression.
+- **Doc validation must pass.** If a new command is documented in `knowledge.md` but not yet implemented, either implement it or note it as planned.

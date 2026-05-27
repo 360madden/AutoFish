@@ -1,0 +1,64 @@
+---
+globs:
+  - ".github/**/*.yml"
+  - ".github/**/*.md"
+---
+
+# AutoFish — GitHub & CI Conventions
+
+## CI Workflow (`.github/workflows/ci.yml`)
+
+- **Trigger:** Push to `main`/`master` and all pull requests.
+- **Runner:** `windows-2025-vs2026` (Windows Server 2025 with Visual Studio 2026).
+- **Steps (in order):**
+  1. `actions/checkout@v6`
+  2. `dotnet --info` — show available SDKs
+  3. `dotnet build AutoFish.sln --configuration Release`
+  4. `pwsh .\scripts\validate-profiles.ps1`
+  5. `pwsh .\scripts\run-python-helper-checks.ps1`
+
+### CI Modification Rules
+
+- **Keep steps aligned with `scripts/run-local-checks.ps1`.** CI and local checks must validate the same artifacts.
+- **Use `shell: pwsh`** for PowerShell steps — the CI runner may not default to PowerShell 7.
+- **Do not add live-input steps.** CI never has a Rift client. No `--confirm-input`, no PID/HWND discovery.
+- **Action versions:** Pin major versions only (`@v6`, not `@v6.0.0`).
+- **Lua checks:** Not currently in CI (no `luac`/`lua` on the runner). Use `-SkipLuaChecks` locally if matching CI.
+
+## Issue Templates (`.github/ISSUE_TEMPLATE/`)
+
+### Bug Report (`bug_report.md`)
+- **Frontmatter:** `name: Bug report`, `labels: bug`
+- **Required sections:** Area (checkboxes for addon/helper/contracts/profiles), Description, Reproduction, Expected behavior
+
+### Feature Request (`feature_request.md`)
+- **Frontmatter:** `name: Feature request`, `labels: enhancement`
+- **Required sections:** Requested capability, Why it matters, Scope (checkboxes)
+
+### Config (`config.yml`)
+- **Blank issues disabled.** Users must choose a template.
+
+## Pull Request Template (`.github/PULL_REQUEST_TEMPLATE.md`)
+
+- Auto-populated for all PRs.
+- Keep sections brief and checklist-oriented.
+
+## Contributing (`CONTRIBUTING.md`)
+
+- **Before PR:** Run `.\scripts\run-local-checks.ps1`.
+- **Cross-layer changes:** Keep Lua, .NET, and schema changes aligned when bridge payloads change.
+- **Profile changes:** Keep profiles and helper-side loading aligned.
+- **Safety principle:** Lua addon remains fail-safe if helper disconnects. Helper is supervisory, not authoritative.
+
+## Copilot Instructions (`.github/copilot-instructions.md`)
+
+- Mirror of key rules from `AGENTS.md` for GitHub Copilot context.
+- Keep in sync with `AGENTS.md` when project rules change.
+- Focus on safety rules and architecture constraints.
+
+## What NOT to Do
+
+- Do not add secrets or tokens to workflow files — they are plaintext in the repo.
+- Do not add live-game steps to CI (no `--confirm-input`, no PID/HWND, no game client).
+- Do not disable blank issues in `config.yml` without a template for every issue type.
+- Do not change the CI runner OS without verifying `dotnet` and `pwsh` availability.

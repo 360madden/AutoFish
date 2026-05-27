@@ -1,0 +1,62 @@
+---
+globs:
+  - "docs/**/*.md"
+  - "*.md"
+  - "!.github/**"
+---
+
+# AutoFish — Documentation Conventions
+
+Documentation lives in `docs/` with subdirectories for different domains. Root-level markdown files (`README.md`, `AGENTS.md`, `knowledge.md`, `CONTRIBUTING.md`, `CHANGELOG.md`) are project-facing.
+
+## Doc Directory Map
+
+| Directory | Purpose |
+|---|---|
+| `docs/handoffs/` | Sequential live-run artifacts. Must follow `handoffs.mdc` conventions. |
+| `docs/live-validation/` | Live attempt records, signal proof results. Date-stamped filenames. |
+| `docs/development/` | Plans, calibration guides, proof lanes. |
+| `docs/research/` | Reference research, cross-reference JSON, archived external sources. Read-only. |
+| `docs/research/archive/` | Frozen historical sources. Do not modify. |
+
+## File Naming
+
+- **Date-stamped records** (handoffs, live-validation): `YYYY-MM-DD-<slug>.md`
+- **Guide/plan docs:** `kebab-case.md` (e.g., `prototype-first-workflow.md`, `helper-operator-guide.md`)
+- **Plans/probes:** `kebab-case.md` (e.g., `fishability-probe-plan.md`, `incremental-development-goals.md`)
+
+## Structure Conventions
+
+- **H1 (`#`)** is the document title — one per file.
+- **H2 (`##`)** for major sections; **H3 (`###`)** for subsections.
+- **Tables** preferred over bullet lists for structured data (signal classifications, gate definitions, file maps).
+- **Code blocks** must specify language: `powershell`, `lua`, `python`, `text`, `json`.
+- **Inline paths** use backtick format: `` `lua/AutoFish/Main.lua` ``.
+- **Evidence paths** reference `.autofish-live/` artifacts by relative path.
+
+## Tone
+
+- **Operational and direct.** Docs are operator-facing and agent-facing, not marketing.
+- **Present tense.** "The helper sends input" not "The helper will send input."
+- **Active voice.** "Run the command" not "The command should be run."
+- **Bullet lists** for operational steps; **paragraphs** for context and reasoning.
+
+## Cross-Referencing
+
+- Reference other docs by relative path: `docs/development/historical-signal-proof-lane.md`.
+- Reference schemas by identifier: `autofish.sessionPlan.v1`.
+- Reference contracts by file: `contracts/fishing-profile.schema.json`.
+
+## When to Create New Docs
+
+- **Handoff:** After every live work session that produced evidence or changed state.
+- **Live-validation record:** After proving or retiring a signal with current evidence.
+- **Development plan:** Before implementing a new proof lane or complex feature.
+- **Research notes:** When discovering API namespaces, external reference material, or game mechanics.
+
+## What NOT to Do
+
+- Do not create narrative-style docs during live iteration — use handoffs instead.
+- Do not duplicate information already in `knowledge.md` or `AGENTS.md` — link to them.
+- Do not edit archived external sources in `docs/research/archive/`.
+- Do not commit `.autofish-live/` contents — the directory is git-ignored.

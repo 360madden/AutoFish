@@ -1,0 +1,74 @@
+---
+globs: "docs/handoffs/*.md"
+---
+
+# AutoFish — Handoff Conventions
+
+Handoff artifacts are sequential records of live-run state that bridge work sessions. They live in `docs/handoffs/`.
+
+## Naming
+
+```
+handoff-YYYY-MM-DD-HHMMSS-<slug>.md
+```
+
+- **Timestamp:** UTC date/time when the handoff was written.
+- **Slug:** lowercase-hyphenated summary of the handoff's focus (e.g., `autofish-compact`, `python-proof-lane`, `cast-start-revelation`).
+- **Latest handoff:** Always the most recent by timestamp. Sort the directory; read the last file.
+
+## Required Sections
+
+Every handoff must include these minimum sections. Additional sections are allowed after the required set.
+
+| Section | Purpose |
+|---|---|
+| `# Title` | `AutoFish [compact] handoff - <one-line summary>` |
+| `Date:` | `YYYY-MM-DD HH:MM ±TZ` |
+| `Repo:` | Local path |
+| `Branch:` | Active branch |
+| `Remote:` | Remote URL |
+| `## TL;DR` | 2–4 sentence summary of current state, blocker, and next action |
+| `## Current blocker` | **When blocked:** specific gate that failed, evidence, and resolution steps. **When unblocked:** use `## Current direction` instead — summarize the active lane and recent progress. |
+| `## Evidence written` | Paths to `.autofish-live/` artifacts produced (or note that none were) |
+| `## Commands already run` | Exact commands executed, with placeholders for stale PID/HWND |
+| `## Sequential progress snapshot` | ASCII progress bar checklist (e.g., `[x] 1. ... [ ] 2. ...`) |
+| `## Next unblocked action` / `## Recommended next live sequence` | Specific, copy-pasteable command sequence to resume |
+| `## Current classifications` | Signal classification table (e.g., `reticle/cursor: fallback-only`) |
+| `## Safety reminders` | Bullet list of non-negotiable constraints specific to the current state. Singular `## Safety reminder` also acceptable. |
+
+## Classification Table Convention
+
+Use a classification-pair table:
+
+```markdown
+| Signal | Classification |
+|---|---|
+| reticle/cursor | fallback-only |
+| native water detection | needs-more-evidence |
+| facing detection | needs-more-evidence |
+```
+
+Valid classifications: `promote`, `fallback-only`, `retire`, `needs-more-evidence`, `blocked`.
+
+## Command Placeholders
+
+Never include real PID/HWND values in committed handoffs. Use placeholders:
+
+```markdown
+--pid <CURRENT_RIFT_PID>
+--hwnd <CURRENT_RIFT_HWND>
+```
+
+## Evidence Paths
+
+- All live evidence goes to `.autofish-live/` (git-ignored).
+- Handoffs reference evidence by relative path from repo root.
+- Never commit `.autofish-live/` contents.
+
+## Style
+
+- **Use `<!-- omit in toc -->`** if the handoff has a table of contents.
+- **Code blocks** must specify language: `powershell`, `text`, `markdown`.
+- **Keep sections tight.** Handoffs are operational artifacts, not narrative docs.
+- **Sequential checklist** uses `[x]` for complete, `[ ]` for pending, `[!]` for blocked.
+- **Blocked steps** include the reason after `BLOCKED:`.
