@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+
+# AutoFish — General Conventions
+
+Read `AGENTS.md` first — it's the canonical agent instruction file. `knowledge.md` has the full project reference.
+
+## Code Style
+- **Match existing conventions in surrounding code exactly.**
+- **No `any` type casts** (or equivalent in Lua/Python).
+- **Remove dead code** when replacing functionality.
+- **Imports:** Always add necessary imports; remove unused ones.
+- **Testing:** If you create a unit test, run it to verify it passes.
+
+## Project Rules (not covered by other .mdc files)
+- **.NET app (`src/AutoFish.App/`) is frozen legacy.** Do not add new live-window automation there.
+- **Contracts must stay in sync.** Changes to `contracts/` schemas must match `src/AutoFish.Contracts/Models/` C# models.
+- **Profile-driven defaults.** `profiles/*.json` provide timing/pacing defaults via `--profile <id>`.
+- **Live evidence is git-ignored.** All proof output → `.autofish-live/`. Never commit it.

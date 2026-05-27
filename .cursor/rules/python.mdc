@@ -1,0 +1,21 @@
+---
+globs: "tools/autofish-helper-py/**/*.py"
+---
+
+# AutoFish — Python Conventions
+
+## Architecture
+- **Monolithic:** `autofish_helper.py` is a single ~9k line file. Do not split into modules without discussion.
+- **Stdlib only.** No pip packages. All imports from Python standard library (`ctypes`, `argparse`, `json`, `struct`, `hashlib`, `wave`, `urllib`, etc.).
+- **Windows-only.** Guarded by `os.name == "nt"` at module level.
+
+## Style
+- **Type hints preferred** for new code (not required everywhere in the existing 9k-line monolith).
+- **Match existing patterns.** Follow internal helper function conventions in the monolith.
+- **PowerShell 7+ (`pwsh`)** required for live scripts. Windows PowerShell 5.1 lacks `ConvertFrom-Json -Depth`.
+
+## Validation
+```powershell
+.\scripts\run-python-helper-checks.ps1     # Python: compile, smoke, doc validation, help surfaces
+.\scripts\run-local-checks.ps1 -SkipLuaChecks  # Skip Lua if working on Python-only changes
+```

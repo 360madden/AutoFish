@@ -1,6 +1,8 @@
 # AutoFish — Project Knowledge
 
-> **Agent note:** This file is the condensed reference for AI agents working on this repo. Read it first. The Python helper sends real keyboard/mouse input to a live game — never call `--confirm-input` without explicit user approval.
+> **Agent note:** This is the detailed project reference. For agent instructions (safety rules, architecture, conventions), read `AGENTS.md` first. This file provides the full command reference, file map, and deeper gotchas.
+>
+> **Critical:** The Python helper sends real keyboard/mouse input to a live game — never call `--confirm-input` without explicit user approval.
 
 ## What this project is
 

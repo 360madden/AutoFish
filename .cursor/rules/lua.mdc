@@ -1,0 +1,24 @@
+---
+globs: "lua/AutoFish/**/*.lua"
+---
+
+# AutoFish — Lua Conventions
+
+## Architecture
+- **Modular.** Split into `Bridge/`, `Core/`, `UI/` subdirectories with clear responsibilities.
+- **Entrypoint:** `Main.lua` — slash command routing.
+- **Core logic:** `AutoFishAddon.lua` — observation, decision rules, state management.
+- **Bridge layer:** `Bridge/` — command normalizer, message bus, contracts, envelope builder.
+- **Core layer:** `Core/` — state machine, guardrails, observation, session state, profile runtime.
+- **UI layer:** `UI/` — Controller, Layout, ViewModel.
+
+## Style
+- Follow the module pattern established in `AutoFishAddon.lua`.
+- Respect the existing bridge and state-machine architecture.
+- Use slash commands for in-game interaction.
+
+## Validation
+```powershell
+luac -p lua/AutoFish/AutoFishAddon.lua      # Syntax check
+lua scripts/lua-smoke-tests.lua              # Smoke tests
+```

@@ -1,0 +1,25 @@
+---
+alwaysApply: true
+---
+
+# AutoFish — Safety Rules
+
+These rules are **non-negotiable** and apply to every file in the project.
+
+## Input-Sending Rules (highest severity)
+
+1. **Never call `--confirm-input` without explicit user approval.** The Python helper sends real keyboard/mouse input to a live Rift game client.
+2. **Always dry-run before confirm-input.** Every proof command requires `--dry-run` first.
+3. **Exact PID and HWND always.** No live command without validated PID and HWND.
+4. **No `-` (dash) key as input.** It's bound to `reloadui` and will disrupt the session.
+
+## Session-Control Rules
+
+5. **No unattended loops.** Only supervised bounded sessions.
+6. **Stop file is sacred.** If `.autofish-live/STOP.txt` exists, bounded-session and one-cast abort before the next action.
+7. **Session plans expire.** Max age 240 minutes. Never reuse a session plan after Rift restart or resize — stale PID/HWND could send input to the wrong window.
+
+## Window & External Rules
+
+8. **Minimized windows refused.** Live-input commands refuse to restore minimized Rift windows. Restore/maximize Rift manually first.
+9. **No ChromaLink modification.** Read-only via `http://127.0.0.1:7337`.
