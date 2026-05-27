@@ -34,7 +34,7 @@ AutoFish is a **Rift fishing automation tool** with a split stack:
 
 - **Python helper is monolithic.** `autofish_helper.py` stays as one file. Do not split into modules without discussion.
 - **Python stdlib only.** No pip packages. Windows-only (`os.name == "nt"` guard).
-- **PowerShell 7+ (`pwsh`)** required for live scripts. Windows PowerShell 5.1 lacks `ConvertFrom-Json -Depth`.
+- **Python 3.x** required for all scripts. No PowerShell dependencies remain in the project scripts.
 - **Lua addon is modular.** Respect the existing `Bridge/`, `Core/`, `UI/` split.
 - **.NET app is frozen.** Do not add new live-window automation there.
 - **Contracts are shared.** Changes to schemas in `contracts/` must stay in sync with C# models in `src/AutoFish.Contracts/Models/`.
@@ -47,14 +47,9 @@ AutoFish is a **Rift fishing automation tool** with a split stack:
 
 ### Validate changes before committing
 ```powershell
-.\scripts\run-local-checks.ps1                     # Full: .NET + profiles + Python + Lua
-.\scripts\run-local-checks.ps1 -SkipLuaChecks      # Skip Lua if luac/lua not installed
-.\scripts\run-python-helper-checks.ps1              # Python only: compile, smoke, docs, help
-```
-
-### Profile validation
-```powershell
-.\scripts\validate-profiles.ps1
+python scripts/run_local_checks.py                  # Full: .NET + profiles + Python + Lua
+python scripts/run_local_checks.py --skip-lua       # Skip Lua if luac/lua not installed
+python scripts/run_python_checks.py                 # Python only: compile, smoke, docs, help
 ```
 
 ### Lua checks
@@ -70,7 +65,7 @@ lua scripts/lua-smoke-tests.lua
 - **Type hints preferred** in Python (not required everywhere in the 9k-line monolith, but add them to new code).
 - **Match existing style.** Follow the patterns in surrounding code exactly.
 - **Lua:** Follow the module pattern in `AutoFishAddon.lua` and the bridge/state-machine architecture.
-- **Profiles:** `profiles/*.json` — schema-driven; validate with `validate-profiles.ps1`.
+- **Profiles:** `profiles/*.json` — schema-driven; validate with `scripts/run_local_checks.py --skip-lua`.
 - **Handoffs:** Sequential artifacts live in `docs/handoffs/` and record live-run state.
 - **Live evidence:** All proof output goes to `.autofish-live/` (git-ignored). Never commit it.
 

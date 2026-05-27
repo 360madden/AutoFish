@@ -6,7 +6,7 @@
 ## Checks
 
 - [ ] `dotnet build AutoFish.sln --configuration Release`
-- [ ] `.\scripts\validate-profiles.ps1`
+- [ ] `python scripts/run_local_checks.py`
 - [ ] Lua syntax/smoke checks
 
 ## Notes

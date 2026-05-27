@@ -16,7 +16,7 @@ The repository now contains:
 
 - `C:\RIFT MODDING\AutoFish\lua\AutoFish\RiftAddon.toc`
 - `C:\RIFT MODDING\AutoFish\lua\AutoFish\Main.lua`
-- `C:\RIFT MODDING\AutoFish\scripts\deploy-addon.ps1`
+- `C:\RIFT MODDING\AutoFish\scripts\deploy_addon.py`
 
 These files provide a live-loadable shell for diagnostics only. They are not yet treated as a completed fishing implementation.
 

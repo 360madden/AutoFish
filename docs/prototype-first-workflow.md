@@ -66,24 +66,19 @@ Everything else is optional until the prototype catches fish.
 
 ## Working prototype target
 
-The next concrete target is a helper-side script:
+The next concrete target is a Python helper command:
 
 ```powershell
-scripts\start-live-fishing-prototype.ps1 `
-  -TargetProcessId <pid> `
-  -TargetWindowHandle <hwnd> `
-  -ClientX <fishable-x> `
-  -ClientY <fishable-y> `
-  -FishingKey 8 `
-  -MaxCasts 1 `
-  -DryRun
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast `
+  --session-plan .autofish-live\session-plan-latest.json `
+  --dry-run
 ```
 
 Then:
 
-1. run `-DryRun`,
-2. run `-MaxCasts 1`,
-3. if one catch works, run `-MaxCasts 3`,
+1. run `--dry-run`,
+2. run `--confirm-input` for one cast,
+3. if one catch works, run `bounded-session --max-casts 3`,
 4. only then add better signal detection.
 
 ## Definition of progress
@@ -137,21 +132,20 @@ Treat every historical method as **stale until proven current**. Use `docs/devel
 
 ## Near-term implementation order
 
-1. Keep `scripts\invoke-live-fishable-point-probe.ps1` for coordinate proof.
-2. Add `scripts\start-live-fishing-prototype.ps1`.
-3. Support `-DryRun`, `-MaxCasts`, `-CastWaitSeconds`, and post-key/pull delay settings.
-4. Run one calibrated point through one cast.
-5. Tune timing.
-6. Run three capped casts.
-7. Only then integrate addon status and advisory mode.
+1. Use `python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast` for single-cast proof.
+2. Support `--dry-run`, `--max-casts`, `--cast-wait-seconds`, and post-key/pull delay settings.
+3. Run one calibrated point through one cast.
+4. Tune timing.
+5. Run three capped casts via `bounded-session`.
+6. Only then integrate addon status and advisory mode.
 
-Current script status:
+Current tool status:
 
-- `scripts\invoke-live-fishable-point-probe.ps1` exists for proving/calibrating a point.
-- `scripts\start-live-fishing-prototype.ps1` exists for bounded click/key/click/wait/pull runs.
-- Always run the prototype script with `-DryRun` before a real cast at a new coordinate.
-- Use `-SkipInitialClick` for the simpler key-then-click sequence if click/key/click does not cast.
-- Use `-ActionClientX/-ActionClientY` to click the visible rod action slot directly if the keybind path is uncertain.
+- `python tools/autofish-helper-py/autofish_helper.py target-snapshot` for no-input PID/HWND validation.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof one-cast` for single bounded cast proof.
+- `python tools/autofish-helper-py/autofish_helper.py signal-proof bounded-session` for bounded multi-cast sessions.
+- Always run with `--dry-run` before a real cast at a new coordinate.
+- Use `--session-plan .autofish-live\session-plan-latest.json` to carry PID/HWND/fishable-point between commands.
 
 ## Non-negotiable stop line
 

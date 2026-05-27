@@ -53,8 +53,8 @@ jobs:
         run: |
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
           if (Get-Command luac -ErrorAction SilentlyContinue) {
-            .\scripts\run-local-checks.ps1
+            python scripts/run_local_checks.py
           } else {
             Write-Warning "luac not found; skipping Lua checks"
-            .\scripts\run-local-checks.ps1 -SkipLuaChecks
+            python scripts/run_local_checks.py --skip-lua
           }

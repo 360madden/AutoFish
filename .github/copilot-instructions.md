@@ -15,14 +15,13 @@ This project is a Rift fishing automation tool. Read `AGENTS.md` for the full ag
 
 ## Key Constraints
 - Python: stdlib only, no pip packages, Windows-only.
-- PowerShell 7+ required for live scripts.
+- Python 3.x required for all scripts. No PowerShell dependencies remain in project scripts.
 - No `-` (dash) key as input (bound to `reloadui`).
 - Minimum readable window: 960×540 client area.
 - Session plans expire after 240 minutes.
 
 ## Validation
 ```powershell
-.\scripts\run-local-checks.ps1 -SkipLuaChecks     # Python-only changes
-.\scripts\run-python-helper-checks.ps1              # Quick Python checks
-.\scripts\validate-profiles.ps1                     # Profile validation
+python scripts/run_local_checks.py --skip-lua    # Python-only changes
+python scripts/run_python_checks.py              # Quick Python checks
 ```

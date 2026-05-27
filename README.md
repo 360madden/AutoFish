@@ -77,7 +77,7 @@ Use `docs/prototype-first-workflow.md` for live work. It is the active rule set 
 - `docs/addon-architecture.md` - addon module map.
 - `docs/prototype-first-workflow.md` - live prototype-first workflow that prevents process drift.
 - `docs/python-helper-pivot.md` - Python-first helper direction and migration rules.
-- `scripts/run-local-checks.ps1` - one-command offline verification.
+- `scripts/run_local_checks.py` - one-command offline verification (Python).
 
 ## Runtime responsibilities
 
@@ -134,25 +134,25 @@ dotnet build AutoFish.sln --configuration Release
 ### Validate fishing profiles
 
 ```powershell
-.\scripts\validate-profiles.ps1
+python scripts/run_local_checks.py --skip-lua
 ```
 
 ### Run all local checks
 
 ```powershell
-.\scripts\run-local-checks.ps1
+python scripts/run_local_checks.py
 ```
 
-This now includes the Python helper smoke checks. If local `lua`/`luac` are not installed and the current change is intentionally non-Lua, use:
+This includes the Python helper smoke checks. If local `lua`/`luac` are not installed and the current change is intentionally non-Lua, use:
 
 ```powershell
-.\scripts\run-local-checks.ps1 -SkipLuaChecks
+python scripts/run_local_checks.py --skip-lua
 ```
 
 ### Run Python helper checks only
 
 ```powershell
-.\scripts\run-python-helper-checks.ps1
+python scripts/run_python_checks.py
 ```
 
 ### Launch the legacy helper GUI
@@ -201,16 +201,14 @@ Current blocker:
 - current-client `/log` proof is blocked until a known enabled Rift log path/config is found
 - no native `Inspect.Cursor` or `Inspect.Interaction` API was found for fishable-hover detection, so cursor/fishable-point calibration remains helper/operator driven
 
-Useful live scripts:
+Useful live commands (Python helper):
 
 ```powershell
-.\scripts\run-live-preflight.ps1 -ExpectedProcessId <pid> -ExpectedWindowHandle <hwnd> -Focus -Capture
+python tools\autofish-helper-py\autofish_helper.py target-snapshot --pid <pid> --hwnd <hwnd> --require-readable
 
-.\scripts\invoke-live-fishable-point-probe.ps1 -TargetProcessId <pid> -TargetWindowHandle <hwnd> -ClientX <x> -ClientY <y> -DryRun
+python tools\autofish-helper-py\autofish_helper.py signal-proof one-cast --session-plan .autofish-live\session-plan-latest.json --dry-run
 
-.\scripts\invoke-live-fishable-point-probe.ps1 -TargetProcessId <pid> -TargetWindowHandle <hwnd> -ClientX <x> -ClientY <y>
-
-.\scripts\start-live-fishing-prototype.ps1 -TargetProcessId <pid> -TargetWindowHandle <hwnd> -ClientX <x> -ClientY <y> -MaxCasts 1 -DryRun
+python tools\autofish-helper-py\autofish_helper.py signal-proof bounded-session --session-plan .autofish-live\session-plan-latest.json --max-casts 1 --dry-run
 ```
 
 Next live gate: use the expanded API probes plus one visibly successful manual catch/loot cycle to decide whether native inventory/chat/progression signals can prove success. Until then, unattended loops remain out of scope.

@@ -28,10 +28,9 @@ The Python helper is the **primary active development surface**. The Lua addon i
 | `src/AutoFish.Contracts/Models/` | C# contract models (BridgeCommand, SessionStatus, etc.) |
 | `contracts/` | JSON Schemas for bridge messages and profiles |
 | `profiles/` | Versioned fishing profiles (shoreline-grind.json, starter-pond.json, etc.) |
-| `scripts/run-local-checks.ps1` | One-command offline validation (build + profiles + Python + Lua) |
-| `scripts/run-python-helper-checks.ps1` | Python-only checks (compile, smoke, doc validation, help surfaces) |
-| `scripts/run-live-preflight.ps1` | Live target discovery + focus + capture via RiftReader |
-| `scripts/deploy-addon.ps1` | Copy Lua addon to Rift addons directory |
+| `scripts/run_local_checks.py` | One-command offline validation (build + profiles + Python + Lua) |
+| `scripts/run_python_checks.py` | Python-only checks (compile, smoke, doc validation, help surfaces) |
+| `scripts/deploy_addon.py` | Copy Lua addon to Rift addons directory |
 | `docs/handoffs/` | Sequential handoff artifacts for live proof-pack runs |
 | `.autofish-live/` | **Git-ignored** live evidence directory (target discovery, snapshots, proof manifests, session plans) |
 
@@ -39,9 +38,9 @@ The Python helper is the **primary active development surface**. The Lua addon i
 
 ### Offline validation (run before PRs)
 ```powershell
-.\scripts\run-local-checks.ps1                     # Full: .NET build + profiles + Python + Lua
-.\scripts\run-local-checks.ps1 -SkipLuaChecks      # Skip Lua if luac/lua not installed
-.\scripts\run-python-helper-checks.ps1              # Python only: compile, smoke, doc validation, help surfaces
+python scripts/run_local_checks.py                  # Full: .NET build + profiles + Python + Lua
+python scripts/run_local_checks.py --skip-lua       # Skip Lua if luac/lua not installed
+python scripts/run_python_checks.py                 # Python only: compile, smoke, doc validation, help surfaces
 ```
 
 ### .NET build (legacy)
@@ -52,7 +51,7 @@ dotnet run --project src/AutoFish.App/AutoFish.App.csproj
 
 ### Profile validation
 ```powershell
-.\scripts\validate-profiles.ps1
+python scripts/run_local_checks.py --skip-lua
 ```
 
 ### Lua syntax/smoke (requires `luac` and `lua` on PATH)
@@ -130,9 +129,8 @@ python tools\autofish-helper-py\autofish_helper.py doctor --proof-root .autofish
 - Summaries and doctor commands aggregate manifests from a proof root directory.
 
 ### Shell requirements
-- **PowerShell 7+ (`pwsh`)** required for live scripts. Windows PowerShell 5.1 lacks `ConvertFrom-Json -Depth`.
 - Python 3.x required. No external pip packages needed (stdlib only: `ctypes`, `argparse`, `json`, `struct`, `hashlib`, `wave`, `urllib`, etc.).
-- `luac` and `lua` required for Lua checks; skip with `-SkipLuaChecks` if working on Python-only changes.
+- `luac` and `lua` required for Lua checks; skip with `--skip-lua` if working on Python-only changes.
 
 ### Historical signals are stale until proven
 The project treats all historical Rift fishing methods (cursor-change, `/log`, pixel checks, audio, fixed hotbar/bag) as **stale** until locally proven with current evidence. See `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md`.

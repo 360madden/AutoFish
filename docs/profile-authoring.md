@@ -29,7 +29,7 @@ Fishing profiles let the helper and addon share leveling-oriented behavior witho
 Run:
 
 ```powershell
-.\scripts\validate-profiles.ps1
+python scripts/run_local_checks.py --skip-lua
 ```
 
 ## Python helper usage

@@ -15,7 +15,7 @@ AutoFish is a split-stack project:
 Run the offline checks that are currently expected to pass:
 
 ```powershell
-.\scripts\run-local-checks.ps1
+python scripts/run_local_checks.py
 ```
 
 ## Contribution guidelines
