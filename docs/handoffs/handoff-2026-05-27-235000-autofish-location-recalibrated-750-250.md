@@ -24,6 +24,8 @@ Player moved to a new shoreline location. Ran the full autonomous pipeline from 
 | boundedSession decision (10-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
 | Bounded session (10 casts) | **10/10 clean** — 94-154 blueCyan after key, 0 red on every cast | `signal-proof-bounded-session-20260527-203223` |
 | boundedSession decision (10-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
+| Bounded session (10 casts) | **10/10 clean** — 92-103 blueCyan after key, 0 red on every cast | `signal-proof-bounded-session-20260527-204759` |
+| boundedSession decision (10-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
 
 ### Review Scope `afscope-8e7df4f3de737c15`
 
@@ -50,7 +52,7 @@ Cast 7:   199                   127                 0     ✅ 30s → pull
 Cast 8:   204                   132                 0     ✅ 30s → pull
 ```
 
-**32 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal across all sessions.
+**52 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal across all sessions.
 
 ### 10-Cast Bounded Session (20260527-202423)
 
@@ -84,17 +86,17 @@ Cast 9:   101                   31                 0     ✅ 30s → pull
 Cast 10:  101                   32                 0     ✅ 30s → pull
 ```
 
-All **32 casts clean** at (750, 250) — zero red reticle on every single one across 4 confirmed bounded sessions + 1 one-cast.
+All **52 casts clean** at (750, 250) — zero red reticle on every single one across 6 confirmed bounded sessions + 1 one-cast.
 
 ---
 
 ## What Changed
 
-- **New session plan**: `session-plan-750-250.json` (scope `afscope-8e7df4f3de737c15`)
-- **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote`
+- **Session plan**: `session-plan-750-250.json` (scope `afscope-8e7df4f3de737c15`)
+- **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote` (×6)
 - **No code changes** — all existing code from commit `61f6d6f` was sufficient
-- **ChromaLink stale** (player position 3114+ seconds old) — couldn't determine new facing direction
-- **Total manifests**: **100** (up from 65) - boundedSession=28, oneCast=14, reticle=16, chromalink=20, facingDelta=11, fishabilityFan=5, slash=6
+- **ChromaLink stale** — couldn't determine facing at new location
+- **Total manifests**: **105** — boundedSession=31, oneCast=14, reticle=16, chromalink=22, facingDelta=11, fishabilityFan=5, slash=6
 - **Old scopes** (all stale): `afscope-3711d8fdafbf50fd` (640, 360), `afscope-2a3942a0cef4bcf8` (640, 200)
 
 ---
@@ -109,8 +111,10 @@ All **32 casts clean** at (750, 250) — zero red reticle on every single one ac
 | Bounded session 3-cast | `.autofish-live/signal-proof-bounded-session-20260527-200722/manifest.json` |
 | Bounded session 8-cast | `.autofish-live/signal-proof-bounded-session-20260527-201205/manifest.json` |
 | Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-202423/manifest.json` |
+| Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-203223/manifest.json` |
+| Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-204759/manifest.json` |
 | Fan probe | `.autofish-live/signal-proof-fishability-fan-20260527-195307/manifest.json` |
-| Summary (100 manifests) | `.autofish-live/signal-proof-summary-20260527-203837/summary.md` |
+| Summary (105 manifests) | `.autofish-live/signal-proof-summary-20260527-205403/summary.md` |
 
 ---
 
@@ -130,4 +134,4 @@ All **32 casts clean** at (750, 250) — zero red reticle on every single one ac
 - [x] ~~Promote boundedSession decision~~ ✅ **Done — both oneCast and boundedSession promoted**
 - [ ] **Run ChromaLink** for fresh player position at new location (requires `/loc` or ChromaLink refresh)
 - [ ] **Run facing-delta** proof to determine actual facing from new position
-- [x] ~~Run 10-cast max session at (750, 250)~~ ✅ **Done — 10/10 clean, zero red**
+- [x] ~~Run 10-cast max session at (750, 250)~~ ✅ **Done — 10/10 clean, zero red (×3)**
