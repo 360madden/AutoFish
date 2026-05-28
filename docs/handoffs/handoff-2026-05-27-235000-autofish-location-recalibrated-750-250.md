@@ -54,7 +54,7 @@ Cast 7:   199                   127                 0     ✅ 30s → pull
 Cast 8:   204                   132                 0     ✅ 30s → pull
 ```
 
-**62 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal across all sessions.
+**52 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal across all sessions.
 
 ### 10-Cast Bounded Session (20260527-202423)
 
@@ -104,7 +104,7 @@ Cast 9:   106                   33                 0     ✅ 30s → pull
 Cast 10:  99                    29                 0     ✅ 30s → pull
 ```
 
-All **62 casts clean** at (750, 250) — zero red reticle on every single one across 6 confirmed bounded sessions + 1 one-cast.
+All **52 casts clean** at (750, 250) — zero red reticle on every single one across 6 confirmed bounded sessions + 1 one-cast.
 
 ---
 
