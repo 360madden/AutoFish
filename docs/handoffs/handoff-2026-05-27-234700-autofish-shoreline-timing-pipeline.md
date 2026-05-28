@@ -45,8 +45,8 @@ This session made **3 bulk profile timing updates**, **lowered the readability t
 | `profiles/shoreline-grind.json` | `biteTimeoutMs` 10000→30000, added `interCastDelayMs: 1500` |
 | `profiles/vendor-recovery-loop.json` | `biteTimeoutMs` 14000→30000, added `interCastDelayMs: 1500` |
 | `contracts/fishing-profile.schema.json` | Added `interCastDelayMs` to pacing schema |
-| `tools/autofish-helper-py/autofish_helper.py` | Reads `interCastDelayMs` from profile; lowered readability 960×540→320×240; updated warning text |
-| `tools/autofish-helper-py/tests/smoke_autofish_helper.py` | Updated readability gate test (640×360 → 100×100) and retitle screen default |
+| Python helper | Reads `interCastDelayMs` from profile; lowered readability 960×540→320×240; updated warning text |
+| Smoke tests | Updated readability gate test (640×360 → 100×100) and retitle screen default |
 
 ---
 
