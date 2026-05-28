@@ -5,8 +5,8 @@
 **Commit**: `61f6d6f` (feat: unify profile timing to 30s bite timeout with 1.5s inter-cast delay)
 **Latest commit**: `76f28fc` (feat: improve reticle heuristic — skip manual review when blueCyan dominant and red < 20)
 
-> **Newest session**: +10 casts (215609), 12 bounded sessions, 127 manifests total
-> **Milestone**: **100 total clean casts** at (750, 250) 🎉
+> **Newest session**: +10 casts (220639), 13 bounded sessions, 130 manifests total
+> **Milestone**: **110 total clean casts** at (750, 250) 🎉
 **Rift**: PID 3140, HWND `0x508AE`, 1280×720
 
 ---
@@ -44,6 +44,8 @@ Player moved to a new shoreline location. Ran the full autonomous pipeline from 
 | boundedSession decision (10-cast) | **`promote`** ✅ (12th) | `signal-proof-decisions.json` |
 | Bounded session (10 casts) | **10/10 clean** — 37-251 blueCyan, 0 red on every cast, 100 total milestone | `signal-proof-bounded-session-20260527-215609` |
 | boundedSession decision (10-cast) | **`promote`** ✅ (13th) | `signal-proof-decisions.json` |
+| Bounded session (10 casts) | **10/10 clean** — 73-83 blueCyan after key, 0 red on every cast, 110 total milestone | `signal-proof-bounded-session-20260527-220639` |
+| boundedSession decision (10-cast) | **`promote`** ✅ (14th) | `signal-proof-decisions.json` |
 
 ### Review Scope `afscope-8e7df4f3de737c15`
 
@@ -152,17 +154,17 @@ Cast 9:   84                    12                 0     ✅ 30s → pull
 Cast 10:  88                    14                 0     ✅ 30s → pull
 ```
 
-All **100 casts clean** at (750, 250) — zero red reticle on every single one across 12 confirmed bounded sessions + 1 one-cast.
+All **110 casts clean** at (750, 250) — zero red reticle on every single one across 13 confirmed bounded sessions + 1 one-cast.
 
 ---
 
 ## What Changed
 
 - **Session plan**: `session-plan-750-250.json` (scope `afscope-8e7df4f3de737c15`)
-- **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote` (×12)
+- **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote` (×13)
 - **Code change**: `choose_reticle_color()` improved — when blueCyan dominant AND red < 20, return `blueCyan` + `manualReviewRequired=False` instead of noisy `unknown` + `manualReviewRequired=True`. Validated with 3-cast session: all captures now show `suggested=blueCyan` instead of `unknown`.
 - **ChromaLink stale** — couldn't determine facing at new location
-- **Total manifests**: **127** — boundedSession=39, chromalinkWorldState=34, oneCast=14, reticle=16, facingDelta=12, slash=7, fishabilityFan=5
+- **Total manifests**: **130** — boundedSession=40, chromalinkWorldState=36, oneCast=14, reticle=16, facingDelta=12, slash=7, fishabilityFan=5
 - **Old scopes** (all stale): `afscope-3711d8fdafbf50fd` (640, 360), `afscope-2a3942a0cef4bcf8` (640, 200)
 
 ---
@@ -187,7 +189,8 @@ All **100 casts clean** at (750, 250) — zero red reticle on every single one a
 | Bounded session 5-cast | `.autofish-live/signal-proof-bounded-session-20260527-213542/manifest.json` |
 | Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-214126/manifest.json` |
 | Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-215609/manifest.json` |
-| Summary (127 manifests) | `.autofish-live/signal-proof-summary-20260527-220211/summary.md` |
+| Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-220639/manifest.json` |
+| Summary (130 manifests) | `.autofish-live/signal-proof-summary-20260527-221721/summary.md` |
 
 ---
 
