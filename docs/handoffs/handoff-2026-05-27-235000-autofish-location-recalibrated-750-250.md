@@ -22,6 +22,8 @@ Player moved to a new shoreline location. Ran the full autonomous pipeline from 
 | boundedSession decision (3+8) | **`promote`** ✅ | `signal-proof-decisions.json` |
 | Bounded session (10 casts) | **10/10 clean** — 88-107 blueCyan after key, 0 red on every cast | `signal-proof-bounded-session-20260527-202423` |
 | boundedSession decision (10-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
+| Bounded session (10 casts) | **10/10 clean** — 94-154 blueCyan after key, 0 red on every cast | `signal-proof-bounded-session-20260527-203223` |
+| boundedSession decision (10-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
 
 ### Review Scope `afscope-8e7df4f3de737c15`
 
@@ -48,7 +50,7 @@ Cast 7:   199                   127                 0     ✅ 30s → pull
 Cast 8:   204                   132                 0     ✅ 30s → pull
 ```
 
-**22 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal across all sessions.
+**32 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal across all sessions.
 
 ### 10-Cast Bounded Session (20260527-202423)
 
@@ -66,7 +68,23 @@ Cast 9:   88                    27                 0     ✅ 30s → pull
 Cast 10:  106                   35                 0     ✅ 30s → pull
 ```
 
-All 22 casts clean at (750, 250) — zero red reticle on every single one across 3 confirmed sessions (1 one-cast + 3-cast + 8-cast + 10-cast).
+### 10-Cast Bounded Session (20260527-203223)
+
+```
+          after-key blueCyan    center blueCyan    red    complete
+Cast 1:   98                    33                 0     ✅ 30s → pull
+Cast 2:   97                    29                 0     ✅ 30s → pull
+Cast 3:   110                   30                 0     ✅ 30s → pull
+Cast 4:   94                    26                 0     ✅ 30s → pull
+Cast 5:   97                    30                 0     ✅ 30s → pull
+Cast 6:   94                    29                 0     ✅ 30s → pull
+Cast 7:   100                   30                 0     ✅ 30s → pull
+Cast 8:   154                   30                 0     ✅ 30s → pull
+Cast 9:   101                   31                 0     ✅ 30s → pull
+Cast 10:  101                   32                 0     ✅ 30s → pull
+```
+
+All **32 casts clean** at (750, 250) — zero red reticle on every single one across 4 confirmed bounded sessions + 1 one-cast.
 
 ---
 
@@ -76,7 +94,7 @@ All 22 casts clean at (750, 250) — zero red reticle on every single one across
 - **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote`
 - **No code changes** — all existing code from commit `61f6d6f` was sufficient
 - **ChromaLink stale** (player position 3114+ seconds old) — couldn't determine new facing direction
-- **Total manifests**: **98** (up from 65) - boundedSession=27, oneCast=14, reticle=16, chromalink=19, facingDelta=11, fishabilityFan=5, slash=6
+- **Total manifests**: **100** (up from 65) - boundedSession=28, oneCast=14, reticle=16, chromalink=20, facingDelta=11, fishabilityFan=5, slash=6
 - **Old scopes** (all stale): `afscope-3711d8fdafbf50fd` (640, 360), `afscope-2a3942a0cef4bcf8` (640, 200)
 
 ---
@@ -92,7 +110,7 @@ All 22 casts clean at (750, 250) — zero red reticle on every single one across
 | Bounded session 8-cast | `.autofish-live/signal-proof-bounded-session-20260527-201205/manifest.json` |
 | Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-202423/manifest.json` |
 | Fan probe | `.autofish-live/signal-proof-fishability-fan-20260527-195307/manifest.json` |
-| Summary (98 manifests) | `.autofish-live/signal-proof-summary-20260527-203035/summary.md` |
+| Summary (100 manifests) | `.autofish-live/signal-proof-summary-20260527-203837/summary.md` |
 
 ---
 
