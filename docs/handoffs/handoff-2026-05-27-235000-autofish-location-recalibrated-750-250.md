@@ -19,7 +19,9 @@ Player moved to a new shoreline location. Ran the full autonomous pipeline from 
 | oneCast decision | **`promote`** ✅ | `signal-proof-decisions.json` |
 | Bounded session (3 casts) | **3/3 clean** — 205-222 blueCyan after key, 0 red each cast | `signal-proof-bounded-session-20260527-200722` |
 | Bounded session (8 casts) | **8/8 clean** — 193-214 blueCyan after key, 0 red on every cast | `signal-proof-bounded-session-20260527-201205` |
-| boundedSession decision | **`promote`** ✅ | `signal-proof-decisions.json` |
+| boundedSession decision (3+8) | **`promote`** ✅ | `signal-proof-decisions.json` |
+| Bounded session (10 casts) | **10/10 clean** — 88-107 blueCyan after key, 0 red on every cast | `signal-proof-bounded-session-20260527-202423` |
+| boundedSession decision (10-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
 
 ### Review Scope `afscope-8e7df4f3de737c15`
 
@@ -46,7 +48,25 @@ Cast 7:   199                   127                 0     ✅ 30s → pull
 Cast 8:   204                   132                 0     ✅ 30s → pull
 ```
 
-**11 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal (193-222 pixels, 123-136 center).
+**22 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal across all sessions.
+
+### 10-Cast Bounded Session (20260527-202423)
+
+```
+          after-key blueCyan    center blueCyan    red    complete
+Cast 1:   103                   36                 0     ✅ 30s → pull
+Cast 2:   92                    26                 0     ✅ 30s → pull
+Cast 3:   107                   33                 0     ✅ 30s → pull
+Cast 4:   97                    31                 0     ✅ 30s → pull
+Cast 5:   90                    26                 0     ✅ 30s → pull
+Cast 6:   100                   30                 0     ✅ 30s → pull
+Cast 7:   95                    26                 0     ✅ 30s → pull
+Cast 8:   97                    32                 0     ✅ 30s → pull
+Cast 9:   88                    27                 0     ✅ 30s → pull
+Cast 10:  106                   35                 0     ✅ 30s → pull
+```
+
+All 22 casts clean at (750, 250) — zero red reticle on every single one across 3 confirmed sessions (1 one-cast + 3-cast + 8-cast + 10-cast).
 
 ---
 
@@ -56,7 +76,7 @@ Cast 8:   204                   132                 0     ✅ 30s → pull
 - **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote`
 - **No code changes** — all existing code from commit `61f6d6f` was sufficient
 - **ChromaLink stale** (player position 3114+ seconds old) — couldn't determine new facing direction
-- **Total manifests**: 92 (up from 65)
+- **Total manifests**: **98** (up from 65) - boundedSession=27, oneCast=14, reticle=16, chromalink=19, facingDelta=11, fishabilityFan=5, slash=6
 - **Old scopes** (all stale): `afscope-3711d8fdafbf50fd` (640, 360), `afscope-2a3942a0cef4bcf8` (640, 200)
 
 ---
@@ -70,8 +90,9 @@ Cast 8:   204                   132                 0     ✅ 30s → pull
 | One-cast confirmed | `.autofish-live/signal-proof-one-cast-20260527-200553/manifest.json` |
 | Bounded session 3-cast | `.autofish-live/signal-proof-bounded-session-20260527-200722/manifest.json` |
 | Bounded session 8-cast | `.autofish-live/signal-proof-bounded-session-20260527-201205/manifest.json` |
+| Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-202423/manifest.json` |
 | Fan probe | `.autofish-live/signal-proof-fishability-fan-20260527-195307/manifest.json` |
-| Summary (92 manifests) | `.autofish-live/signal-proof-summary-20260527-201740/summary.md` |
+| Summary (98 manifests) | `.autofish-live/signal-proof-summary-20260527-203035/summary.md` |
 
 ---
 
@@ -91,4 +112,4 @@ Cast 8:   204                   132                 0     ✅ 30s → pull
 - [x] ~~Promote boundedSession decision~~ ✅ **Done — both oneCast and boundedSession promoted**
 - [ ] **Run ChromaLink** for fresh player position at new location (requires `/loc` or ChromaLink refresh)
 - [ ] **Run facing-delta** proof to determine actual facing from new position
-- [ ] Consider running **10-cast max** session at (750, 250) for maximum evidence
+- [x] ~~Run 10-cast max session at (750, 250)~~ ✅ **Done — 10/10 clean, zero red**
