@@ -1,8 +1,9 @@
 # AutoFish — Location Recalibrated to (750, 250)
 
 **Date**: 2026-05-27
-**Updated**: 2026-05-28T01:25:00 UTC
+**Updated**: 2026-05-28T01:45:00 UTC
 **Commit**: `61f6d6f` (feat: unify profile timing to 30s bite timeout with 1.5s inter-cast delay)
+**Latest commit**: `76f28fc` (feat: improve reticle heuristic — skip manual review when blueCyan dominant and red < 20)
 **Rift**: PID 3140, HWND `0x508AE`, 1280×720
 
 ---
@@ -152,7 +153,7 @@ All **75 casts clean** at (750, 250) — zero red reticle on every single one ac
 - **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote` (×9)
 - **Code change**: `choose_reticle_color()` improved — when blueCyan dominant AND red < 20, return `blueCyan` + `manualReviewRequired=False` instead of noisy `unknown` + `manualReviewRequired=True`. Validated with 3-cast session: all captures now show `suggested=blueCyan` instead of `unknown`.
 - **ChromaLink stale** — couldn't determine facing at new location
-- **Total manifests**: **115** — boundedSession=35, oneCast=14, reticle=16, chromalink=27, facingDelta=12, fishabilityFan=5, slash=6
+- **Total manifests**: **120** (+5 slash) — boundedSession=35, chromalinkWorldState=31, oneCast=14, reticle=16, facingDelta=12, slash=7, fishabilityFan=5
 - **Old scopes** (all stale): `afscope-3711d8fdafbf50fd` (640, 360), `afscope-2a3942a0cef4bcf8` (640, 200)
 
 ---
@@ -174,7 +175,7 @@ All **75 casts clean** at (750, 250) — zero red reticle on every single one ac
 | Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-210637/manifest.json` |
 | Bounded session 3-cast (heuristic validation) | `.autofish-live/signal-proof-bounded-session-20260527-212149/manifest.json` |
 | Fan probe | `.autofish-live/signal-proof-fishability-fan-20260527-195307/manifest.json` |
-| Summary (115 manifests) | `.autofish-live/signal-proof-summary-20260527-212519/summary.md` |
+| Summary (120 manifests) | `.autofish-live/signal-proof-summary-20260527-213338/summary.md` |
 
 ---
 
