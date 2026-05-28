@@ -35,6 +35,8 @@ Player moved to a new shoreline location. Ran the full autonomous pipeline from 
 | boundedSession decision (10-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
 | Bounded session (3 casts) | **3/3 clean** — 91-326 blueCyan, 0 red, heuristic validated | `signal-proof-bounded-session-20260527-212149` |
 | boundedSession decision (3-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
+| Bounded session (5 casts) | **5/5 clean** — 69-110 blueCyan, 0 red on every cast | `signal-proof-bounded-session-20260527-213542` |
+| boundedSession decision (5-cast) | **`promote`** ✅ (10th) | `signal-proof-decisions.json` |
 
 ### Review Scope `afscope-8e7df4f3de737c15`
 
@@ -143,17 +145,17 @@ Cast 9:   84                    12                 0     ✅ 30s → pull
 Cast 10:  88                    14                 0     ✅ 30s → pull
 ```
 
-All **75 casts clean** at (750, 250) — zero red reticle on every single one across 9 confirmed bounded sessions + 1 one-cast.
+All **80 casts clean** at (750, 250) — zero red reticle on every single one across 10 confirmed bounded sessions + 1 one-cast.
 
 ---
 
 ## What Changed
 
 - **Session plan**: `session-plan-750-250.json` (scope `afscope-8e7df4f3de737c15`)
-- **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote` (×9)
+- **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote` (×10)
 - **Code change**: `choose_reticle_color()` improved — when blueCyan dominant AND red < 20, return `blueCyan` + `manualReviewRequired=False` instead of noisy `unknown` + `manualReviewRequired=True`. Validated with 3-cast session: all captures now show `suggested=blueCyan` instead of `unknown`.
 - **ChromaLink stale** — couldn't determine facing at new location
-- **Total manifests**: **120** (+5 slash) — boundedSession=35, chromalinkWorldState=31, oneCast=14, reticle=16, facingDelta=12, slash=7, fishabilityFan=5
+- **Total manifests**: **122** — boundedSession=36, chromalinkWorldState=32, oneCast=14, reticle=16, facingDelta=12, slash=7, fishabilityFan=5
 - **Old scopes** (all stale): `afscope-3711d8fdafbf50fd` (640, 360), `afscope-2a3942a0cef4bcf8` (640, 200)
 
 ---
@@ -175,7 +177,8 @@ All **75 casts clean** at (750, 250) — zero red reticle on every single one ac
 | Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-210637/manifest.json` |
 | Bounded session 3-cast (heuristic validation) | `.autofish-live/signal-proof-bounded-session-20260527-212149/manifest.json` |
 | Fan probe | `.autofish-live/signal-proof-fishability-fan-20260527-195307/manifest.json` |
-| Summary (120 manifests) | `.autofish-live/signal-proof-summary-20260527-213338/summary.md` |
+| Bounded session 5-cast | `.autofish-live/signal-proof-bounded-session-20260527-213542/manifest.json` |
+| Summary (122 manifests) | `.autofish-live/signal-proof-summary-20260527-213917/summary.md` |
 
 ---
 
