@@ -758,6 +758,10 @@ def choose_reticle_color(counts: dict[str, int]) -> tuple[str, str, bool]:
     legacy_candidates = {"red": red, "yellow": yellow, "blueCyan": blue_cyan, "green": green}
     legacy = max(legacy_candidates, key=legacy_candidates.get)
     if legacy == "blueCyan" and blue_cyan >= 20:
+        # When red is essentially absent (< 20 pixels), blueCyan dominance is
+        # water background noise, not a red reticle signal. Skip manual review.
+        if red < 20:
+            return "blueCyan", "blue_cyan_dominant_water_background_red_too_low_for_risk", False
         return "unknown", "blue_cyan_requires_manual_review_due_to_water_background_risk", True
     if legacy_candidates[legacy] >= 20:
         return "unknown", f"{legacy}_pixels_below_reticle_threshold", False

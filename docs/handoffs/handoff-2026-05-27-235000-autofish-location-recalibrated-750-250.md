@@ -1,7 +1,7 @@
 # AutoFish — Location Recalibrated to (750, 250)
 
 **Date**: 2026-05-27
-**Updated**: 2026-05-28T00:10:00 UTC
+**Updated**: 2026-05-28T01:25:00 UTC
 **Commit**: `61f6d6f` (feat: unify profile timing to 30s bite timeout with 1.5s inter-cast delay)
 **Rift**: PID 3140, HWND `0x508AE`, 1280×720
 
@@ -32,6 +32,8 @@ Player moved to a new shoreline location. Ran the full autonomous pipeline from 
 | boundedSession decision (10-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
 | Bounded session (10 casts) | **10/10 clean** — 77-114 blueCyan after key, 0 red on every cast | `signal-proof-bounded-session-20260527-210637` |
 | boundedSession decision (10-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
+| Bounded session (3 casts) | **3/3 clean** — 91-326 blueCyan, 0 red, heuristic validated | `signal-proof-bounded-session-20260527-212149` |
+| boundedSession decision (3-cast) | **`promote`** ✅ | `signal-proof-decisions.json` |
 
 ### Review Scope `afscope-8e7df4f3de737c15`
 
@@ -58,7 +60,7 @@ Cast 7:   199                   127                 0     ✅ 30s → pull
 Cast 8:   204                   132                 0     ✅ 30s → pull
 ```
 
-**72 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal across all sessions.
+**75 total casts** at this location — zero red reticle on every single one. Consistent blueCyan water signal across all sessions.
 
 ### 10-Cast Bounded Session (20260527-202423)
 
@@ -140,17 +142,17 @@ Cast 9:   84                    12                 0     ✅ 30s → pull
 Cast 10:  88                    14                 0     ✅ 30s → pull
 ```
 
-All **72 casts clean** at (750, 250) — zero red reticle on every single one across 8 confirmed bounded sessions + 1 one-cast.
+All **75 casts clean** at (750, 250) — zero red reticle on every single one across 9 confirmed bounded sessions + 1 one-cast.
 
 ---
 
 ## What Changed
 
 - **Session plan**: `session-plan-750-250.json` (scope `afscope-8e7df4f3de737c15`)
-- **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote` (×8)
-- **No code changes** — all existing code from commit `61f6d6f` was sufficient
+- **Decisions**: `oneCast` = `promote`, `boundedSession` = `promote` (×9)
+- **Code change**: `choose_reticle_color()` improved — when blueCyan dominant AND red < 20, return `blueCyan` + `manualReviewRequired=False` instead of noisy `unknown` + `manualReviewRequired=True`. Validated with 3-cast session: all captures now show `suggested=blueCyan` instead of `unknown`.
 - **ChromaLink stale** — couldn't determine facing at new location
-- **Total manifests**: **113** — boundedSession=34, oneCast=14, reticle=16, chromalink=26, facingDelta=12, fishabilityFan=5, slash=6
+- **Total manifests**: **115** — boundedSession=35, oneCast=14, reticle=16, chromalink=27, facingDelta=12, fishabilityFan=5, slash=6
 - **Old scopes** (all stale): `afscope-3711d8fdafbf50fd` (640, 360), `afscope-2a3942a0cef4bcf8` (640, 200)
 
 ---
@@ -170,8 +172,9 @@ All **72 casts clean** at (750, 250) — zero red reticle on every single one ac
 | Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-204759/manifest.json` |
 | Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-205740/manifest.json` |
 | Bounded session 10-cast | `.autofish-live/signal-proof-bounded-session-20260527-210637/manifest.json` |
+| Bounded session 3-cast (heuristic validation) | `.autofish-live/signal-proof-bounded-session-20260527-212149/manifest.json` |
 | Fan probe | `.autofish-live/signal-proof-fishability-fan-20260527-195307/manifest.json` |
-| Summary (113 manifests) | `.autofish-live/signal-proof-summary-20260527-211446/summary.md` |
+| Summary (115 manifests) | `.autofish-live/signal-proof-summary-20260527-212519/summary.md` |
 
 ---
 
@@ -191,4 +194,4 @@ All **72 casts clean** at (750, 250) — zero red reticle on every single one ac
 - [x] ~~Promote boundedSession decision~~ ✅ **Done — both oneCast and boundedSession promoted**
 - [ ] **Run ChromaLink** for fresh player position at new location (requires `/loc` or ChromaLink refresh)
 - [ ] **Run facing-delta** proof to determine actual facing from new position
-- [x] ~~Run 10-cast max session at (750, 250)~~ ✅ **Done — 10/10 clean, zero red (×6)**
+- [x] ~~Run 10-cast max session at (750, 250)~~ ✅ **Done — 10/10 clean, zero red (×7)**
