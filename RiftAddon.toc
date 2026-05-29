@@ -4,7 +4,7 @@ NameShort = "AFCopy"
 Description = "Copy-ready chat capture window for Rift. Captures future chat notifications into a selectable text box."
 Author = "OpenAI ChatGPT"
 Website = ""
-Version = "0.1.0"
+Version = "0.1.1"
 Email = "noreply@example.com"
 Environment = "4.4"
 

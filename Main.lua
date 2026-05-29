@@ -1,5 +1,5 @@
 -- AutoFishChatCopy Main.lua
--- Version: 0.1.0
+-- Version: 0.1.1
 -- Total character count: 15533
 -- Purpose: Capture future Rift chat notifications into a bounded buffer and present copy-ready text in a selectable UI text field.
 -- Notes: Rift addons are sandboxed; this addon does not claim direct Windows clipboard access.
@@ -8,7 +8,7 @@ local addonInfo, privateVars = ...
 privateVars = privateVars or {}
 
 local IDENTIFIER = (addonInfo and addonInfo.identifier) or "AutoFishChatCopy"
-local VERSION = (addonInfo and addonInfo.version) or "0.1.0"
+local VERSION = (addonInfo and addonInfo.version) or "0.1.1"
 
 local MAX_LINES = 200
 local DEFAULT_EXPORT_LINES = 40
@@ -512,7 +512,9 @@ local function onStartup(handle, addon)
   end
 
   ensureState()
-  write("Loaded. Use /afcopy help. Captures future chat events only.", "#00CC88")
+  write("Loaded. Auto-opening copy window. Slash command may be unavailable in this Rift build.", "#00CC88")
+  local text, exported = buildExport("last", DEFAULT_EXPORT_LINES)
+  showCopyWindow(text, "Auto-opened on load. Click box, Ctrl+A, Ctrl+C.")
 end
 
 local function attach(eventTable, handler, label)

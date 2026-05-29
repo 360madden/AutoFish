@@ -6,20 +6,28 @@
 
 ## What this project is
 
-AutoFish is a split-stack Rift fishing automation tool with four layers:
+AutoFish is a split-stack Rift fishing automation tool with five layers:
 
 1. **Lua addon** (`lua/AutoFish/`) — in-game Rift addon for state, guardrails, GUI, and slash commands.
-2. **Python helper** (`tools/autofish-helper-py/`) — same-PC desktop automation: exact PID/HWND validation, screenshot capture, cursor/key input, bounded cast proofs. **This is the active live-work layer.**
-3. **Shared contracts** (`src/AutoFish.Contracts/`, `contracts/`) — JSON schemas and C# models for bridge messages, profiles, and proof manifests.
-4. **Legacy .NET app** (`src/AutoFish.App/`) — WinForms GUI; kept for reference. Do not add new live-window automation here.
+2. **Lua chat-copy addon** (`Main.lua` + `RiftAddon.toc` at repo root) — separate simpler addon ("AutoFishChatCopy") that captures future Rift chat events into a bounded buffer and presents copy-ready text in a selectable UI window. Uses `/afcopy` and `/chatcopy` slash commands. Current version 0.1.1 with auto-open-on-load.
+3. **Python helper** (`tools/autofish-helper-py/`) — same-PC desktop automation: exact PID/HWND validation, screenshot capture, cursor/key input, bounded cast proofs. **This is the active live-work layer.**
+4. **Shared contracts** (`src/AutoFish.Contracts/`, `contracts/`) — JSON schemas and C# models for bridge messages, profiles, and proof manifests.
+5. **Legacy .NET app** (`src/AutoFish.App/`) — WinForms GUI; kept for reference. Do not add new live-window automation here.
 
 The Python helper is the **primary active development surface**. The Lua addon is the in-game layer. The .NET app is frozen legacy.
+
+> **Note:** `Main.lua` and `RiftAddon.toc` at the repo root belong to AutoFishChatCopy — a separate addon from `lua/AutoFish/`. Don't confuse the two. The `lua/AutoFish/` addon uses `/autofish`; the root addon uses `/afcopy`.
 
 ## Key files and what they do
 
 | Path | Role |
 |---|---|
 | `tools/autofish-helper-py/autofish_helper.py` | **Monolithic Python helper** — all proof commands, session plans, gates, doctor, reticle, casts, fan planning, etc. (~9000+ lines) |
+| `tools/autofish-helper-py/tests/smoke_autofish_helper.py` | Python smoke tests — imports and exercises the helper module programmatically |
+| `tools/autofish-helper-py/tests/validate_doc_commands.py` | Validates that CLI commands documented in markdown match actual argparse surface |
+| `tools/autofish-helper-py/tests/validate_lua_slash_commands.py` | Validates Lua slash command doc strings |
+| `Main.lua` (root) | **AutoFishChatCopy** addon entrypoint — chat capture buffer with `/afcopy` slash commands |
+| `RiftAddon.toc` (root) | AutoFishChatCopy addon manifest (Identifier `AutoFishChatCopy`, v0.1.1) |
 | `lua/AutoFish/Main.lua` | Lua addon entrypoint; slash command routing |
 | `lua/AutoFish/AutoFishAddon.lua` | Core addon logic, observation, decision rules |
 | `lua/AutoFish/Bridge/` | Lua-side bridge queue, command normalizer, contracts |
@@ -31,8 +39,13 @@ The Python helper is the **primary active development surface**. The Lua addon i
 | `scripts/run_local_checks.py` | One-command offline validation (build + profiles + Python + Lua) |
 | `scripts/run_python_checks.py` | Python-only checks (compile, smoke, doc validation, help surfaces) |
 | `scripts/deploy_addon.py` | Copy Lua addon to Rift addons directory |
-| `docs/handoffs/` | Sequential handoff artifacts for live proof-pack runs |
+| `scripts/lua-smoke-tests.lua` | Lua smoke tests for the addon |
+| `tools/apply_*.py` / `tools/fix_*.py` | One-off fix scripts (clipboard, doctor, dry-run, inbound bridge) — historical, not for new development |
+| `docs/handoffs/` | Sequential handoff artifacts for live proof-pack runs (latest = most recent timestamp) |
 | `.autofish-live/` | **Git-ignored** live evidence directory (target discovery, snapshots, proof manifests, session plans) |
+| `.cursor/rules/` | 12 `.mdc` rule files loaded per file type (contracts, docs, dotnet, general, github, handoffs, lua, profiles, python, safety, scripts, testing) |
+| `.editorconfig` | Code style: UTF-8, CRLF, 4-space indent, trim trailing WS (except .md) |
+| `global.json` | .NET SDK 10.0.300 with `latestFeature` rollForward |
 
 ## Commands
 
@@ -135,8 +148,31 @@ python tools/autofish-helper-py/autofish_helper.py doctor --proof-root .autofish
 ### Historical signals are stale until proven
 The project treats all historical Rift fishing methods (cursor-change, `/log`, pixel checks, audio, fixed hotbar/bag) as **stale** until locally proven with current evidence. See `docs/live-validation/2026-05-25-historical-signal-live-proof-runbook.md`.
 
+### Two separate Lua addons share the same repo
+- **`lua/AutoFish/`** — the main fishing addon. Uses `/autofish` slash commands. Has `Bridge/`, `Core/`, `UI/` submodules.
+- **`Main.lua` + `RiftAddon.toc` (root)** — AutoFishChatCopy, a simpler chat capture addon. Uses `/afcopy` and `/chatcopy`. Saves state in `AutoFishChatCopy_State` SavedVariable. Auto-opens its copy window on load (v0.1.1+).
+
+These are independent addons deployed to the same Rift `Interface/Addons/` directory. The `.toc` files have different `Identifier` values.
+
 ### Live workflow
 Follow `docs/prototype-first-workflow.md`: calibrate fishable coordinate → exact PID/HWND → bounded casts → simple timing → then harden. Don't block on perfect native water detection or broad bridge architecture.
 
 ### Profile-driven defaults
-Fishing profiles (in `profiles/`) provide `pacing.biteTimeoutMs` → `--cast-wait-seconds` and `pacing.lootTimeoutMs` → `--post-pull-delay-ms`. Use `--profile <id>` to load defaults; CLI overrides take precedence.
+Fishing profiles (in `profiles/`) provide `pacing.biteTimeoutMs` → `--cast-wait-seconds`, `pacing.lootTimeoutMs` → `--post-pull-delay-ms`, and `pacing.interCastDelayMs` → between-cast delay (default 800ms). All profiles currently use 30s bite timeout, 1.5s inter-cast delay. Use `--profile <id>` to load defaults; CLI overrides take precedence.
+
+### Testing
+- **Python smoke tests:** `python tools/autofish-helper-py/tests/smoke_autofish_helper.py` — spawns the helper module in-process, exercises profile defaults, session plans, runbook rendering, doctor reports, red-reticle guards, facing deltas, fan planning, and stale-plan refusal. No game interaction.
+- **Doc command validation:** `python tools/autofish-helper-py/tests/validate_doc_commands.py` — verifies all CLI commands in markdown docs match the actual argparse surface.
+- **Lua smoke tests:** `lua scripts/lua-smoke-tests.lua` — smoke-tests the Lua addon.
+- **Full offline validation:** `python scripts/run_local_checks.py` — runs .NET build, profile validation, Python smoke tests, doc validation, and Lua checks.
+
+### Code style (.editorconfig)
+- **All files:** UTF-8, CRLF line endings, `insert_final_newline = true`, `trim_trailing_whitespace = true`
+- **.cs / .lua / .py:** 4-space indent
+- **.md:** trailing whitespace NOT trimmed (preserves markdown line breaks)
+
+### Cursor rules
+- `.cursor/rules/` contains 12 `.mdc` files loaded by glob pattern for each file type (contracts, docs, dotnet, general, github, handoffs, lua, profiles, python, safety, scripts, testing). These contain file-type-specific conventions.
+
+### One-off fix scripts
+- `tools/apply_clipboard_fix.py`, `tools/apply_doctor_fix2.py`, `tools/apply_final_fixes.py`, `tools/fix_dry_run.py`, `tools/fix_inbound_bridge.py` — historical patches. Do not use as templates for new code. All active logic lives in `autofish_helper.py`.
