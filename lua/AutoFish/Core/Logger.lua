@@ -89,4 +89,7 @@ function Logger:clear()
     self.entries = {}
 end
 
-return Logger
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.Logger = Logger
+if require ~= nil then return Logger end

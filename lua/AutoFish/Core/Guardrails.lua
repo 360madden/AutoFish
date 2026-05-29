@@ -1,5 +1,5 @@
-local Contracts = require("AutoFish.Bridge.Contracts")
-local GuardrailRules = require("AutoFish.Core.GuardrailRules")
+local Contracts = AutoFish.Bridge.Contracts
+local GuardrailRules = AutoFish.Core.GuardrailRules
 
 local Guardrails = {}
 
@@ -52,4 +52,7 @@ function Guardrails.evaluate(observation, config, session, logger)
     return nil
 end
 
-return Guardrails
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.Guardrails = Guardrails
+if require ~= nil then return Guardrails end

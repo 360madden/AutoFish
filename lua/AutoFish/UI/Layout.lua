@@ -50,4 +50,7 @@ local Layout = {
     },
 }
 
-return Layout
+AutoFish = AutoFish or {}
+AutoFish.UI = AutoFish.UI or {}
+AutoFish.UI.Layout = Layout
+if require ~= nil then return Layout end

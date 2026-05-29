@@ -15,6 +15,7 @@ local snakeCaseAliases = {
     durabilityLow = "durability_low",
     canCast = "can_cast",
     stuckForSeconds = "stuck_for_seconds",
+    reticleColor = "reticle_color",
 }
 
 function Observation.get(observation, key, fallback)
@@ -64,4 +65,7 @@ function Observation.string(observation, key, fallback)
     return fallback
 end
 
-return Observation
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.Observation = Observation
+if require ~= nil then return Observation end

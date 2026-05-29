@@ -1,10 +1,10 @@
-local Contracts = require("AutoFish.Bridge.Contracts")
-local DecisionRules = require("AutoFish.Core.DecisionRules")
-local Defaults = require("AutoFish.Core.Defaults")
-local Guardrails = require("AutoFish.Core.Guardrails")
-local Observation = require("AutoFish.Core.Observation")
-local SessionState = require("AutoFish.Core.SessionState")
-local SnapshotBuilder = require("AutoFish.Core.SnapshotBuilder")
+local Contracts = AutoFish.Bridge.Contracts
+local DecisionRules = AutoFish.Core.DecisionRules
+local Defaults = AutoFish.Core.Defaults
+local Guardrails = AutoFish.Core.Guardrails
+local Observation = AutoFish.Core.Observation
+local SessionState = AutoFish.Core.SessionState
+local SnapshotBuilder = AutoFish.Core.SnapshotBuilder
 
 local StateMachine = {}
 StateMachine.__index = StateMachine
@@ -307,4 +307,7 @@ function StateMachine:failSafePause(reason)
     }
 end
 
-return StateMachine
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.StateMachine = StateMachine
+if require ~= nil then return StateMachine end

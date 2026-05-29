@@ -1,14 +1,14 @@
-local Contracts = require("AutoFish.Bridge.Contracts")
-local CommandNormalizer = require("AutoFish.Bridge.CommandNormalizer")
-local EnvelopeBuilder = require("AutoFish.Bridge.EnvelopeBuilder")
-local MessageBus = require("AutoFish.Bridge.MessageBus")
-local Logger = require("AutoFish.Core.Logger")
-local Observation = require("AutoFish.Core.Observation")
-local ProfileRuntime = require("AutoFish.Core.ProfileRuntime")
-local StateMachine = require("AutoFish.Core.StateMachine")
-local Layout = require("AutoFish.UI.Layout")
-local UIController = require("AutoFish.UI.Controller")
-local ViewModel = require("AutoFish.UI.ViewModel")
+local Contracts = AutoFish.Bridge.Contracts
+local CommandNormalizer = AutoFish.Bridge.CommandNormalizer
+local EnvelopeBuilder = AutoFish.Bridge.EnvelopeBuilder
+local MessageBus = AutoFish.Bridge.MessageBus
+local Logger = AutoFish.Core.Logger
+local Observation = AutoFish.Core.Observation
+local ProfileRuntime = AutoFish.Core.ProfileRuntime
+local StateMachine = AutoFish.Core.StateMachine
+local Layout = AutoFish.UI.Layout
+local UIController = AutoFish.UI.Controller
+local ViewModel = AutoFish.UI.ViewModel
 
 local AutoFishAddon = {}
 AutoFishAddon.__index = AutoFishAddon
@@ -348,4 +348,6 @@ function AutoFishAddon:drainOutboundMessages()
     return drained
 end
 
-return AutoFishAddon
+AutoFish = AutoFish or {}
+AutoFish.AutoFishAddon = AutoFishAddon
+if require ~= nil then return AutoFishAddon end

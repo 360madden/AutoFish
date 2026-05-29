@@ -1,4 +1,4 @@
-local Observation = require("AutoFish.Core.Observation")
+local Observation = AutoFish.Core.Observation
 
 local SnapshotBuilder = {}
 
@@ -47,10 +47,14 @@ function SnapshotBuilder.build(session, characterName, observation)
         freeSlots = type(session.freeSlots) == "number" and math.max(0, math.floor(session.freeSlots)) or 0,
         lastAction = type(session.lastAction) == "string" and session.lastAction or "pause",
         lastReason = type(session.lastReason) == "string" and session.lastReason or "snapshot generated from incomplete session data",
+        reticleColor = Observation.string(observation, "reticleColor", "unknown"),
         updatedAtUtc = os.date("!%Y-%m-%dT%H:%M:%SZ"),
         counters = counters,
         alerts = alerts,
     }
 end
 
-return SnapshotBuilder
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.SnapshotBuilder = SnapshotBuilder
+if require ~= nil then return SnapshotBuilder end

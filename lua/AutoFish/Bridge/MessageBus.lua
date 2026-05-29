@@ -86,4 +86,7 @@ function MessageBus:getStatus()
     }
 end
 
-return MessageBus
+AutoFish = AutoFish or {}
+AutoFish.Bridge = AutoFish.Bridge or {}
+AutoFish.Bridge.MessageBus = MessageBus
+if require ~= nil then return MessageBus end

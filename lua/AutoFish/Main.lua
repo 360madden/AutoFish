@@ -5,6 +5,7 @@ local addonIdentifier = (addonInfo and addonInfo.identifier) or "AutoFish"
 local addonVersion = (addonInfo and addonInfo.version) or "0.1.0"
 
 local REFRESH_INTERVAL = 1.0
+local BRIDGE_FLUSH_INTERVAL = 4.0
 local MAX_MATCHES = 6
 local MAX_TRACE_SAMPLES = 90
 
@@ -18,10 +19,71 @@ local runtime = {
   dirty = true,
   pendingReason = "startup",
   lastRefreshAt = 0,
+  lastBridgeFlushAt = 0,
   lastAbilityScanAt = 0,
   abilityCandidates = {},
   abilityScanError = nil,
 }
+
+-- Bridge: MessageBus, envelope builder, snapshot builder, and command normalizer
+local MessageBus = AutoFish.Bridge.MessageBus
+local Contracts = AutoFish.Bridge.Contracts
+local CommandNormalizer = AutoFish.Bridge.CommandNormalizer
+local EnvelopeBuilder = AutoFish.Bridge.EnvelopeBuilder
+local SnapshotBuilder = AutoFish.Core.SnapshotBuilder
+local JsonParser = AutoFish.Bridge.JsonParser
+local AutoFishAddon = AutoFish.AutoFishAddon
+local bridgeLogger = {
+  entries = {},
+  maxEntries = 50,
+  warn = function(self, msg, ctx)
+    if type(self) == "table" and self.entries then
+      table.insert(self.entries, { level = "warn", message = msg, context = ctx })
+      if #self.entries > (self.maxEntries or 50) then
+        table.remove(self.entries, 1)
+      end
+    end
+  end,
+  error = function(self, msg, ctx)
+    if type(self) == "table" and self.entries then
+      table.insert(self.entries, { level = "error", message = msg, context = ctx })
+      if #self.entries > (self.maxEntries or 50) then
+        table.remove(self.entries, 1)
+      end
+    end
+  end,
+}
+AutoFishLive.BridgeMessageBus = MessageBus.new(bridgeLogger)
+
+-- Bridge transport: EditBox frame (clipboard relay to Python helper)
+-- RIFT's sandbox blocks file I/O, so we use a 1x1 visible EditBox whose
+-- text the Python helper retrieves via Ctrl+A/Ctrl+C + Windows clipboard.
+-- The EditBox must be visible (even at 1px) to receive focus for keyboard input.
+local bridgeEditBox = nil
+local function ensureBridgeEditBox()
+  if bridgeEditBox ~= nil then
+    return bridgeEditBox
+  end
+  local bridgeCtx = UI.CreateContext(addonIdentifier .. "Bridge")
+  if type(bridgeCtx) ~= "table" then
+    return nil
+  end
+  -- "EditBox" is not a valid frame type in RIFT's UI API, so wrap in pcall.
+  -- The bridge will operate in degraded mode (no clipboard transport) until a
+  -- supported transport mechanism is implemented.
+  local ok, editFrame = pcall(UI.CreateFrame, "EditBox", addonIdentifier .. "BridgeEditBox", bridgeCtx)
+  if ok and type(editFrame) == "table" then
+    bridgeEditBox = editFrame
+    bridgeEditBox:SetWidth(1)
+    bridgeEditBox:SetHeight(1)
+    bridgeEditBox:SetLayer(0)
+    bridgeEditBox:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
+    bridgeEditBox:SetVisible(true)
+  else
+    print("[AutoFish] Bridge transport unavailable: EditBox frame type not supported.")
+  end
+  return bridgeEditBox
+end
 
 local POLE_KEYWORDS = { "fishing", "pole", "rod" }
 local BAIT_KEYWORDS = { "bait", "lure" }
@@ -111,6 +173,92 @@ local function shallowCopy(source)
 
   return target
 end
+
+-- Convert a Lua value to a JSON string (serializer).
+-- depth guards against runaway recursion; visited table guards against cycles.
+local function tableToJson(value, depth, visited)
+  depth = depth or 0
+  if depth > 24 then
+    return "null"
+  end
+
+  local t = type(value)
+
+  if t == "nil" then
+    return "null"
+  elseif t == "boolean" then
+    return tostring(value)
+  elseif t == "number" then
+    if value ~= value or value == math.huge then
+      return "null"
+    end
+    return tostring(value)
+  elseif t == "string" then
+    local escaped = string.gsub(value, '["\\\n\r\t]', {
+      ['"'] = '\\"',
+      ['\\'] = '\\\\',
+      ['\n'] = '\\n',
+      ['\r'] = '\\r',
+      ['\t'] = '\\t',
+    })
+    return '"' .. escaped .. '"'
+  elseif t ~= "table" then
+    return '"' .. tostring(value) .. '"'
+  end
+
+  -- Cycle guard: replace visited table refs with null
+  visited = visited or {}
+  if visited[value] then
+    return "null"
+  end
+  visited[value] = true
+
+  -- Detect dense array (consecutive integer keys 1..n)
+  local maxIdx, count = 0, 0
+  local isArray = true
+  for k, _ in pairs(value) do
+    count = count + 1
+    if type(k) == "number" and k >= 1 and math.floor(k) == k then
+      if k > maxIdx then
+        maxIdx = k
+      end
+    else
+      isArray = false
+    end
+  end
+
+  if isArray and count > 0 and maxIdx == count then
+    local elems = {}
+    for i = 1, count do
+      elems[i] = tableToJson(value[i], depth + 1, visited)
+    end
+    return "[" .. table.concat(elems, ",") .. "]"
+  end
+
+  -- Object: collect keys and serialize k/v pairs
+  local parts, keys = {}, {}
+  for k, _ in pairs(value) do
+    keys[#keys + 1] = k
+  end
+  table.sort(keys, function(a, b)
+    return tostring(a) < tostring(b)
+  end)
+
+  for _, k in ipairs(keys) do
+    local v = value[k]
+    if v ~= nil then
+      parts[#parts + 1] = tableToJson(k, depth + 1, visited) .. ":" .. tableToJson(v, depth + 1, visited)
+    end
+  end
+
+  if #parts == 0 then
+    return "{}"
+  end
+
+  return "{" .. table.concat(parts, ",") .. "}"
+end
+
+-- jsonToTable moved to AutoFish.Bridge.JsonParser (extracted for testability)
 
 function Console.Write(message, color)
   local text = tostring(message or "")
@@ -677,6 +825,26 @@ local function collectApiProbe()
   }
 end
 
+local function cursorTypeToReticleColor(cursorType)
+  if cursorType == nil then
+    return "unknown"
+  end
+
+  local lowerType = string.lower(tostring(cursorType))
+
+  if lowerType == "attack" then
+    return "red"
+  elseif lowerType == "interact" then
+    return "yellow"
+  elseif lowerType == "loot" then
+    return "green"
+  elseif lowerType == "none" then
+    return "default"
+  else
+    return "unknown"
+  end
+end
+
 local function formatProbeValue(value)
   if value == nil then
     return "nil"
@@ -945,6 +1113,16 @@ local function buildObservationSnapshot(snapshot)
   local nearWater = false
   addObservationNote(notes, "near_water is not confirmed by native addon APIs yet")
 
+  -- Probe reticle color from Inspect.Cursor native API
+  local reticleColor = "unknown"
+  local cursorAvailable = Inspect and type(Inspect.Cursor) == "function"
+  if cursorAvailable then
+    local ok, cursorType = pcall(Inspect.Cursor)
+    if ok then
+      reticleColor = cursorTypeToReticleColor(cursorType)
+    end
+  end
+
   local canCast = inGame
     and not inCombat
     and snapshot.secureMode ~= true
@@ -987,6 +1165,7 @@ local function buildObservationSnapshot(snapshot)
     durability_low = false,
     can_cast = canCast,
     stuck_for_seconds = 0,
+    reticle_color = reticleColor,
     confidence = confidence,
     notes = notes,
   }
@@ -1041,6 +1220,7 @@ local function recordTraceSample(snapshot, observation)
     trackFish = type(fishing.trackFishBuff) == "table",
     cursorType = cursor.type,
     cursorHeld = cursor.held,
+    reticleColor = cursorTypeToReticleColor(cursor.type),
     tooltipType = tooltip.type,
     tooltipShown = tooltip.shown,
     tooltipExtra = tooltip.extra,
@@ -2073,9 +2253,140 @@ function AutoFishLive.OnStartup(handle, addon)
   end
 
   ensureState()
+  if not runtime.addonInstance then
+    runtime.addonInstance = AutoFishAddon.new({}, {})
+  end
   runtime.started = true
   AutoFishLive.Refresh("startup", true)
   Console.Write("Loaded. Use /autofish help to inspect fishing-readiness signals.", "#00CC88")
+end
+
+local function consumeInboundCommands()
+  if type(state) ~= "table" then
+    return
+  end
+
+  -- Read inbound commands from the bridge EditBox (pasted via clipboard by the Python helper)
+  local editBox = ensureBridgeEditBox()
+  if type(editBox) ~= "table" then
+    return
+  end
+
+  local ok, editText = pcall(editBox.GetText, editBox)
+  if not ok or type(editText) ~= "string" or editText == "" then
+    return
+  end
+
+  local addon = runtime.addonInstance
+  if type(addon) ~= "table" or type(addon.bus) ~= "table" then
+    return
+  end
+
+  local enqueuedCount = 0
+  for line in string.gmatch(editText, "[^\n]+") do
+    local trimmed = string.match(line, "^%s*(.-)%s*$")
+    if trimmed and trimmed ~= "" then
+      local okParse, parsed = pcall(JsonParser.parse, trimmed)
+      if okParse and type(parsed) == "table" then
+        local command, reason = CommandNormalizer.normalize(parsed)
+        if command then
+          addon.bus:enqueueInbound(command)
+          enqueuedCount = enqueuedCount + 1
+        end
+      end
+    end
+  end
+
+  -- Process enqueued commands through AutoFishAddon's command pipeline
+  if enqueuedCount > 0 then
+    addon:handleInboundCommands()
+
+    -- Sync session state back from AutoFishAddon's stateMachine to AutoFish_State.session
+    local sm = addon.stateMachine
+    if type(sm) == "table" and type(sm.session) == "table" then
+      local smSession = sm.session
+      state.session.mode = smSession.mode
+      state.session.lastAction = smSession.lastAction
+      state.session.lastReason = smSession.lastReason
+      if smSession.activeProfile then
+        state.session.activeProfile = smSession.activeProfile
+      end
+      if type(smSession.counters) == "table" then
+        state.session.counters = smSession.counters
+      end
+      if type(smSession.alerts) == "table" then
+        state.session.alerts = smSession.alerts
+      end
+      state.session.remainingBait = smSession.remainingBait
+      state.session.freeSlots = smSession.freeSlots
+      state.session.bridgeOnline = smSession.bridgeOnline
+    end
+
+    -- Clear the EditBox after processing
+    pcall(editBox.SetText, editBox, "")
+  end
+end
+
+local function flushBridgeOutbound()
+  if AutoFishLive.BridgeMessageBus == nil then
+    return
+  end
+
+  local currentTime = now()
+  if (currentTime - (runtime.lastBridgeFlushAt or 0)) < BRIDGE_FLUSH_INTERVAL then
+    return
+  end
+  runtime.lastBridgeFlushAt = currentTime
+
+  -- Build a session-status envelope from the current snapshot
+  local player = type(state) == "table" and state.current or {}
+  local characterName = "player"
+  if type(player.player) == "table" then
+    characterName = player.player.name or characterName
+  end
+  local observation = state and state.currentObservation or {}
+  local session = state and state.session or {}
+
+  local ok, snapshot = pcall(SnapshotBuilder.build, session, characterName, observation)
+  if not ok or type(snapshot) ~= "table" then
+    return
+  end
+
+  local ok, envelope = pcall(EnvelopeBuilder.buildSessionStatus, snapshot)
+  if not ok or type(envelope) ~= "table" then
+    return
+  end
+
+  AutoFishLive.BridgeMessageBus:enqueueOutbound(envelope)
+
+  -- Drain and write to the 1x1 EditBox (readable via clipboard by helper)
+  local drained = AutoFishLive.BridgeMessageBus:drainOutbound()
+  if type(drained) ~= "table" or #drained == 0 then
+    return
+  end
+
+  local lines = {}
+  for _, payload in ipairs(drained) do
+    local ok, line = pcall(tableToJson, payload, 0, {})
+    if ok and type(line) == "string" then
+      lines[#lines + 1] = line
+    end
+  end
+
+  if #lines == 0 then
+    return
+  end
+
+  -- Set the latest envelope text on the 1x1 EditBox for clipboard relay,
+  -- then attempt focus so the Python helper's Ctrl+A/Ctrl+C targets it.
+  local editBox = ensureBridgeEditBox()
+  if type(editBox) ~= "table" then
+    return
+  end
+  local ok, result = pcall(editBox.SetText, editBox, table.concat(lines, "\n"))
+  if ok then
+    pcall(editBox.SetFocus, editBox)
+  end
 end
 
 function AutoFishLive.OnUpdateEnd()
@@ -2087,6 +2398,10 @@ function AutoFishLive.OnUpdateEnd()
   if runtime.dirty or (currentTime - runtime.lastRefreshAt) >= REFRESH_INTERVAL then
     AutoFishLive.Refresh(runtime.pendingReason or "heartbeat", false)
   end
+
+  consumeInboundCommands()
+
+  flushBridgeOutbound()
 end
 
 local function attach(eventTable, handler, label)

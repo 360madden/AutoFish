@@ -1,4 +1,4 @@
-local Defaults = require("AutoFish.Core.Defaults")
+local Defaults = AutoFish.Core.Defaults
 
 local ProfileRuntime = {}
 
@@ -25,4 +25,7 @@ function ProfileRuntime.fromProfile(profile)
     })
 end
 
-return ProfileRuntime
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.ProfileRuntime = ProfileRuntime
+if require ~= nil then return ProfileRuntime end

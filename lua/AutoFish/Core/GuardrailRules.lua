@@ -1,5 +1,5 @@
-local Contracts = require("AutoFish.Bridge.Contracts")
-local Observation = require("AutoFish.Core.Observation")
+local Contracts = AutoFish.Bridge.Contracts
+local Observation = AutoFish.Core.Observation
 
 local GuardrailRules = {}
 
@@ -102,4 +102,7 @@ function GuardrailRules.getAll()
     return rules
 end
 
-return GuardrailRules
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.GuardrailRules = GuardrailRules
+if require ~= nil then return GuardrailRules end
