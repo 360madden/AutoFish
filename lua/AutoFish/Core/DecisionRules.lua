@@ -1,4 +1,4 @@
-local Contracts = require("AutoFish.Bridge.Contracts")
+local Contracts = AutoFish.Bridge.Contracts
 
 local DecisionRules = {}
 
@@ -105,4 +105,7 @@ function DecisionRules.getAll()
     return rules
 end
 
-return DecisionRules
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.DecisionRules = DecisionRules
+if require ~= nil then return DecisionRules end

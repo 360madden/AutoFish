@@ -41,4 +41,7 @@ function Defaults.normalize(config)
     }
 end
 
-return Defaults
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.Defaults = Defaults
+if require ~= nil then return Defaults end

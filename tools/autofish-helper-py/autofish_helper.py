@@ -27,10 +27,8 @@ import wave
 from datetime import datetime, timezone
 from typing import Any
 
-
 if os.name != "nt":
     raise SystemExit("autofish_helper.py currently supports Windows only.")
-
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
@@ -50,8 +48,10 @@ SW_RESTORE = 9
 VK_SHIFT = 0x10
 VK_CONTROL = 0x11
 VK_MENU = 0x12
-PREFERRED_READABLE_CLIENT_WIDTH = 960
-PREFERRED_READABLE_CLIENT_HEIGHT = 540
+CF_TEXT = 1
+CF_UNICODETEXT = 13
+PREFERRED_READABLE_CLIENT_WIDTH = 320
+PREFERRED_READABLE_CLIENT_HEIGHT = 240
 DEFAULT_LOG_TERMS = (
     "fish",
     "fishing",
@@ -96,10 +96,8 @@ ADDON_COORD_RE = re.compile(r"\b([xyz])\s*=\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 ADDON_PLAYER_UNIT_RE = re.compile(r"\bplayerUnit\s*=\s*(\S+)", re.IGNORECASE)
 HCURSOR = getattr(wintypes, "HCURSOR", wintypes.HANDLE)
 
-
 class POINT(ctypes.Structure):
     _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
-
 
 class RECT(ctypes.Structure):
     _fields_ = [
@@ -109,7 +107,6 @@ class RECT(ctypes.Structure):
         ("bottom", wintypes.LONG),
     ]
 
-
 class CURSORINFO(ctypes.Structure):
     _fields_ = [
         ("cbSize", wintypes.DWORD),
@@ -117,7 +114,6 @@ class CURSORINFO(ctypes.Structure):
         ("hCursor", HCURSOR),
         ("ptScreenPos", POINT),
     ]
-
 
 class BITMAPINFOHEADER(ctypes.Structure):
     _fields_ = [
@@ -134,10 +130,8 @@ class BITMAPINFOHEADER(ctypes.Structure):
         ("biClrImportant", wintypes.DWORD),
     ]
 
-
 class BITMAPINFO(ctypes.Structure):
     _fields_ = [("bmiHeader", BITMAPINFOHEADER), ("bmiColors", wintypes.DWORD * 3)]
-
 
 class WAVEFORMATEX(ctypes.Structure):
     _fields_ = [
@@ -150,7 +144,6 @@ class WAVEFORMATEX(ctypes.Structure):
         ("cbSize", wintypes.WORD),
     ]
 
-
 class WAVEHDR(ctypes.Structure):
     _fields_ = [
         ("lpData", ctypes.c_void_p),
@@ -162,7 +155,6 @@ class WAVEHDR(ctypes.Structure):
         ("lpNext", ctypes.c_void_p),
         ("reserved", ctypes.c_size_t),
     ]
-
 
 user32.IsWindow.argtypes = [wintypes.HWND]
 user32.IsWindow.restype = wintypes.BOOL
@@ -256,11 +248,9 @@ winmm.waveInUnprepareHeader.restype = wintypes.UINT
 winmm.waveInClose.argtypes = [wintypes.HANDLE]
 winmm.waveInClose.restype = wintypes.UINT
 
-
 def last_error_message(action: str) -> str:
     err = ctypes.get_last_error()
     return f"{action} failed with Win32 error {err}"
-
 
 def mm_error_message(result: int, action: str) -> str:
     buffer = ctypes.create_unicode_buffer(256)
@@ -268,11 +258,9 @@ def mm_error_message(result: int, action: str) -> str:
     detail = buffer.value if text_result == 0 and buffer.value else f"MMRESULT {result}"
     return f"{action} failed: {detail}"
 
-
 def mm_check(result: int, action: str) -> None:
     if result != 0:
         raise RuntimeError(mm_error_message(result, action))
-
 
 def parse_hwnd(value: str) -> int:
     text = value.strip()
@@ -282,10 +270,8 @@ def parse_hwnd(value: str) -> int:
         return int(text, 16)
     return int(text, 10)
 
-
 def hwnd_hex(hwnd: int) -> str:
     return f"0x{hwnd:X}"
-
 
 def validate_target(hwnd: int, expected_pid: int, *, require_foreground: bool) -> dict[str, Any]:
     if not user32.IsWindow(hwnd):
@@ -337,13 +323,12 @@ def validate_target(hwnd: int, expected_pid: int, *, require_foreground: bool) -
             "preferredMinimumClientHeight": PREFERRED_READABLE_CLIENT_HEIGHT,
             "belowPreferredMinimum": below_readable_preference,
             "warning": (
-                "Client is below preferred proof-capture size; enlarge Rift before evidence runs if readable screenshots matter."
+                "Higher resolutions improve reticle detection reliability; consider enlarging Rift for better evidence."
                 if below_readable_preference
                 else None
             ),
         },
     }
-
 
 def assert_client_point(target: dict[str, Any], x: int, y: int) -> None:
     width = int(target["clientWidth"])
@@ -351,13 +336,11 @@ def assert_client_point(target: dict[str, Any], x: int, y: int) -> None:
     if x < 0 or y < 0 or x >= width or y >= height:
         raise RuntimeError(f"Client point ({x},{y}) is outside target client rect {width}x{height}")
 
-
 def client_to_screen(hwnd: int, x: int, y: int) -> tuple[int, int]:
     point = POINT(x, y)
     if not user32.ClientToScreen(hwnd, ctypes.byref(point)):
         raise RuntimeError(last_error_message("ClientToScreen"))
     return int(point.x), int(point.y)
-
 
 def validated_client_to_screen(
     hwnd: int,
@@ -372,7 +355,6 @@ def validated_client_to_screen(
     screen_x, screen_y = client_to_screen(hwnd, x, y)
     return target, screen_x, screen_y
 
-
 def target_is_readable(target: dict[str, Any] | None) -> bool:
     if not isinstance(target, dict):
         return False
@@ -386,7 +368,6 @@ def target_is_readable(target: dict[str, Any] | None) -> bool:
         and not target.get("isMinimized")
         and target.get("clientOriginAvailable") is True
     )
-
 
 def build_target_snapshot_report(args: argparse.Namespace) -> dict[str, Any]:
     hwnd = parse_hwnd(args.hwnd)
@@ -457,9 +438,9 @@ def build_target_snapshot_report(args: argparse.Namespace) -> dict[str, Any]:
         "required": bool(args.require_readable),
         "passed": readable,
         "reason": (
-            "Target client is restored and at or above the preferred proof-capture size."
+            "Target client is restored for proof review (higher resolutions improve reliability)."
             if readable
-            else "Target client is minimized, unreadable, below preferred proof-capture size, or has no client origin."
+            else "Target is minimized or too small for usable proof screenshots."
         ),
         "preferredMinimumClientWidth": PREFERRED_READABLE_CLIENT_WIDTH,
         "preferredMinimumClientHeight": PREFERRED_READABLE_CLIENT_HEIGHT,
@@ -477,7 +458,6 @@ def build_target_snapshot_report(args: argparse.Namespace) -> dict[str, Any]:
     }
     return report
 
-
 def run_target_snapshot(args: argparse.Namespace) -> int:
     report = build_target_snapshot_report(args)
     if args.output:
@@ -489,20 +469,17 @@ def run_target_snapshot(args: argparse.Namespace) -> int:
         print(json.dumps(report, indent=2))
     return 0 if report["readiness"]["targetSnapshotReady"] else 1
 
-
 def focus_target(hwnd: int) -> None:
     if user32.IsIconic(hwnd):
         raise RuntimeError("Target is minimized; restore/maximize Rift manually before live input to avoid changing the saved window size.")
     user32.SetForegroundWindow(hwnd)
     time.sleep(0.20)
 
-
 def focus_visible_target_without_restore(hwnd: int) -> None:
     if user32.IsIconic(hwnd):
         raise RuntimeError("Target is minimized; restore/focus Rift manually before movement proof to avoid changing the saved window size.")
     user32.SetForegroundWindow(hwnd)
     time.sleep(0.20)
-
 
 def get_cursor_state() -> dict[str, Any]:
     info = CURSORINFO()
@@ -517,7 +494,6 @@ def get_cursor_state() -> dict[str, Any]:
         "screenX": int(info.ptScreenPos.x),
         "screenY": int(info.ptScreenPos.y),
     }
-
 
 def virtual_key_for(key: str) -> int:
     aliases = {
@@ -537,14 +513,12 @@ def virtual_key_for(key: str) -> int:
         raise ValueError(f"Unable to map key {key!r} to a virtual key")
     return int(scan) & 0xFF
 
-
 def press_key_once(key: str, hold_ms: int) -> dict[str, Any]:
     vk = virtual_key_for(key)
     user32.keybd_event(vk, 0, 0, None)
     time.sleep(max(hold_ms, 0) / 1000.0)
     user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, None)
     return {"key": key, "virtualKey": f"0x{vk:02X}", "holdMs": hold_ms}
-
 
 def hold_key_safely(key: str, hold_ms: int) -> dict[str, Any]:
     vk = virtual_key_for(key)
@@ -554,7 +528,6 @@ def hold_key_safely(key: str, hold_ms: int) -> dict[str, Any]:
     finally:
         user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, None)
     return {"key": key, "virtualKey": f"0x{vk:02X}", "holdMs": hold_ms}
-
 
 def virtual_key_sequence_for_character(character: str) -> tuple[int, list[int]]:
     if len(character) != 1:
@@ -575,12 +548,10 @@ def virtual_key_sequence_for_character(character: str) -> tuple[int, list[int]]:
         modifier_keys.append(VK_MENU)
     return int(scan) & 0xFF, modifier_keys
 
-
 def press_virtual_key(vk: int, hold_ms: int) -> None:
     user32.keybd_event(vk, 0, 0, None)
     time.sleep(max(hold_ms, 0) / 1000.0)
     user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, None)
-
 
 def type_text_keys(text: str, *, key_hold_ms: int, inter_key_delay_ms: int) -> None:
     for character in text:
@@ -595,7 +566,6 @@ def type_text_keys(text: str, *, key_hold_ms: int, inter_key_delay_ms: int) -> N
             for modifier in reversed(modifier_keys):
                 user32.keybd_event(modifier, 0, KEYEVENTF_KEYUP, None)
         time.sleep(max(inter_key_delay_ms, 0) / 1000.0)
-
 
 def validate_slash_command(command: str, *, allow_reload_key: bool, allow_non_autofish: bool) -> str:
     normalized = command.strip()
@@ -613,36 +583,30 @@ def validate_slash_command(command: str, *, allow_reload_key: bool, allow_non_au
         raise ValueError("Slash command is too long for this bounded proof helper")
     return normalized
 
-
 def safe_file_stem(value: str, fallback: str) -> str:
     text = value.strip().lower().replace("/", "")
     safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "-" for ch in text)
     safe = "-".join(part for part in safe.split("-") if part)
     return safe[:48] or fallback
 
-
 def move_cursor_to(screen_x: int, screen_y: int) -> None:
     if not user32.SetCursorPos(screen_x, screen_y):
         raise RuntimeError(last_error_message("SetCursorPos"))
-
 
 def left_click() -> None:
     user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, None)
     time.sleep(0.08)
     user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, None)
 
-
 def assert_stop_file_absent(stop_file: str | None) -> None:
     if stop_file and Path(stop_file).exists():
         raise RuntimeError(f"Stop file exists: {stop_file}")
-
 
 def wait_seconds_with_stop(seconds: float, stop_file: str | None) -> None:
     deadline = time.monotonic() + max(0.0, seconds)
     while time.monotonic() < deadline:
         assert_stop_file_absent(stop_file)
         time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
-
 
 def capture_screen_rect(left: int, top: int, width: int, height: int) -> bytes:
     if width <= 0 or height <= 0:
@@ -685,7 +649,6 @@ def capture_screen_rect(left: int, top: int, width: int, height: int) -> bytes:
         gdi32.DeleteDC(mem_dc)
         user32.ReleaseDC(0, screen_dc)
 
-
 def write_bmp_24(path: Path, width: int, height: int, bgra_top_down: bytes) -> None:
     row_stride = ((width * 3 + 3) // 4) * 4
     image_size = row_stride * height
@@ -721,7 +684,6 @@ def write_bmp_24(path: Path, width: int, height: int, bgra_top_down: bytes) -> N
             f.write(row)
             f.write(padding)
 
-
 def classify_reticle_pixel(r: int, g: int, b: int) -> tuple[str, ...]:
     matches: list[str] = []
     if r >= 150 and g <= 115 and b <= 115 and r >= g + 35 and r >= b + 35:
@@ -733,7 +695,6 @@ def classify_reticle_pixel(r: int, g: int, b: int) -> tuple[str, ...]:
     if g >= 135 and r <= 140 and b <= 150 and g >= r + 25:
         matches.append("green")
     return tuple(matches)
-
 
 def choose_reticle_color(counts: dict[str, int]) -> tuple[str, str, bool]:
     red = counts.get("red", 0)
@@ -758,11 +719,14 @@ def choose_reticle_color(counts: dict[str, int]) -> tuple[str, str, bool]:
     legacy_candidates = {"red": red, "yellow": yellow, "blueCyan": blue_cyan, "green": green}
     legacy = max(legacy_candidates, key=legacy_candidates.get)
     if legacy == "blueCyan" and blue_cyan >= 20:
+        # When red is essentially absent (< 20 pixels), blueCyan dominance is
+        # water background noise, not a red reticle signal. Skip manual review.
+        if red < 20:
+            return "blueCyan", "blue_cyan_dominant_water_background_red_too_low_for_risk", False
         return "unknown", "blue_cyan_requires_manual_review_due_to_water_background_risk", True
     if legacy_candidates[legacy] >= 20:
         return "unknown", f"{legacy}_pixels_below_reticle_threshold", False
     return "unknown", "no_color_threshold_met", False
-
 
 def build_red_reticle_click_guard(
     capture_info: dict[str, Any] | None,
@@ -804,7 +768,6 @@ def build_red_reticle_click_guard(
     else:
         gate["reason"] = "No red reticle was detected by the heuristic; continue with manual evidence review."
     return gate
-
 
 def color_stats(width: int, height: int, bgra_top_down: bytes) -> dict[str, Any]:
     counts = {"red": 0, "yellow": 0, "blueCyan": 0, "green": 0, "bright": 0}
@@ -863,7 +826,6 @@ def color_stats(width: int, height: int, bgra_top_down: bytes) -> dict[str, Any]
         "manualReviewRequired": review_required,
     }
 
-
 def capture_client_crop(hwnd: int, expected_pid: int, client_x: int, client_y: int, crop_size: int, output_path: Path) -> dict[str, Any]:
     target = validate_target(hwnd, expected_pid, require_foreground=False)
     width = int(target["clientWidth"])
@@ -895,7 +857,6 @@ def capture_client_crop(hwnd: int, expected_pid: int, client_x: int, client_y: i
         "colorStats": stats,
     }
 
-
 def parse_region_spec(spec: str) -> dict[str, Any]:
     if ":" not in spec:
         raise ValueError(f"Region must use name:left,top,width,height format: {spec!r}")
@@ -918,7 +879,6 @@ def parse_region_spec(spec: str) -> dict[str, Any]:
         "width": width,
         "height": height,
     }
-
 
 def capture_client_region(
     hwnd: int,
@@ -961,12 +921,9 @@ def capture_client_region(
         "colorStats": color_stats(width, height, pixels),
     }
 
-
-
 def write_manifest(output_root: Path, manifest: dict[str, Any]) -> None:
     manifest_path = output_root / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
 
 def load_json_object(path: Path) -> dict[str, Any]:
     try:
@@ -977,7 +934,6 @@ def load_json_object(path: Path) -> dict[str, Any]:
         raise RuntimeError(f"Expected a JSON object in {path}.")
     return value
 
-
 def resolve_profile_path(profile: str, profile_root: str | None) -> Path:
     candidate = Path(profile)
     if candidate.exists() or candidate.suffix.lower() == ".json" or any(separator in profile for separator in ("\\", "/")):
@@ -985,7 +941,6 @@ def resolve_profile_path(profile: str, profile_root: str | None) -> Path:
 
     root = Path(profile_root) if profile_root else Path("profiles")
     return root / f"{profile}.json"
-
 
 def load_fishing_profile(profile: str | None, profile_root: str | None) -> dict[str, Any] | None:
     if not profile:
@@ -1011,7 +966,6 @@ def load_fishing_profile(profile: str | None, profile_root: str | None) -> dict[
         "guardrails": data.get("guardrails") if isinstance(data.get("guardrails"), dict) else {},
     }
 
-
 def apply_fishing_runtime_defaults(args: argparse.Namespace, *, include_session_defaults: bool) -> dict[str, Any]:
     profile_info = load_fishing_profile(getattr(args, "profile", None), getattr(args, "profile_root", None))
     pacing = profile_info.get("pacing") if isinstance(profile_info, dict) else {}
@@ -1034,13 +988,12 @@ def apply_fishing_runtime_defaults(args: argparse.Namespace, *, include_session_
     if include_session_defaults:
         apply_default("max_casts", 3)
         apply_default("max_allowed_casts", 10)
-        apply_default("inter_cast_delay_ms", 800)
+        apply_default("inter_cast_delay_ms", int(pacing.get("interCastDelayMs", 800)))
 
     return {
         "profile": profile_info,
         "appliedDefaults": applied,
     }
-
 
 def load_session_plan(path_text: str | None) -> dict[str, Any] | None:
     if not path_text:
@@ -1052,7 +1005,6 @@ def load_session_plan(path_text: str | None) -> dict[str, Any] | None:
     if schema != "autofish.sessionPlan.v1":
         raise RuntimeError(f"Unsupported session plan schema in {path}: {schema or '<missing>'}")
     return {"path": str(path), "plan": plan}
-
 
 def apply_session_plan_defaults(args: argparse.Namespace, *, include_session_defaults: bool) -> dict[str, Any]:
     loaded = load_session_plan(getattr(args, "session_plan", None))
@@ -1093,13 +1045,11 @@ def apply_session_plan_defaults(args: argparse.Namespace, *, include_session_def
         "appliedDefaults": applied,
     }
 
-
 def require_runtime_values(args: argparse.Namespace, names: tuple[str, ...], *, context: str) -> None:
     missing = [name for name in names if getattr(args, name, None) is None]
     if missing:
         flags = ", ".join("--" + name.replace("_", "-") for name in missing)
         raise RuntimeError(f"{context} requires {flags}, either directly or through --session-plan.")
-
 
 def build_session_review_scope(plan: dict[str, Any]) -> dict[str, Any]:
     target = plan.get("target") if isinstance(plan.get("target"), dict) else {}
@@ -1144,12 +1094,10 @@ def build_session_review_scope(plan: dict[str, Any]) -> dict[str, Any]:
             scope["source"]["facingUsable"] = bool(facing_evidence.get("usable"))
     return scope
 
-
 def compute_review_scope_token(scope: dict[str, Any]) -> str:
     payload = json.dumps(scope, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
     return f"afscope-{digest}"
-
 
 def attach_session_review_scope(plan: dict[str, Any]) -> dict[str, Any]:
     scope = build_session_review_scope(plan)
@@ -1161,13 +1109,11 @@ def attach_session_review_scope(plan: dict[str, Any]) -> dict[str, Any]:
     }
     return plan
 
-
 def get_session_plan_review_token(session_plan_info: dict[str, Any] | None) -> str | None:
     plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
     review = plan.get("review") if isinstance(plan, dict) and isinstance(plan.get("review"), dict) else None
     token = review.get("scopeToken") if isinstance(review, dict) else None
     return str(token) if token else None
-
 
 def build_session_plan_provenance(session_plan_info: dict[str, Any] | None) -> dict[str, Any] | None:
     plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
@@ -1228,14 +1174,12 @@ def build_session_plan_provenance(session_plan_info: dict[str, Any] | None) -> d
 
     return {key: value for key, value in provenance.items() if value is not None}
 
-
 def positive_int_or_none(value: Any) -> int | None:
     try:
         parsed = int(value)
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
-
 
 def parse_iso_datetime_utc(value: Any) -> datetime:
     if not value:
@@ -1247,7 +1191,6 @@ def parse_iso_datetime_utc(value: Any) -> datetime:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
-
 
 def check_session_plan_age_gate(
     session_plan_info: dict[str, Any] | None,
@@ -1309,7 +1252,6 @@ def check_session_plan_age_gate(
     )
     return gate
 
-
 def session_plan_expected_client_size(session_plan_info: dict[str, Any] | None) -> dict[str, Any] | None:
     plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
     if not isinstance(plan, dict):
@@ -1331,7 +1273,6 @@ def session_plan_expected_client_size(session_plan_info: dict[str, Any] | None) 
         "targetValidation": target_validation,
     }
 
-
 def validate_current_target_from_session_plan(session_plan_info: dict[str, Any] | None) -> dict[str, Any]:
     plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
     target = plan.get("target") if isinstance(plan, dict) and isinstance(plan.get("target"), dict) else {}
@@ -1340,7 +1281,6 @@ def validate_current_target_from_session_plan(session_plan_info: dict[str, Any] 
     if pid is None or not hwnd_text:
         raise RuntimeError("Session plan target.pid or target.hwnd is missing.")
     return validate_target(parse_hwnd(str(hwnd_text)), int(pid), require_foreground=False)
-
 
 def check_session_plan_target_freshness(
     session_plan_info: dict[str, Any] | None,
@@ -1394,7 +1334,6 @@ def check_session_plan_target_freshness(
         )
     return gate
 
-
 def check_session_plan_foreground_gate(
     session_plan_info: dict[str, Any] | None,
     current_target: dict[str, Any] | None = None,
@@ -1425,7 +1364,6 @@ def check_session_plan_foreground_gate(
         }
     )
     return gate
-
 
 def check_session_plan_readability_gate(
     session_plan_info: dict[str, Any] | None,
@@ -1464,18 +1402,16 @@ def check_session_plan_readability_gate(
             "reason": (
                 "Target client size is readable for proof review."
                 if passed
-                else "Target client is minimized or below preferred proof-review size; restore/maximize Rift before live proof input."
+                else "Target is minimized or very small; restore Rift for better detection screenshots."
             ),
         }
     )
     return gate
 
-
 def session_plan_stop_file_path(session_plan_info: dict[str, Any] | None) -> str:
     plan = session_plan_info.get("plan") if isinstance(session_plan_info, dict) else None
     defaults = plan.get("defaults") if isinstance(plan, dict) and isinstance(plan.get("defaults"), dict) else {}
     return str(defaults.get("stopFile") or DEFAULT_STOP_FILE)
-
 
 def check_session_plan_stop_file_gate(session_plan_info: dict[str, Any] | None) -> dict[str, Any]:
     stop_file = session_plan_stop_file_path(session_plan_info)
@@ -1491,7 +1427,6 @@ def check_session_plan_stop_file_gate(session_plan_info: dict[str, Any] | None) 
             else "Stop file exists; delete it before any confirmed live proof input."
         ),
     }
-
 
 def build_session_plan(args: argparse.Namespace) -> dict[str, Any]:
     stop_file = args.stop_file or DEFAULT_STOP_FILE
@@ -1541,7 +1476,6 @@ def build_session_plan(args: argparse.Namespace) -> dict[str, Any]:
     attach_session_review_scope(plan)
     return plan
 
-
 def run_session_plan_create(args: argparse.Namespace) -> int:
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1549,7 +1483,6 @@ def run_session_plan_create(args: argparse.Namespace) -> int:
     output_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
     print(json.dumps({"ok": True, "path": str(output_path), "schema": plan["schema"]}, indent=2))
     return 0
-
 
 def select_fan_candidate(manifest: dict[str, Any], *, candidate_index: int | None, candidate_name: str | None) -> dict[str, Any]:
     candidates = manifest.get("candidates") if isinstance(manifest.get("candidates"), list) else []
@@ -1565,7 +1498,6 @@ def select_fan_candidate(manifest: dict[str, Any], *, candidate_index: int | Non
     selector = f"index {candidate_index}" if candidate_index is not None else f"name {candidate_name}"
     raise RuntimeError(f"Fishability fan manifest has no candidate with {selector}.")
 
-
 def target_validation_from_fan_manifest(manifest: dict[str, Any]) -> dict[str, Any] | None:
     target = manifest.get("target") if isinstance(manifest.get("target"), dict) else None
     if not target:
@@ -1580,7 +1512,6 @@ def target_validation_from_fan_manifest(manifest: dict[str, Any]) -> dict[str, A
         snapshot["clientHeight"] = height
         snapshot["clientSizeSource"] = effective_client.get("source") or snapshot.get("clientSizeSource") or "fan-manifest-target"
     return snapshot
-
 
 def build_session_plan_from_fan(args: argparse.Namespace) -> dict[str, Any]:
     manifest_path = Path(args.manifest)
@@ -1651,7 +1582,6 @@ def build_session_plan_from_fan(args: argparse.Namespace) -> dict[str, Any]:
     attach_session_review_scope(plan)
     return plan
 
-
 def run_session_plan_from_fan(args: argparse.Namespace) -> int:
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1670,13 +1600,11 @@ def run_session_plan_from_fan(args: argparse.Namespace) -> int:
     )
     return 0
 
-
 def run_session_plan_show(args: argparse.Namespace) -> int:
     loaded = load_session_plan(args.path)
     assert loaded is not None
     print(json.dumps(loaded["plan"], indent=2))
     return 0
-
 
 def build_session_plan_stop_file_report(path: str, action: str) -> dict[str, Any]:
     loaded = load_session_plan(path)
@@ -1721,12 +1649,10 @@ def build_session_plan_stop_file_report(path: str, action: str) -> dict[str, Any
         ],
     }
 
-
 def run_session_plan_stop_file(args: argparse.Namespace) -> int:
     report = build_session_plan_stop_file_report(args.path, args.stop_file_action)
     print(json.dumps(report, indent=2))
     return 0
-
 
 READINESS_NAME_BY_FLAG = {
     "stop-file-clear": "stopFileClear",
@@ -1740,7 +1666,6 @@ READINESS_NAME_BY_FLAG = {
     "ready-bounded-session": "readyForBoundedSession",
 }
 
-
 SESSION_PLAN_GATE_ORDER = (
     "stopFileClear",
     "planFresh",
@@ -1751,7 +1676,6 @@ SESSION_PLAN_GATE_ORDER = (
     "oneCast",
 )
 
-
 SESSION_PLAN_GATE_LABELS = {
     "stopFileClear": "Stop file clear",
     "planFresh": "Plan fresh",
@@ -1761,7 +1685,6 @@ SESSION_PLAN_GATE_LABELS = {
     "fishabilityCandidate": "Fishability candidate reviewed",
     "oneCast": "One-cast reviewed",
 }
-
 
 def build_session_plan_gate_report(
     path: str,
@@ -1851,7 +1774,6 @@ def build_session_plan_gate_report(
     }
     return report
 
-
 def run_session_plan_gates(args: argparse.Namespace) -> int:
     report = build_session_plan_gate_report(
         args.path,
@@ -1862,7 +1784,6 @@ def run_session_plan_gates(args: argparse.Namespace) -> int:
     print(json.dumps(report, indent=2))
     return 1 if session_plan_required_readiness_failures(report) else 0
 
-
 def session_plan_required_readiness_failures(report: dict[str, Any]) -> list[str]:
     readiness = report.get("readiness") if isinstance(report.get("readiness"), dict) else {}
     failures: list[str] = []
@@ -1872,14 +1793,12 @@ def session_plan_required_readiness_failures(report: dict[str, Any]) -> list[str
             failures.append(str(required))
     return failures
 
-
 def session_plan_gate_status(gate: dict[str, Any] | None) -> str:
     if not isinstance(gate, dict):
         return "missing"
     if gate.get("passed") is True:
         return "pass" if gate.get("required", True) else "not required"
     return "blocked"
-
 
 def session_plan_gate_reason(gate: dict[str, Any] | None) -> str:
     if not isinstance(gate, dict):
@@ -1888,7 +1807,6 @@ def session_plan_gate_reason(gate: dict[str, Any] | None) -> str:
     if reason:
         return str(reason)
     return "Passed." if gate.get("passed") else "Blocked; inspect the gate JSON for details."
-
 
 def session_plan_next_action(report: dict[str, Any]) -> str:
     gates = report.get("gates") if isinstance(report.get("gates"), dict) else {}
@@ -1909,7 +1827,6 @@ def session_plan_next_action(report: dict[str, Any]) -> str:
     if report.get("readiness", {}).get("readyForBoundedSession"):
         return "All no-input bounded-session gates pass; run only the supervised bounded-session command when the operator is ready."
     return "Inspect the gate table above, fix the first blocked gate, then rerun session-plan gates."
-
 
 def render_session_plan_gate_explanation(report: dict[str, Any]) -> str:
     readiness = report.get("readiness") if isinstance(report.get("readiness"), dict) else {}
@@ -1945,7 +1862,6 @@ def render_session_plan_gate_explanation(report: dict[str, Any]) -> str:
     )
     return "\n".join(lines)
 
-
 def run_session_plan_explain(args: argparse.Namespace) -> int:
     report = build_session_plan_gate_report(
         args.path,
@@ -1961,7 +1877,6 @@ def run_session_plan_explain(args: argparse.Namespace) -> int:
     else:
         print(markdown)
     return 0
-
 
 def run_session_plan_preflight(args: argparse.Namespace) -> int:
     report = build_session_plan_gate_report(
@@ -1979,7 +1894,6 @@ def run_session_plan_preflight(args: argparse.Namespace) -> int:
     else:
         print(markdown)
     return 1 if session_plan_required_readiness_failures(report) else 0
-
 
 def build_session_plan_doctor_report(
     path: str,
@@ -2045,7 +1959,6 @@ def build_session_plan_doctor_report(
         ],
     }
 
-
 def render_session_plan_doctor_markdown(report: dict[str, Any]) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     gate_report = report.get("gateReport") if isinstance(report.get("gateReport"), dict) else {}
@@ -2091,7 +2004,6 @@ def render_session_plan_doctor_markdown(report: dict[str, Any]) -> str:
     )
     return "\n".join(lines).rstrip() + "\n"
 
-
 def run_session_plan_doctor(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"session-plan-doctor-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -2108,10 +2020,8 @@ def run_session_plan_doctor(args: argparse.Namespace) -> int:
     print(json.dumps({"ok": True, "outputRoot": str(output_root), "doctor": str(json_path), "markdown": str(markdown_path)}, indent=2))
     return 0
 
-
 def checked_box(done: bool) -> str:
     return "[x]" if done else "[ ]"
-
 
 def render_session_plan_checklist(
     plan_path: str,
@@ -2275,7 +2185,6 @@ def render_session_plan_checklist(
     )
     return "\n".join(lines).rstrip() + "\n"
 
-
 def run_session_plan_checklist(args: argparse.Namespace) -> int:
     markdown = render_session_plan_checklist(
         args.path,
@@ -2292,10 +2201,8 @@ def run_session_plan_checklist(args: argparse.Namespace) -> int:
         print(markdown, end="")
     return 0
 
-
 def quote_ps(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
-
 
 def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
     loaded = load_session_plan(plan_path)
@@ -2468,7 +2375,6 @@ def render_session_plan_runbook(plan_path: str, proof_root: str) -> str:
         lines.append("- Fan-derived plans also require a reviewed fishabilityCandidate decision before confirmed one-cast input.")
     return "\n".join(lines).rstrip() + "\n"
 
-
 def run_session_plan_runbook(args: argparse.Namespace) -> int:
     markdown = render_session_plan_runbook(args.path, args.proof_root)
     if args.output:
@@ -2480,7 +2386,6 @@ def run_session_plan_runbook(args: argparse.Namespace) -> int:
         print(markdown, end="")
     return 0
 
-
 def decision_entry_scope_tokens(entry: dict[str, Any]) -> list[str]:
     tokens: list[str] = []
     scope_tokens = entry.get("scopeTokens")
@@ -2491,12 +2396,10 @@ def decision_entry_scope_tokens(entry: dict[str, Any]) -> list[str]:
         tokens.append(str(scope_token))
     return list(dict.fromkeys(tokens))
 
-
 def latest_signal_decision(register: dict[str, Any], signal: str) -> dict[str, Any] | None:
     latest_by_signal = register.get("latestBySignal") if isinstance(register.get("latestBySignal"), dict) else {}
     latest = latest_by_signal.get(signal)
     return latest if isinstance(latest, dict) else None
-
 
 def latest_accepted_decision(
     register: dict[str, Any],
@@ -2518,7 +2421,6 @@ def latest_accepted_decision(
         return entry
     return None
 
-
 def decision_scope_hint(session_plan_info: dict[str, Any] | None, scope_token: str | None) -> str:
     if not scope_token:
         return ""
@@ -2526,7 +2428,6 @@ def decision_scope_hint(session_plan_info: dict[str, Any] | None, scope_token: s
     if plan_path:
         return f" --session-plan {plan_path}"
     return f" --scope-token {scope_token}"
-
 
 def check_one_cast_review_gate(args: argparse.Namespace, session_plan_info: dict[str, Any] | None = None) -> dict[str, Any]:
     if getattr(args, "allow_unreviewed_one_cast", False):
@@ -2565,7 +2466,6 @@ def check_one_cast_review_gate(args: argparse.Namespace, session_plan_info: dict
             + ", or intentionally bypass with --allow-unreviewed-one-cast."
         )
     return gate
-
 
 def check_fan_candidate_review_gate(
     session_plan_info: dict[str, Any] | None,
@@ -2634,7 +2534,6 @@ def check_fan_candidate_review_gate(
         )
     return gate
 
-
 def normalized_manifest_review_gates(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     gates = manifest.get("reviewGates") if isinstance(manifest.get("reviewGates"), dict) else {}
     normalized: dict[str, dict[str, Any]] = {
@@ -2659,7 +2558,6 @@ def normalized_manifest_review_gates(manifest: dict[str, Any]) -> dict[str, dict
 
     return normalized
 
-
 def summarize_review_gates(manifest: dict[str, Any]) -> dict[str, Any]:
     gates = normalized_manifest_review_gates(manifest)
     required = sorted(name for name, gate in gates.items() if gate.get("required", True))
@@ -2672,7 +2570,6 @@ def summarize_review_gates(manifest: dict[str, Any]) -> dict[str, Any]:
         "overriddenReviewGateNames": overridden,
         "allReviewGatesPassed": bool(gates) and not failed,
     }
-
 
 def summarize_red_reticle_click_guards(manifest: dict[str, Any]) -> dict[str, Any]:
     guards: list[dict[str, Any]] = []
@@ -2717,7 +2614,6 @@ def summarize_red_reticle_click_guards(manifest: dict[str, Any]) -> dict[str, An
         "redReticleClickGuards": guards,
     }
 
-
 def read_text_from_offset(path: Path, offset: int, max_bytes: int) -> tuple[str, int, bool]:
     current_size = path.stat().st_size
     start = offset if offset <= current_size else 0
@@ -2730,7 +2626,6 @@ def read_text_from_offset(path: Path, offset: int, max_bytes: int) -> tuple[str,
         truncated = True
     return data.decode("utf-8", errors="replace"), start + len(data), truncated
 
-
 def tail_lines(path: Path, line_count: int, max_bytes: int = 65536) -> list[str]:
     if line_count <= 0 or not path.exists():
         return []
@@ -2739,7 +2634,6 @@ def tail_lines(path: Path, line_count: int, max_bytes: int = 65536) -> list[str]
         f.seek(max(0, size - max_bytes))
         text = f.read(max_bytes).decode("utf-8", errors="replace")
     return text.splitlines()[-line_count:]
-
 
 def scan_text_terms(text: str, terms: list[str]) -> dict[str, Any]:
     lowered = text.lower()
@@ -2763,14 +2657,12 @@ def scan_text_terms(text: str, terms: list[str]) -> dict[str, Any]:
         "matchedLinesTruncated": len(matched_lines) > 100,
     }
 
-
 def write_wav_pcm16(path: Path, pcm_data: bytes, *, sample_rate: int, channels: int) -> None:
     with wave.open(str(path), "wb") as wav:
         wav.setnchannels(channels)
         wav.setsampwidth(2)
         wav.setframerate(sample_rate)
         wav.writeframes(pcm_data)
-
 
 def analyze_pcm16_windows(pcm_data: bytes, *, sample_rate: int, channels: int, window_ms: int) -> dict[str, Any]:
     bytes_per_frame = channels * 2
@@ -2830,7 +2722,6 @@ def analyze_pcm16_windows(pcm_data: bytes, *, sample_rate: int, channels: int, w
         "windows": windows,
     }
 
-
 def record_audio_pcm16(*, seconds: float, sample_rate: int, channels: int, device_id: int) -> bytes:
     if seconds <= 0:
         raise ValueError("Audio proof duration must be greater than zero seconds.")
@@ -2889,7 +2780,6 @@ def record_audio_pcm16(*, seconds: float, sample_rate: int, channels: int, devic
         if prepared:
             winmm.waveInUnprepareHeader(handle, ctypes.byref(header), ctypes.sizeof(header))
         winmm.waveInClose(handle)
-
 
 def run_signal_proof_reticle(args: argparse.Namespace) -> int:
     hwnd = parse_hwnd(args.hwnd)
@@ -3027,7 +2917,6 @@ def run_signal_proof_reticle(args: argparse.Namespace) -> int:
         write_manifest(output_root, manifest)
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
-
 
 def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
     plan_defaults = apply_session_plan_defaults(args, include_session_defaults=False)
@@ -3257,7 +3146,6 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
         write_manifest(output_root, manifest)
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
-
 
 def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
     plan_defaults = apply_session_plan_defaults(args, include_session_defaults=True)
@@ -3529,12 +3417,10 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
 
-
 def parse_int_list(values: list[int] | None, default: list[int]) -> list[int]:
     if not values:
         return list(default)
     return [int(value) for value in values]
-
 
 def generate_fan_candidates(
     *,
@@ -3596,7 +3482,6 @@ def generate_fan_candidates(
     }
     return candidates, geometry
 
-
 def build_reticle_candidate_commands(
     *,
     pid: int,
@@ -3626,7 +3511,6 @@ def build_reticle_candidate_commands(
             "Only run confirmed commands while supervised and after exact PID/HWND/foreground are current.",
         ],
     }
-
 
 def load_facing_evidence(path: str | None, *, require_usable: bool) -> dict[str, Any] | None:
     if require_usable and not path:
@@ -3669,7 +3553,6 @@ def load_facing_evidence(path: str | None, *, require_usable: bool) -> dict[str,
             "AutoFish does not convert world-coordinate facing into screen coordinates without a separately proven mapping.",
         ],
     }
-
 
 def render_fishability_fan_runbook(manifest_path: str) -> str:
     path = Path(manifest_path)
@@ -3786,7 +3669,6 @@ def render_fishability_fan_runbook(manifest_path: str) -> str:
 
     return "\n".join(lines).rstrip() + "\n"
 
-
 def run_signal_proof_fishability_fan_runbook(args: argparse.Namespace) -> int:
     try:
         markdown = render_fishability_fan_runbook(args.manifest)
@@ -3801,7 +3683,6 @@ def run_signal_proof_fishability_fan_runbook(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
-
 
 def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
     hwnd = parse_hwnd(args.hwnd)
@@ -3977,7 +3858,6 @@ def run_signal_proof_fishability_fan(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
 
-
 def normalize_base_url(base_url: str) -> str:
     text = str(base_url or "").strip()
     if not text:
@@ -3986,10 +3866,8 @@ def normalize_base_url(base_url: str) -> str:
         text += "/"
     return text
 
-
 def chromalink_url(base_url: str, path: str) -> str:
     return urllib.parse.urljoin(normalize_base_url(base_url), path.lstrip("/"))
-
 
 def fetch_json(url: str, *, timeout_seconds: float, max_bytes: int = 1_048_576) -> dict[str, Any]:
     started = time.perf_counter()
@@ -4041,16 +3919,13 @@ def fetch_json(url: str, *, timeout_seconds: float, max_bytes: int = 1_048_576) 
         result["bodyPreview"] = text[:400]
     return result
 
-
 def get_object(value: Any, key: str) -> dict[str, Any]:
     if isinstance(value, dict) and isinstance(value.get(key), dict):
         return value[key]
     return {}
 
-
 def is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
-
 
 def classify_chromalink_world_state(health: dict[str, Any], ready: dict[str, Any], world: dict[str, Any]) -> dict[str, Any]:
     health_json = health.get("json") if isinstance(health.get("json"), dict) else {}
@@ -4139,7 +4014,6 @@ def classify_chromalink_world_state(health: dict[str, Any], ready: dict[str, Any
         },
     }
 
-
 def query_chromalink_world_state(base_url: str, *, timeout_seconds: float) -> dict[str, Any]:
     health = fetch_json(chromalink_url(base_url, "/health"), timeout_seconds=timeout_seconds)
     ready = fetch_json(chromalink_url(base_url, "/ready"), timeout_seconds=timeout_seconds)
@@ -4152,7 +4026,6 @@ def query_chromalink_world_state(base_url: str, *, timeout_seconds: float) -> di
         "worldState": world,
         "classification": classification,
     }
-
 
 def wait_for_chromalink_position(
     base_url: str,
@@ -4176,7 +4049,6 @@ def wait_for_chromalink_position(
                 "position": classification.get("playerPosition"),
             }
         time.sleep(max(0.05, poll_interval_ms / 1000.0))
-
 
 def compute_facing_delta(before: dict[str, Any], after: dict[str, Any], *, min_distance: float) -> dict[str, Any]:
     dx = float(after["x"]) - float(before["x"])
@@ -4226,7 +4098,6 @@ def compute_facing_delta(before: dict[str, Any], after: dict[str, Any], *, min_d
         },
     }
 
-
 def build_facing_delta_result(
     classification: str,
     *,
@@ -4251,7 +4122,6 @@ def build_facing_delta_result(
         result["afterCoordinateReady"] = after_coordinate_ready
     return result
 
-
 def parse_addon_coord_line(line: str) -> dict[str, Any]:
     values: dict[str, float] = {}
     for axis, value in ADDON_COORD_RE.findall(line or ""):
@@ -4272,7 +4142,6 @@ def parse_addon_coord_line(line: str) -> dict[str, Any]:
         "z": values["z"],
         "playerUnit": unit_match.group(1) if unit_match else None,
     }
-
 
 def manual_coordinate_sample(
     label: str,
@@ -4317,7 +4186,6 @@ def manual_coordinate_sample(
         },
     }
 
-
 def addon_coordinate_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
     numeric_values = (args.addon_x, args.addon_y, args.addon_z)
     has_any_numeric = any(value is not None for value in numeric_values)
@@ -4339,7 +4207,6 @@ def addon_coordinate_from_args(args: argparse.Namespace) -> dict[str, Any] | Non
 
     return None
 
-
 def compare_coordinates(addon_position: dict[str, Any], bridge_position: dict[str, Any], *, tolerance: float) -> dict[str, Any]:
     deltas = {
         axis: round(float(bridge_position[axis]) - float(addon_position[axis]), 6)
@@ -4356,7 +4223,6 @@ def compare_coordinates(addon_position: dict[str, Any], bridge_position: dict[st
         "maxAbsoluteDelta": round(max_abs_delta, 6),
         "classification": "coordinate-match" if matched else "coordinate-mismatch",
     }
-
 
 def run_signal_proof_coordinate_crosscheck(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-coordinate-crosscheck-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -4468,7 +4334,6 @@ def run_signal_proof_coordinate_crosscheck(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
 
-
 def run_signal_proof_chromalink(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-chromalink-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -4550,7 +4415,6 @@ def run_signal_proof_chromalink(args: argparse.Namespace) -> int:
         write_manifest(output_root, manifest)
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
-
 
 def run_signal_proof_facing_delta(args: argparse.Namespace) -> int:
     hwnd = parse_hwnd(args.hwnd)
@@ -4751,7 +4615,6 @@ def run_signal_proof_facing_delta(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
 
-
 def run_signal_proof_facing_from_coords(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-facing-from-coords-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -4849,7 +4712,6 @@ def run_signal_proof_facing_from_coords(args: argparse.Namespace) -> int:
         write_manifest(output_root, manifest)
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
-
 
 def run_signal_proof_log(args: argparse.Namespace) -> int:
     log_path = Path(args.log_path)
@@ -4949,7 +4811,6 @@ def run_signal_proof_log(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
 
-
 def run_signal_proof_layout(args: argparse.Namespace) -> int:
     hwnd = parse_hwnd(args.hwnd)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-layout-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -5024,6 +4885,297 @@ def run_signal_proof_layout(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
 
+def _read_clipboard_text() -> str | None:
+    """Read text from the Windows clipboard using ctypes (stdlib).
+
+    Returns the clipboard text as a UTF-8 string, or None if no text is
+    available or the clipboard cannot be opened.
+    """
+    user32 = ctypes.windll.user32
+    if not user32.OpenClipboard(None):
+        return None
+    try:
+        # Try Unicode first
+        handle = user32.GetClipboardData(CF_UNICODETEXT)
+        if handle:
+            return ctypes.c_wchar_p(handle).value
+        # Fall back to ANSI
+        handle = user32.GetClipboardData(CF_TEXT)
+        if handle:
+            raw = ctypes.c_char_p(handle).value
+            if raw:
+                return raw.decode("utf-8", errors="replace")
+        return None
+    finally:
+        user32.CloseClipboard()
+
+def _foreground_send_select_all(hwnd: int) -> None:
+    """Bring the Rift window to foreground and send Ctrl+A to select all.
+
+    The addon's hidden EditBox must have focus-like selection behavior.
+    Does NOT check for minimized windows — caller should validate first.
+    """
+    user32.SetForegroundWindow(hwnd)
+    time.sleep(0.2)
+    KEYEVENTF_KEYUP = 0x0002
+    # Ctrl down
+    user32.keybd_event(VK_CONTROL, 0, 0, None)
+    time.sleep(0.05)
+    # A down
+    user32.keybd_event(0x41, 0, 0, None)
+    time.sleep(0.05)
+    # A up
+    user32.keybd_event(0x41, 0, KEYEVENTF_KEYUP, None)
+    # Ctrl up
+    user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, None)
+    time.sleep(0.1)
+
+def _foreground_send_ctrl_c(hwnd: int) -> None:
+    """Bring the Rift window to foreground and send Ctrl+C to copy to clipboard.
+    """
+    user32.SetForegroundWindow(hwnd)
+    time.sleep(0.2)
+    KEYEVENTF_KEYUP = 0x0002
+    # Ctrl down
+    user32.keybd_event(VK_CONTROL, 0, 0, None)
+    time.sleep(0.05)
+    # C down
+    user32.keybd_event(0x43, 0, 0, None)
+    time.sleep(0.05)
+    # C up
+    user32.keybd_event(0x43, 0, KEYEVENTF_KEYUP, None)
+    # Ctrl up
+    user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, None)
+    time.sleep(0.1)
+
+def _write_clipboard_text(text: str) -> bool:
+    """Write text to the Windows clipboard using ctypes (stdlib).
+
+    Opens the clipboard, empties it, sets the text as CF_UNICODETEXT,
+    and closes it. Returns True on success, False on failure.
+    """
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    GMEM_MOVEABLE = 0x0002
+    CF_UNICODETEXT = 13
+
+    if not user32.OpenClipboard(None):
+        return False
+    try:
+        user32.EmptyClipboard()
+        # Allocate global memory for the UTF-16 text
+        wide = (text + "\x00").encode("utf-16-le")
+        handle = kernel32.GlobalAlloc(GMEM_MOVEABLE, len(wide))
+        if not handle:
+            return False
+        locked = kernel32.GlobalLock(handle)
+        if locked:
+            ctypes.memmove(locked, wide, len(wide))
+            kernel32.GlobalUnlock(handle)
+        user32.SetClipboardData(CF_UNICODETEXT, handle)
+        return True
+    finally:
+        user32.CloseClipboard()
+
+def _foreground_send_ctrl_v(hwnd: int) -> None:
+    """Bring the Rift window to foreground and send Ctrl+V to paste.
+
+    The Python helper writes structured JSON to the clipboard, then calls
+    this function to paste into the addon's hidden EditBox. The Lua addon
+    reads the paste in its next OnUpdateEnd cycle.
+    """
+    user32.SetForegroundWindow(hwnd)
+    time.sleep(0.2)
+    KEYEVENTF_KEYUP = 0x0002
+    # Ctrl down
+    user32.keybd_event(VK_CONTROL, 0, 0, None)
+    time.sleep(0.05)
+    # V down
+    user32.keybd_event(0x56, 0, 0, None)
+    time.sleep(0.05)
+    # V up
+    user32.keybd_event(0x56, 0, KEYEVENTF_KEYUP, None)
+    # Ctrl up
+    user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, None)
+    time.sleep(0.05)
+
+def run_write_addon_command(args: argparse.Namespace) -> int:
+    """Write-addon-command CLI handler: sends a structured command to the
+    in-game AutoFish addon via clipboard + Ctrl+V paste.
+
+    The command is serialized as JSON, written to the Windows clipboard,
+    and pasted into the addon's hidden EditBox. The Lua addon reads and
+    processes it on the next OnUpdateEnd cycle.
+
+    Supported command types: start, pause, resume, stop, sync_profile,
+    request_snapshot.
+    """
+    VALID_TYPES = {"start", "pause", "resume", "stop", "sync_profile", "request_snapshot"}
+    ct = args.command_type.lower()
+    if ct not in VALID_TYPES:
+        raise ValueError(
+            f"Unknown command_type {args.command_type!r}. "
+            f"Valid: {', '.join(sorted(VALID_TYPES))}"
+        )
+
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    command: dict[str, Any] = {"commandType": ct, "issuedAtUtc": now_utc}
+    if args.profile_id:
+        command["profileId"] = args.profile_id
+    if args.notes:
+        command["notes"] = args.notes
+
+    result: dict[str, Any] = {"command": command}
+    dry_run = bool(args.dry_run)
+    json_payload = json.dumps(command)
+
+    if dry_run:
+        result["clipboardWrite"] = "(dry-run, not written)"
+        result["ctrlVPaste"] = "(dry-run, not sent)"
+        result["dryRun"] = True
+        print(json.dumps(result, indent=2))
+        return 0
+
+    # Write JSON command to clipboard
+    clipboard_ok = _write_clipboard_text(json_payload)
+    if not clipboard_ok:
+        raise RuntimeError("Failed to write command JSON to Windows clipboard")
+    result["clipboardWrite"] = "ok"
+
+    # Paste into Rift via Ctrl+V
+    pid = int(args.pid)
+    hwnd = parse_hwnd(args.hwnd)
+    target = validate_target(hwnd, pid, require_foreground=False)
+    if target.get("isMinimized"):
+        raise RuntimeError("Target is minimized; restore Rift before sending addon commands")
+    _foreground_send_ctrl_v(hwnd)
+    result["ctrlVPaste"] = {"hwnd": hwnd_hex(hwnd), "pid": pid}
+
+    # Write JSON audit file
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    cmd_file = out_dir / f"{ct}-{ts}.json"
+    cmd_file.write_text(json_payload, encoding="utf-8")
+    result["commandFile"] = str(cmd_file.resolve())
+
+    result["dryRun"] = False
+    print(json.dumps(result, indent=2))
+    return 0
+
+def read_addon_bridge(hwnd: int, pid: int) -> dict[str, Any]:
+    """Read the addon's bridge snapshot via Windows clipboard relay.
+
+    The Lua addon writes structured envelope JSON to a hidden EditBox.
+    This helper brings the Rift window to foreground, sends Ctrl+A/Ctrl+C
+    to copy the EditBox content to the clipboard, then reads and parses it.
+
+    Returns a dict with keys: available, snapshot, messageType, etc.
+    On failure returns available=False with a reason string.
+    """
+    try:
+        _foreground_send_select_all(hwnd)
+        _foreground_send_ctrl_c(hwnd)
+    except Exception as exc:
+        return {
+            "available": False,
+            "reason": f"failed to send keyboard input: {exc}",
+        }
+
+    text = _read_clipboard_text()
+    if not text:
+        return {
+            "available": False,
+            "reason": "clipboard was empty after Ctrl+A/Ctrl+C — EditBox may not have focus or content",
+        }
+
+    # Try parsing as a single JSON envelope (preferred) or JSONL
+    text = text.strip()
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            payload = parsed.get("payload") if isinstance(parsed.get("payload"), dict) else {}
+            return {
+                "available": True,
+                "source": "clipboard-single",
+                "messageType": parsed.get("messageType", "unknown"),
+                "contractVersion": parsed.get("contractVersion", "unknown"),
+                "issuedAtUtc": parsed.get("issuedAtUtc", "unknown"),
+                "snapshot": payload,
+            }
+    except json.JSONDecodeError:
+        pass
+
+    # Try JSONL (last line wins)
+    last_envelope = None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            parsed = json.loads(line)
+            last_envelope = parsed
+        except json.JSONDecodeError:
+            continue
+
+    if isinstance(last_envelope, dict):
+        payload = last_envelope.get("payload") if isinstance(last_envelope.get("payload"), dict) else {}
+        return {
+            "available": True,
+            "source": "clipboard-jsonl",
+            "messageType": last_envelope.get("messageType", "unknown"),
+            "contractVersion": last_envelope.get("contractVersion", "unknown"),
+            "issuedAtUtc": last_envelope.get("issuedAtUtc", "unknown"),
+            "snapshot": payload,
+        }
+
+    return {
+        "available": False,
+        "reason": "no parseable JSON or JSONL found in clipboard text",
+    }
+
+def run_addon_command(args: argparse.Namespace) -> int:
+    """CLI handler for ``addon-command`` -- writes a structured addon command."""
+    try:
+        result = write_addon_command(
+            args.command_type,
+            profile_id=args.profile_id,
+            notes=args.notes,
+            output_dir=args.output_dir,
+            saved_vars_path=args.saved_vars_path,
+        )
+    except ValueError as exc:
+        print(f"ERROR: {exc}")
+        return 1
+
+    print(f"Command written: {result['commandFile']}")
+    if result.get("savedVarsFile"):
+        injected = result.get("savedVarsInjected", False)
+        status = "injected" if injected else "NOT injected"
+        print(f"SavedVariables file: {result['savedVarsFile']} ({status})")
+        if not injected and result.get("savedVarsWarning"):
+            print(f"  Warning: {result['savedVarsWarning']}")
+    else:
+        print("SavedVariables file: not provided (use --saved-vars-path to enable injection)")
+
+    cmd = result.get("command", {})
+    print(f"Command: {json.dumps(cmd)}")
+    print(f"\nNext: trigger a UI reload (/reloadui) in Rift so the addon picks up the command.")
+    return 0
+
+def run_addon_snapshot(args: argparse.Namespace) -> int:
+    """Read and display the latest addon bridge snapshot via clipboard relay."""
+    hwnd = getattr(args, "hwnd", None)
+    pid = getattr(args, "pid", None)
+    if not hwnd or not pid:
+        print("--pid and --hwnd are required for clipboard bridge reading", file=sys.stderr)
+        return 1
+    bridge = read_addon_bridge(hwnd, pid)
+    print(json.dumps(bridge, indent=2, default=str))
+    if bridge.get("available"):
+        return 0
+    print(f"Bridge snapshot unavailable: {bridge.get('reason', 'unknown')}", file=sys.stderr)
+    return 1
 
 def run_signal_proof_slash(args: argparse.Namespace) -> int:
     hwnd = parse_hwnd(args.hwnd)
@@ -5158,7 +5310,6 @@ def run_signal_proof_slash(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
 
-
 def run_signal_proof_audio(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-audio-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -5224,13 +5375,11 @@ def run_signal_proof_audio(args: argparse.Namespace) -> int:
         print(json.dumps({"ok": False, "outputRoot": str(output_root), "error": str(exc)}, indent=2), file=sys.stderr)
         return 1
 
-
 def signal_from_schema(schema: str) -> str:
     parts = schema.split(".")
     if len(parts) >= 3 and parts[0] == "autofish" and parts[1] == "signalProof":
         return parts[2]
     return "unknown"
-
 
 SIGNAL_PROOF_REQUIRED_FIELD_TYPES: dict[str, dict[str, type]] = {
     "reticle": {
@@ -5310,7 +5459,6 @@ SIGNAL_PROOF_REQUIRED_FIELD_TYPES: dict[str, dict[str, type]] = {
     },
 }
 
-
 def validate_signal_proof_manifest_shape(manifest: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     schema = manifest.get("schema")
@@ -5338,7 +5486,6 @@ def validate_signal_proof_manifest_shape(manifest: dict[str, Any]) -> list[str]:
             errors.append(f"{field_name} must be {expected_type.__name__} for {signal} manifests")
     return errors
 
-
 def load_signal_proof_manifests(proof_root: Path) -> list[tuple[Path, dict[str, Any]]]:
     manifests: list[tuple[Path, dict[str, Any]]] = []
     if proof_root.is_file() and proof_root.name == "manifest.json":
@@ -5355,7 +5502,6 @@ def load_signal_proof_manifests(proof_root: Path) -> list[tuple[Path, dict[str, 
             manifests.append((path, manifest))
     return manifests
 
-
 def nonzero_counts(counts: dict[str, Any]) -> dict[str, int]:
     result: dict[str, int] = {}
     for key, value in counts.items():
@@ -5366,7 +5512,6 @@ def nonzero_counts(counts: dict[str, Any]) -> dict[str, int]:
         if count:
             result[str(key)] = count
     return result
-
 
 def suggest_review(signal: str, summary: dict[str, Any]) -> str:
     if summary.get("manifestValidationErrors"):
@@ -5447,7 +5592,6 @@ def suggest_review(signal: str, summary: dict[str, Any]) -> str:
         return "needs-slash-output-evidence"
     return "manual-review"
 
-
 def summarize_session_plan_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
     provenance = manifest.get("sessionPlanProvenance")
     if not isinstance(provenance, dict):
@@ -5479,7 +5623,6 @@ def summarize_session_plan_provenance(manifest: dict[str, Any]) -> dict[str, Any
         ),
         "sourceFacingIsNativeActorFacing": bool(facing_evidence.get("isNativeActorFacing")),
     }
-
 
 def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
     schema = str(manifest.get("schema") or "unknown")
@@ -5778,7 +5921,6 @@ def summarize_signal_proof_manifest(path: Path, manifest: dict[str, Any]) -> dic
     summary["suggestedReview"] = suggest_review(signal, summary)
     return summary
 
-
 def append_session_plan_provenance_lines(lines: list[str], summary: dict[str, Any]) -> None:
     plan_path = summary.get("sessionPlanPath")
     scope_token = summary.get("sessionPlanScopeToken")
@@ -5807,7 +5949,6 @@ def append_session_plan_provenance_lines(lines: list[str], summary: dict[str, An
             f"- source operational facing: x={vector.get('x')} y={vector.get('y')} "
             f"angle={facing.get('angleDegreesMath')} native={summary.get('sourceFacingIsNativeActorFacing')}"
         )
-
 
 def render_signal_proof_markdown(report: dict[str, Any]) -> str:
     lines = [
@@ -5974,7 +6115,6 @@ def render_signal_proof_markdown(report: dict[str, Any]) -> str:
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
-
 def build_signal_proof_summary_report(proof_root: Path) -> dict[str, Any]:
     summaries = [
         summarize_signal_proof_manifest(path, manifest)
@@ -6002,7 +6142,6 @@ def build_signal_proof_summary_report(proof_root: Path) -> dict[str, Any]:
         ],
     }
 
-
 def write_signal_proof_summary_artifacts(proof_root: Path, output_root: Path) -> tuple[dict[str, Any], dict[str, str]]:
     output_root.mkdir(parents=True, exist_ok=True)
     report = build_signal_proof_summary_report(proof_root)
@@ -6017,14 +6156,12 @@ def write_signal_proof_summary_artifacts(proof_root: Path, output_root: Path) ->
         "markdown": str(markdown_path),
     }
 
-
 def run_signal_proof_summarize(args: argparse.Namespace) -> int:
     proof_root = Path(args.proof_root)
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-summary-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     report, summary_artifacts = write_signal_proof_summary_artifacts(proof_root, output_root)
     print(json.dumps({"ok": True, "manifestCount": report["manifestCount"], **summary_artifacts}, indent=2))
     return 0
-
 
 def load_decision_register(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -6050,7 +6187,6 @@ def load_decision_register(path: Path) -> dict[str, Any]:
     if not isinstance(register["latestBySignal"], dict):
         raise RuntimeError(f"Decision register latestBySignal must be an object: {path}")
     return register
-
 
 def collect_decision_scopes(args: argparse.Namespace) -> tuple[list[str], list[dict[str, Any]]]:
     tokens: list[str] = []
@@ -6079,7 +6215,6 @@ def collect_decision_scopes(args: argparse.Namespace) -> tuple[list[str], list[d
         )
 
     return tokens, plan_scopes
-
 
 def inspect_decision_evidence_paths(evidence: list[str] | None, proof_root: str | None) -> list[dict[str, Any]]:
     inspections: list[dict[str, Any]] = []
@@ -6146,7 +6281,6 @@ def inspect_decision_evidence_paths(evidence: list[str] | None, proof_root: str 
         inspections.append(entry)
     return inspections
 
-
 def decision_evidence_validation(entry: dict[str, Any]) -> list[dict[str, Any]]:
     existing = entry.get("evidenceValidation")
     if isinstance(existing, list):
@@ -6154,7 +6288,6 @@ def decision_evidence_validation(entry: dict[str, Any]) -> list[dict[str, Any]]:
     evidence = entry.get("evidence") if isinstance(entry.get("evidence"), list) else []
     proof_root = str(entry.get("proofRoot") or ".autofish-live")
     return inspect_decision_evidence_paths([str(value) for value in evidence], proof_root)
-
 
 def latest_summaries_by_signal(summaries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
@@ -6166,7 +6299,6 @@ def latest_summaries_by_signal(summaries: list[dict[str, Any]]) -> dict[str, dic
         if current is None or summary_key >= current_key:
             latest[signal] = summary
     return latest
-
 
 def build_signal_proof_doctor_report(proof_root: str, decision_register: str) -> dict[str, Any]:
     proof_path = Path(proof_root)
@@ -6257,7 +6389,6 @@ def build_signal_proof_doctor_report(proof_root: str, decision_register: str) ->
         ],
     }
 
-
 def render_signal_proof_doctor_markdown(report: dict[str, Any]) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     lines = [
@@ -6278,6 +6409,43 @@ def render_signal_proof_doctor_markdown(report: dict[str, Any]) -> str:
         f"- decisions: {summary.get('decisionCount', 0)}",
         f"- weak decision evidence entries: {summary.get('weakDecisionEvidenceCount', 0)}",
     ]
+    # Addon bridge snapshot section
+    addon_bridge = report.get("addonBridge") if isinstance(report.get("addonBridge"), dict) else {}
+    if addon_bridge.get("available"):
+        snap = addon_bridge.get("snapshot") if isinstance(addon_bridge.get("snapshot"), dict) else {}
+        counters = snap.get("counters") if isinstance(snap.get("counters"), dict) else {}
+        lines.extend([
+            "",
+            "## Addon bridge snapshot",
+            "",
+            f"- mode: `{snap.get('mode', 'unknown')}`",
+            f"- activeProfile: `{snap.get('activeProfile', 'unknown')}`",
+            f"- bridgeOnline: `{snap.get('bridgeOnline', False)}`",
+            f"- inGame: `{snap.get('inGame', False)}`",
+            f"- nearWater: `{snap.get('nearWater', False)}`",
+            f"- inCombat: `{snap.get('inCombat', False)}`",
+            f"- inventoryFull: `{snap.get('inventoryFull', False)}`",
+            f"- remainingBait: `{snap.get('remainingBait', '?')}`",
+            f"- freeSlots: `{snap.get('freeSlots', '?')}`",
+            f"- lastAction: `{snap.get('lastAction', '?')}`",
+            f"- character: `{snap.get('characterName', '?')}`",
+            f"- updatedAt: `{snap.get('updatedAtUtc', '?')}`",
+            f"- counters: casts={counters.get('casts', 0)} hooks={counters.get('hooksets', 0)} catches={counters.get('catches', 0)} skillUps={counters.get('skillUps', 0)}",
+        ])
+        alerts = snap.get("alerts")
+        if isinstance(alerts, list) and alerts:
+            lines.append(f"- alerts ({len(alerts)}): {'; '.join(alerts)}")
+        lines.append(f"- messageType: `{addon_bridge.get('messageType', '?')}`")
+        lines.append(f"- contractVersion: `{addon_bridge.get('contractVersion', '?')}`")
+        lines.append(f"- issuedAt: `{addon_bridge.get('issuedAtUtc', '?')}`")
+    else:
+        lines.extend([
+            "",
+            "## Addon bridge snapshot",
+            "",
+            f"- unavailable: {addon_bridge.get('reason', 'no bridge path configured')}",
+        ])
+
     if summary.get("decisionRegisterError"):
         lines.append(f"- decision register error: `{summary.get('decisionRegisterError')}`")
 
@@ -6316,7 +6484,6 @@ def render_signal_proof_doctor_markdown(report: dict[str, Any]) -> str:
     lines.append("")
     return "\n".join(lines)
 
-
 def run_signal_proof_doctor(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-doctor-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
@@ -6328,11 +6495,11 @@ def run_signal_proof_doctor(args: argparse.Namespace) -> int:
     print(json.dumps({"ok": True, "outputRoot": str(output_root), "doctor": str(json_path), "markdown": str(markdown_path)}, indent=2))
     return 0
 
-
 def build_autofish_doctor_report(
     proof_root: str,
     decision_register: str,
     session_plan: str,
+    bridge_snapshot: dict[str, Any] | None = None,
     *,
     max_plan_age_minutes: int | float | None = DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES,
     fail_on: list[str] | None = None,
@@ -6389,6 +6556,8 @@ def build_autofish_doctor_report(
             "sessionPlanLoaded": bool(session_status.get("loaded")),
             "sessionPlanReadyForOneCast": bool(session_summary.get("readyForOneCast")),
             "sessionPlanReadyForBoundedSession": bool(session_summary.get("readyForBoundedSession")),
+            "addonBridgeAvailable": bool(bridge_snapshot is not None and bridge_snapshot.get("available")),
+            "addonBridge": bridge_snapshot if bridge_snapshot else {"available": False, "reason": "not provided"},
         },
         "signalProofDoctor": signal_report,
         "sessionPlanStatus": session_status,
@@ -6405,7 +6574,6 @@ def build_autofish_doctor_report(
     report["failed"] = bool(failures)
     report["failures"] = failures
     return report
-
 
 def autofish_doctor_failures(report: dict[str, Any], fail_on: list[str]) -> list[dict[str, Any]]:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
@@ -6429,7 +6597,6 @@ def autofish_doctor_failures(report: dict[str, Any], fail_on: list[str]) -> list
         add("not-ready-bounded-session", "Session plan is not ready for confirmed bounded-session input.")
 
     return failures
-
 
 def render_autofish_doctor_markdown(report: dict[str, Any]) -> str:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
@@ -6507,16 +6674,25 @@ def render_autofish_doctor_markdown(report: dict[str, Any]) -> str:
 
     return "\n".join(lines).rstrip() + "\n"
 
-
 def run_autofish_doctor(args: argparse.Namespace) -> int:
     output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"autofish-doctor-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     output_root.mkdir(parents=True, exist_ok=True)
+    # Read addon bridge snapshot if pid/hwnd provided
+    bridge_snapshot = None
+    bridge_hwnd = getattr(args, "hwnd", None)
+    bridge_pid = getattr(args, "pid", None)
+    if bridge_hwnd and bridge_pid:
+        try:
+            bridge_snapshot = read_addon_bridge(bridge_hwnd, bridge_pid)
+        except Exception as exc_read:
+            bridge_snapshot = {"available": False, "reason": f"bridge read failed: {exc_read}"}
     report = build_autofish_doctor_report(
         args.proof_root,
         args.decision_register,
         args.session_plan,
         max_plan_age_minutes=getattr(args, "max_plan_age_minutes", DEFAULT_SESSION_PLAN_MAX_AGE_MINUTES),
         fail_on=getattr(args, "fail_on", None) or [],
+        bridge_snapshot=bridge_snapshot,
     )
     if getattr(args, "refresh_summary", False):
         _, summary_artifacts = write_signal_proof_summary_artifacts(Path(args.proof_root), output_root / "signal-proof-summary")
@@ -6542,7 +6718,6 @@ def run_autofish_doctor(args: argparse.Namespace) -> int:
             payload["summaryArtifacts"] = report["summaryArtifacts"]
         print(json.dumps(payload, indent=2))
     return 1 if report.get("failed") else 0
-
 
 def run_signal_proof_decide(args: argparse.Namespace) -> int:
     register_path = Path(args.register)
@@ -6573,7 +6748,6 @@ def run_signal_proof_decide(args: argparse.Namespace) -> int:
     print(json.dumps({"ok": True, "register": str(register_path), "entry": entry}, indent=2))
     return 0
 
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AutoFish helper diagnostics")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -6585,6 +6759,56 @@ def build_parser() -> argparse.ArgumentParser:
     target_snapshot.add_argument("--require-readable", action="store_true", help="Fail unless the target client is restored and at least 960x540")
     target_snapshot.add_argument("--output", help="Optional JSON output path")
     target_snapshot.set_defaults(func=run_target_snapshot)
+    addon_snapshot = subparsers.add_parser(
+        "addon-snapshot",
+        help="Read the most recent structured bridge snapshot from the in-game addon via clipboard relay",
+    )
+    addon_snapshot.add_argument("--pid", type=int, required=True, help="Expected Rift process ID for clipboard bridge reading")
+    addon_snapshot.add_argument("--hwnd", required=True, help="Expected Rift window handle, decimal or 0x hex, for clipboard bridge reading")
+    addon_snapshot.set_defaults(func=run_addon_snapshot)
+
+    # --- write-addon-command ---
+    write_addon_cmd_parser = subparsers.add_parser(
+        "write-addon-command",
+        help="Send a structured command to the in-game AutoFish addon via clipboard + Ctrl+V paste",
+    )
+    write_addon_cmd_parser.add_argument(
+        "--pid",
+        type=int,
+        required=True,
+        help="Rift process ID for Ctrl+V paste into the bridge EditBox",
+    )
+    write_addon_cmd_parser.add_argument(
+        "--hwnd",
+        required=True,
+        help="Rift window handle, decimal or 0x hex, for Ctrl+V paste into the bridge EditBox",
+    )
+    write_addon_cmd_parser.add_argument(
+        "--command-type",
+        required=True,
+        help="Command type: start, pause, resume, stop, sync_profile, request_snapshot",
+    )
+    write_addon_cmd_parser.add_argument(
+        "--profile-id",
+        default=None,
+        help="Profile ID for sync_profile command",
+    )
+    write_addon_cmd_parser.add_argument(
+        "--notes",
+        default=None,
+        help="Optional human notes attached to the command",
+    )
+    write_addon_cmd_parser.add_argument(
+        "--output-dir",
+        default=".autofish-live/addon-commands",
+        help="Directory for command audit files (default: .autofish-live/addon-commands)",
+    )
+    write_addon_cmd_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview the command that would be sent without modifying any files or sending keyboard input",
+    )
+    write_addon_cmd_parser.set_defaults(func=run_write_addon_command)
 
     doctor = subparsers.add_parser("doctor", help="Write one read-only operator health bundle for proofs and session plan")
     doctor.add_argument("--proof-root", default=".autofish-live", help="Proof root to inspect; default: .autofish-live")
@@ -6607,6 +6831,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     doctor.add_argument("--next-action-only", action="store_true", help="Print only the first recommended next action after writing doctor artifacts")
     doctor.add_argument("--refresh-summary", action="store_true", help="Also write signal-proof summary artifacts beside the doctor output")
+    doctor.add_argument("--pid", type=int, help="Expected Rift process ID for optional clipboard bridge snapshot in doctor report")
+    doctor.add_argument("--hwnd", help="Expected Rift window handle, decimal or 0x hex, for optional clipboard bridge snapshot in doctor report")
     doctor.add_argument("--output-root", help="Doctor output folder; default: .autofish-live/autofish-doctor-*")
     doctor.set_defaults(func=run_autofish_doctor)
 
@@ -6625,7 +6851,7 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_create.add_argument("--pull-clicks", type=int, default=1, help="Pull/loot click default; default: 1")
     session_plan_create.add_argument("--cast-wait-seconds", type=float, help="Optional cast wait override; otherwise profile/default command pacing applies")
     session_plan_create.add_argument("--post-pull-delay-ms", type=int, help="Optional post-pull delay override; otherwise profile/default command pacing applies")
-    session_plan_create.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Inter-cast delay default; default: 800")
+    session_plan_create.add_argument("--inter-cast-delay-ms", type=int, default=None, help="Inter-cast delay default; default: 800 (profile interCastDelayMs when set)")
     session_plan_create.add_argument("--stop-file", help=f"Stop file path to include; default: {DEFAULT_STOP_FILE}")
     session_plan_create.add_argument("--validate-target", action="store_true", help="Validate PID/HWND now and record target geometry without sending input")
     session_plan_create.add_argument("--output", default=".autofish-live/session-plan-latest.json", help="Output session plan JSON path")
@@ -6643,7 +6869,7 @@ def build_parser() -> argparse.ArgumentParser:
     session_plan_from_fan.add_argument("--pull-clicks", type=int, default=1, help="Pull/loot click default; default: 1")
     session_plan_from_fan.add_argument("--cast-wait-seconds", type=float, help="Optional cast wait override; otherwise profile/default command pacing applies")
     session_plan_from_fan.add_argument("--post-pull-delay-ms", type=int, help="Optional post-pull delay override; otherwise profile/default command pacing applies")
-    session_plan_from_fan.add_argument("--inter-cast-delay-ms", type=int, default=800, help="Inter-cast delay default; default: 800")
+    session_plan_from_fan.add_argument("--inter-cast-delay-ms", type=int, default=None, help="Inter-cast delay default; default: 800 (profile interCastDelayMs when set)")
     session_plan_from_fan.add_argument("--stop-file", help=f"Stop file path to include; default: {DEFAULT_STOP_FILE}")
     session_plan_from_fan.add_argument("--validate-target", action="store_true", help="Validate PID/HWND now and record target geometry without sending input")
     session_plan_from_fan.add_argument("--require-usable-facing", action="store_true", help="Fail unless the fishability-fan manifest carries usable facingEvidence")
@@ -7038,12 +7264,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     return parser
 
-
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args))
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

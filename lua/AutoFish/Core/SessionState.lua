@@ -38,4 +38,7 @@ function SessionState.resetMaintenanceResources(session, config)
     session.lootReadySinceMs = nil
 end
 
-return SessionState
+AutoFish = AutoFish or {}
+AutoFish.Core = AutoFish.Core or {}
+AutoFish.Core.SessionState = SessionState
+if require ~= nil then return SessionState end

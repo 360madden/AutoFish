@@ -1,4 +1,4 @@
-local Contracts = require("AutoFish.Bridge.Contracts")
+local Contracts = AutoFish.Bridge.Contracts
 
 local EnvelopeBuilder = {}
 
@@ -38,4 +38,7 @@ function EnvelopeBuilder.buildSessionStatus(snapshot)
     return EnvelopeBuilder.build(Contracts.MessageType.SESSION_STATUS, snapshot)
 end
 
-return EnvelopeBuilder
+AutoFish = AutoFish or {}
+AutoFish.Bridge = AutoFish.Bridge or {}
+AutoFish.Bridge.EnvelopeBuilder = EnvelopeBuilder
+if require ~= nil then return EnvelopeBuilder end

@@ -30,4 +30,7 @@ Contracts.Mode = {
     PAUSED = "paused",
 }
 
-return Contracts
+AutoFish = AutoFish or {}
+AutoFish.Bridge = AutoFish.Bridge or {}
+AutoFish.Bridge.Contracts = Contracts
+if require ~= nil then return Contracts end

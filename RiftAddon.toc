@@ -1,0 +1,17 @@
+Identifier = "AutoFishChatCopy"
+Name = "AutoFish Chat Copy"
+NameShort = "AFCopy"
+Description = "Copy-ready chat capture window for Rift. Captures future chat notifications into a selectable text box."
+Author = "OpenAI ChatGPT"
+Website = ""
+Version = "0.1.0"
+Email = "noreply@example.com"
+Environment = "4.4"
+
+RunOnStartup = {
+  "Main.lua",
+}
+
+SavedVariables = {
+  AutoFishChatCopy_State = "character",
+}

@@ -1,4 +1,4 @@
-local Contracts = require("AutoFish.Bridge.Contracts")
+local Contracts = AutoFish.Bridge.Contracts
 
 local Controller = {}
 
@@ -32,4 +32,7 @@ function Controller.intentToCommand(intent, profileId, notes)
     }, nil
 end
 
-return Controller
+AutoFish = AutoFish or {}
+AutoFish.UI = AutoFish.UI or {}
+AutoFish.UI.Controller = Controller
+if require ~= nil then return Controller end

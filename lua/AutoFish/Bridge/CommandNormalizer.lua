@@ -1,4 +1,4 @@
-local Contracts = require("AutoFish.Bridge.Contracts")
+local Contracts = AutoFish.Bridge.Contracts
 
 local CommandNormalizer = {}
 
@@ -39,4 +39,7 @@ function CommandNormalizer.normalize(command)
     }, nil
 end
 
-return CommandNormalizer
+AutoFish = AutoFish or {}
+AutoFish.Bridge = AutoFish.Bridge or {}
+AutoFish.Bridge.CommandNormalizer = CommandNormalizer
+if require ~= nil then return CommandNormalizer end

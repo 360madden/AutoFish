@@ -51,4 +51,7 @@ function ViewModel.fromSnapshot(snapshot, bridgeStatus)
     }
 end
 
-return ViewModel
+AutoFish = AutoFish or {}
+AutoFish.UI = AutoFish.UI or {}
+AutoFish.UI.ViewModel = ViewModel
+if require ~= nil then return ViewModel end

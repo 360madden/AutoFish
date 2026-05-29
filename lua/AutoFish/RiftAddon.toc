@@ -9,6 +9,25 @@ Email = "noreply@example.com"
 Environment = "4.4"
 
 RunOnStartup = {
+  "Core/Logger.lua",
+  "Core/Defaults.lua",
+  "Core/Observation.lua",
+  "Bridge/Contracts.lua",
+  "Bridge/JsonParser.lua",
+  "UI/Layout.lua",
+  "Core/SessionState.lua",
+  "Core/ProfileRuntime.lua",
+  "Core/SnapshotBuilder.lua",
+  "Bridge/MessageBus.lua",
+  "Core/DecisionRules.lua",
+  "Bridge/CommandNormalizer.lua",
+  "Bridge/EnvelopeBuilder.lua",
+  "UI/Controller.lua",
+  "Core/GuardrailRules.lua",
+  "Core/Guardrails.lua",
+  "UI/ViewModel.lua",
+  "Core/StateMachine.lua",
+  "AutoFishAddon.lua",
   "Main.lua",
 }
 
