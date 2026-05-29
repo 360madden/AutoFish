@@ -608,6 +608,84 @@ def wait_seconds_with_stop(seconds: float, stop_file: str | None) -> None:
         assert_stop_file_absent(stop_file)
         time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
 
+def poll_for_bite_visual(
+    hwnd: int,
+    expected_pid: int,
+    client_x: int,
+    client_y: int,
+    crop_size: int,
+    timeout_seconds: float,
+    stop_file: str | None,
+    *,
+    poll_interval_ms: int = 200,
+    bright_delta_threshold: int = 40,
+) -> tuple[bool, dict[str, Any]]:
+    """Poll a client-relative crop for visual bite indicators.
+
+    After casting, takes a baseline crop then polls at intervals comparing
+    bright-pixel counts. Returns (True, info) when the delta exceeds the
+    threshold, or (False, info) on timeout. Checks stop file each iteration.
+    """
+    time.sleep(2.0)  # wait for bobber to settle before baseline
+    target = validate_target(hwnd, expected_pid, require_foreground=True)
+    half = crop_size // 2
+    crop_left = max(0, min(client_x - half, max(0, int(target["clientWidth"]) - crop_size)))
+    crop_top = max(0, min(client_y - half, max(0, int(target["clientHeight"]) - crop_size)))
+    crop_w = min(crop_size, int(target["clientWidth"]) - crop_left)
+    crop_h = min(crop_size, int(target["clientHeight"]) - crop_top)
+    screen_left, screen_top = client_to_screen(hwnd, crop_left, crop_top)
+
+    baseline_pixels = capture_screen_rect(screen_left, screen_top, crop_w, crop_h)
+    baseline_stats = color_stats(crop_w, crop_h, baseline_pixels)
+    baseline_bright = baseline_stats["counts"]["bright"]
+
+    result: dict[str, Any] = {
+        "method": "visual-bright-delta",
+        "baselineBrightPixels": baseline_bright,
+        "baselineColorStats": baseline_stats,
+        "pollIntervalMs": poll_interval_ms,
+        "brightDeltaThreshold": bright_delta_threshold,
+        "timeoutSeconds": timeout_seconds,
+        "samples": [],
+    }
+
+    start = time.monotonic()
+    deadline = start + max(0.0, timeout_seconds)
+    sample_index = 0
+    while time.monotonic() < deadline:
+        assert_stop_file_absent(stop_file)
+        try:
+            current_pixels = capture_screen_rect(screen_left, screen_top, crop_w, crop_h)
+            current_stats = color_stats(crop_w, crop_h, current_pixels)
+            current_bright = current_stats["counts"]["bright"]
+            delta = abs(current_bright - baseline_bright)
+            sample = {
+                "index": sample_index,
+                "elapsedMs": int((time.monotonic() - start) * 1000),
+                "brightPixels": current_bright,
+                "brightDelta": delta,
+                "averageRgb": current_stats["averageRgb"],
+            }
+            result["samples"].append(sample)
+            if delta >= bright_delta_threshold:
+                result["biteDetected"] = True
+                result["biteSampleIndex"] = sample_index
+                result["biteBrightDelta"] = delta
+                result["reason"] = f"Bright pixel count spiked by {delta} (threshold {bright_delta_threshold})"
+                return True, result
+            sample_index += 1
+            time.sleep(max(poll_interval_ms, 50) / 1000.0)
+
+        except (RuntimeError, OSError) as exc:
+            result["error"] = str(exc)
+            result["reason"] = f"Bite detection polling failed: {exc}"
+            result["biteDetected"] = False
+            return False, result
+
+    result["biteDetected"] = False
+    result["reason"] = f"No bite detected within {timeout_seconds}s timeout"
+    return False, result
+
 def capture_screen_rect(left: int, top: int, width: int, height: int) -> bytes:
     if width <= 0 or height <= 0:
         raise ValueError("Capture dimensions must be positive")
@@ -1305,7 +1383,7 @@ def check_session_plan_target_freshness(
     if current_target is None:
         try:
             current_target = validate_current_target_from_session_plan(session_plan_info)
-        except Exception as exc:
+        except (RuntimeError, OSError) as exc:
             gate["reason"] = f"Current target validation failed: {exc}"
             return gate
 
@@ -1345,7 +1423,7 @@ def check_session_plan_foreground_gate(
     if current_target is None:
         try:
             current_target = validate_current_target_from_session_plan(session_plan_info)
-        except Exception as exc:
+        except (RuntimeError, OSError) as exc:
             gate["reason"] = f"Current target validation failed: {exc}"
             return gate
 
@@ -1378,7 +1456,7 @@ def check_session_plan_readability_gate(
     if current_target is None:
         try:
             current_target = validate_current_target_from_session_plan(session_plan_info)
-        except Exception as exc:
+        except (RuntimeError, OSError) as exc:
             gate["reason"] = f"Current target validation failed: {exc}"
             return gate
 
@@ -3115,7 +3193,16 @@ def run_signal_proof_one_cast(args: argparse.Namespace) -> int:
                 time.sleep(args.post_click_delay_ms / 1000.0)
                 capture("after-confirm-click")
 
-            wait_seconds_with_stop(float(args.cast_wait_seconds), args.stop_file)
+            if args.enable_bite_detect and args.confirm_input:
+                bite_detected, bite_info = poll_for_bite_visual(
+                    hwnd, args.pid, args.x, args.y, args.crop_size,
+                    float(args.cast_wait_seconds), args.stop_file,
+                    poll_interval_ms=int(args.bite_poll_interval_ms),
+                    bright_delta_threshold=int(args.bite_delta_threshold),
+                )
+                cast["biteDetection"] = bite_info
+            else:
+                wait_seconds_with_stop(float(args.cast_wait_seconds), args.stop_file)
             capture("before-pull")
 
             for pull_index in range(1, int(args.pull_clicks) + 1):
@@ -3378,7 +3465,16 @@ def run_signal_proof_bounded_session(args: argparse.Namespace) -> int:
                     if args.capture_each_cast:
                         capture(f"cast-{cast_number:03d}-after-confirm-click", {"castNumber": cast_number})
 
-                wait_seconds_with_stop(float(args.cast_wait_seconds), args.stop_file)
+                if args.enable_bite_detect and args.confirm_input:
+                    bite_detected, bite_info = poll_for_bite_visual(
+                        hwnd, args.pid, args.x, args.y, args.crop_size,
+                        float(args.cast_wait_seconds), args.stop_file,
+                        poll_interval_ms=int(args.bite_poll_interval_ms),
+                        bright_delta_threshold=int(args.bite_delta_threshold),
+                    )
+                    cast["biteDetection"] = bite_info
+                else:
+                    wait_seconds_with_stop(float(args.cast_wait_seconds), args.stop_file)
 
                 for pull_index in range(1, int(args.pull_clicks) + 1):
                     assert_stop_file_absent(args.stop_file)
@@ -6163,6 +6259,66 @@ def run_signal_proof_summarize(args: argparse.Namespace) -> int:
     print(json.dumps({"ok": True, "manifestCount": report["manifestCount"], **summary_artifacts}, indent=2))
     return 0
 
+def run_signal_proof_stats(args: argparse.Namespace) -> int:
+    """Aggregate proof manifests into session statistics."""
+    proof_root = Path(args.proof_root)
+    output_root = Path(args.output_root) if args.output_root else Path(".autofish-live") / f"signal-proof-stats-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    manifests = write_signal_proof_summary_artifacts(proof_root, output_root)
+    report, _ = manifests
+
+    # Extract stats from manifests
+    total_casts = 0
+    total_sessions = 0
+    one_cast_proofs = 0
+    bounded_session_proofs = 0
+    red_reticle_aborts = 0
+    bite_detections = 0
+    schemas_seen: dict[str, int] = {}
+
+    for entry in report.get("entries", []) or []:
+        schema = str(entry.get("schema", ""))
+        schemas_seen[schema] = schemas_seen.get(schema, 0) + 1
+        
+        if "oneCast" in schema:
+            one_cast_proofs += 1
+        elif "boundedSession" in schema:
+            bounded_session_proofs += 1
+            
+        casts = entry.get("casts")
+        if isinstance(casts, list):
+            total_sessions += 1
+            total_casts += len(casts)
+            for cast in casts:
+                if isinstance(cast, dict):
+                    if cast.get("redReticleClickGuard", {}).get("passed") is False:
+                        red_reticle_aborts += 1
+                    if cast.get("biteDetection", {}).get("biteDetected") is True:
+                        bite_detections += 1
+
+    stats: dict[str, Any] = {
+        "schema": "autofish.signalProof.stats.v1",
+        "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "proofRoot": str(proof_root),
+        "manifestCount": report.get("manifestCount", 0),
+        "totals": {
+            "casts": total_casts,
+            "sessions": total_sessions,
+            "oneCastProofs": one_cast_proofs,
+            "boundedSessionProofs": bounded_session_proofs,
+            "redReticleAborts": red_reticle_aborts,
+            "biteDetections": bite_detections,
+        },
+        "schemasSeen": schemas_seen,
+        "reviewBuckets": report.get("reviewBuckets"),
+    }
+
+    stats_path = output_root / "stats.json"
+    stats_path.write_text(json.dumps(stats, indent=2), encoding="utf-8")
+    print(json.dumps({"ok": True, "path": str(stats_path), "totals": stats["totals"]}, indent=2))
+    return 0
+
 def load_decision_register(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {
@@ -6522,7 +6678,7 @@ def build_autofish_doctor_report(
                 max_plan_age_minutes=max_plan_age_minutes,
             )
             session_status["loaded"] = True
-        except Exception as exc:
+        except (RuntimeError, OSError) as exc:
             session_status["error"] = str(exc)
 
     signal_summary = signal_report.get("summary") if isinstance(signal_report.get("summary"), dict) else {}
@@ -7034,6 +7190,9 @@ def build_parser() -> argparse.ArgumentParser:
     one_cast.add_argument("--post-key-delay-ms", type=int, help="Delay after keypress before capture; default: 350")
     one_cast.add_argument("--post-click-delay-ms", type=int, help="Delay after confirm click before capture; default: 800")
     one_cast.add_argument("--post-pull-delay-ms", type=int, help="Delay after each pull/loot click before capture; default: profile lootTimeoutMs or 1200")
+    one_cast.add_argument("--enable-bite-detect", action="store_true", help="Use visual pixel-delta polling instead of blind timed wait after cast; requires --confirm-input")
+    one_cast.add_argument("--bite-poll-interval-ms", type=int, default=200, help="Polling interval for visual bite detection; default: 200")
+    one_cast.add_argument("--bite-delta-threshold", type=int, default=40, help="Bright pixel delta threshold to trigger bite; default: 40")
     one_cast.add_argument("--stop-file", default=DEFAULT_STOP_FILE, help=f"If this file exists before/during the run, abort before the next action; default: {DEFAULT_STOP_FILE}")
     one_cast.add_argument(
         "--max-plan-age-minutes",
@@ -7087,6 +7246,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     bounded_session.add_argument("--decision-register", default=".autofish-live/signal-proof-decisions.json", help="Decision register used to require reviewed oneCast proof before confirmed sessions")
     bounded_session.add_argument("--allow-unreviewed-one-cast", action="store_true", help="Bypass the oneCast decision gate intentionally; still requires --confirm-input and all target gates")
+    bounded_session.add_argument("--enable-bite-detect", action="store_true", help="Use visual pixel-delta polling instead of blind timed wait after each cast; requires --confirm-input")
+    bounded_session.add_argument("--bite-poll-interval-ms", type=int, default=200, help="Polling interval for visual bite detection; default: 200")
+    bounded_session.add_argument("--bite-delta-threshold", type=int, default=40, help="Bright pixel delta threshold to trigger bite; default: 40")
     bounded_session.add_argument("--stop-file", default=DEFAULT_STOP_FILE, help=f"If this file exists before/during the run, abort before the next action; default: {DEFAULT_STOP_FILE}")
     bounded_session.add_argument("--output-root", help="Evidence output folder; default: .autofish-live/signal-proof-bounded-session-*.")
     bounded_session.set_defaults(func=run_signal_proof_bounded_session)
@@ -7242,6 +7404,11 @@ def build_parser() -> argparse.ArgumentParser:
     summarize.add_argument("--proof-root", default=".autofish-live", help="Directory or manifest.json to summarize; default: .autofish-live")
     summarize.add_argument("--output-root", help="Summary output folder; default: .autofish-live/signal-proof-summary-*.")
     summarize.set_defaults(func=run_signal_proof_summarize)
+
+    stats = signal_sub.add_parser("stats", help="Aggregate proof manifests into session statistics")
+    stats.add_argument("--proof-root", default=".autofish-live", help="Directory of proof manifests; default: .autofish-live")
+    stats.add_argument("--output-root", help="Stats output folder; default: .autofish-live/signal-proof-stats-*.")
+    stats.set_defaults(func=run_signal_proof_stats)
 
     doctor = signal_sub.add_parser("doctor", help="Read-only proof-root and decision-register health report")
     doctor.add_argument("--proof-root", default=".autofish-live", help="Proof root to inspect; default: .autofish-live")
